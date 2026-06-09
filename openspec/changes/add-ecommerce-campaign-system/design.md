@@ -109,6 +109,18 @@ FLASH_SALE  → FlashSaleRuleConfig
 
 JSONB 提供彈性儲存，DTO 提供型別安全與驗證，兩者互補。
 
+#### 優惠券三層結構
+
+折扣/優惠券的「使用限制」與「一人一碼 vs 共用碼」拆成三層，避免把代碼、限制與核銷混在單一表（完整綱要見 ER 圖）：
+
+- **coupon_campaign**：規則與總量——`code_type`(SHARED_CODE/UNIQUE_CODE)、`total_usage_limit`、`per_user_limit`、`used_count`（核銷時 atomic update 控總量）。
+- **coupon_code**：個別優惠碼——共用碼一筆；一人一碼多筆，含 `assigned_user_id` 與 `status`(AVAILABLE/ASSIGNED/REDEEMED/EXPIRED)。
+- **coupon_redemption**：核銷紀錄——唯一鍵 `(coupon_code_id, user_id, order_id)` 防同單重複核銷；每人限用 N 次以 transaction + 計數檢查。
+
+#### 活動稽核與並發
+
+campaign 表含 `version`（樂觀鎖，防兩名營運同時編輯互相覆蓋）與 `created_by`/`updated_by`/`updated_at`（稽核）。
+
 ### 規則計算分兩類（重要區分）
 
 活動規則有兩種語意不同的計算，**不可混為一談**：
@@ -174,6 +186,15 @@ Reach.dispatcher    → SendResultRecorded  (使用者層級：發送結果)
 
 `reach.orchestrator` 消費後才解析 `targetSpec`、展開收件人，將「一筆 `ReachRequested`」展開成「N 筆 `ReachTask`」。
 
+#### 觸達批次落庫（reach_request）
+
+`ReachRequested` 一進 reach 即先落為一筆 **reach_request**（活動層級批次紀錄），再展開 reach_task：
+
+- 凍結 `target_spec_snapshot` / `reach_plan_snapshot`：活動事後被改，仍可追溯當時的發送依據。
+- 維護 `total_count` / `pending_count` / `sent_count` / `failed_count`：活動報表直接讀批次計數，免每次聚合 reach_task。
+- `status`（PENDING/EXPANDING/DISPATCHING/DONE/FAILED/CANCELLED）+ `send_cycle_key`：支撐「批次重跑」與排程「已處理 cycle」補償。
+- 觸發語意以 `trigger_type`（SCHEDULED_BATCH/EVENT）與 `trigger_event_id` 表達，取代以 free-text 表示 cycle。
+
 ### 路徑 1：排程批次發送
 
 ```
@@ -196,24 +217,27 @@ Reach.dispatcher    → SendResultRecorded  (使用者層級：發送結果)
 
 ```
 [reach.orchestrator] 消費 reach.requested（活動層級）
+   ├─ 建立 reach_request 批次（凍結 snapshot）
    ├─ AudienceResolver 解析 targetSpec → 收件人清單
    ├─ 去重/頻控（同人同活動短時間內不重複發）
    ├─ 為每個收件人建立 ReachTask(PENDING) 寫入 DB（使用者層級）
    └─► 逐筆送 dispatcher
 
-[dispatcher] 取 ReachTask
-   ├─ 標記 PROCESSING（防多 worker 搶同一筆）
+[dispatcher] 以 FOR UPDATE SKIP LOCKED 撈可發送任務
+   ├─ 條件：status IN (PENDING, RETRY_SCHEDULED) AND next_retry_at <= now()
+   ├─ 標記 PROCESSING（locked_by / locked_until 防多 worker 搶同一筆）
    ├─ 依 channel 選 ChannelAdapter → send()
-   ├─ 成功 → ReachTask=SENT，寫送達結果
-   └─ 失敗 → RETRY_SCHEDULED（指數退避），超限 → FAILED + 進 DLQ
+   ├─ 成功 → ReachTask=SENT，寫 send_result
+   └─ 失敗 → RETRY_SCHEDULED(設 next_retry_at, 指數退避)，超限 → FAILED + 進 DLQ
 ```
 
 ### 關鍵設計點
 
 - 兩條路徑收斂到同一個 `reach.requested` topic，下游受眾解析與發送邏輯只寫一次。
 - 受眾解析一律在 reach 完成，campaign 不展開收件人。
+- 一筆 `ReachRequested` → 一筆 `reach_request`（批次） → N 筆 `ReachTask`（任務）。
 - `ReachTask` 落 DB 是發送的 source of truth，支撐重試、報表、冪等。
-- 冪等鍵：`(campaignId, userId, sendCycle)`，避免批次重跑或事件重送造成重複建立任務。
+- 冪等鍵：`(campaign_id, user_id, send_cycle_key, channel)`——含 channel 以支援未來同週期多通道；`send_cycle_key` 排程為時間鍵、事件為 `event:{id}`。
 
 ## 6. 錯誤處理與韌性
 
@@ -221,7 +245,7 @@ Reach.dispatcher    → SendResultRecorded  (使用者層級：發送結果)
 
 - **重試**：可重試錯誤（網路、429、5xx）走指數退避（1m→5m→30m，最多 3 次），期間狀態為 `RETRY_SCHEDULED`；不可重試（地址無效、退訂）直接標 `FAILED`。
 - **DLQ**：超過重試上限的 `ReachTask` 進 dead-letter topic + 標記，供人工檢視與重放。
-- **冪等與發送語意**：Kafka 採 **at-least-once 消費語意**，消費端透過 DB unique constraint 與 idempotency key `(campaignId, userId, sendCycle)` 避免重複建立 `ReachTask`，達成**業務層級的 effectively-once task creation**。
+- **冪等與發送語意**：Kafka 採 **at-least-once 消費語意**，消費端透過 DB unique constraint 與 idempotency key `(campaign_id, user_id, send_cycle_key, channel)` 避免重複建立 `ReachTask`，達成**業務層級的 effectively-once task creation**。
   - 注意：這不是對外部 Email provider 的嚴格 exactly-once delivery。即使只建立一筆 `ReachTask`，仍可能發生「Email 已送出但更新 `SENT` 前 crash → 重試重送」。
   - 緩解：以 provider message id 或本地 send lock 降低重複發送機率。**本系統目標是避免重複建立任務並降低重複發送機率，而非宣稱對外部 provider 達成嚴格 exactly-once delivery。**
 
@@ -251,6 +275,8 @@ FAILED           不可重試或重試耗盡
 DLQ              進入 dead-letter，待人工檢視/重放
 CANCELLED        活動暫停或結束，未發送任務取消
 ```
+
+worker 友善欄位：`next_retry_at`、`processing_started_at`、`last_attempt_at`、`locked_by`、`locked_until`——支撐 `FOR UPDATE SKIP LOCKED` 並行撈取，避免多 worker 互搶（呼應大量觸達壓測需求）。
 
 ### 可觀測性
 
