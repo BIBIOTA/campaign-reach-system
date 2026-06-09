@@ -1,0 +1,91 @@
+@startuml
+title 整體架構：模組化單體 + Kafka 內部解耦
+
+skinparam componentStyle rectangle
+skinparam packageStyle rectangle
+top to bottom direction
+
+' ===== 第 0 層：外部來源 =====
+actor "行銷人員" as MK
+[電商主站] as STORE
+
+' ===== 單一部署單元（campaign 在上、reach 在下，垂直堆疊）=====
+package "campaign-reach-system（單一部署）" as APP {
+
+  package "campaign 模組" as P_CAMPAIGN #E8F0FE {
+    [Campaign API] as API
+    [Campaign Consumer] as CC
+    [Scheduler] as SCH
+    [Evaluators\n(Promotion / ReachTrigger)] as EVAL
+  }
+
+  package "shared kernel" as P_SHARED #FFF4E5 {
+    [Event Schema] as EVT
+    [Config] as CFG
+    note as N_SHARED #FFFFFF
+      **用意：只放跨模組穩定契約**
+      event schema、common exception、基礎 config。
+      禁止放入 campaign/reach 的
+      entity / repository / service，
+      以免退化成耦合中心、破壞模組邊界。
+    end note
+  }
+
+  package "reach 模組" as P_REACH #E6F4EA {
+    [Orchestrator] as ORC
+    [AudienceResolver] as AR
+    [Dispatcher] as DSP
+    [EmailAdapter] as EA
+    note as N_REACH #FFFFFF
+      **用意：發給誰、怎麼發、如何追蹤**
+      受眾解析、任務展開、發送/重試/DLQ 全在此。
+    end note
+  }
+}
+
+' ===== 基礎設施（部署單元正下方）=====
+package "基礎設施" as INFRA #F3F3F3 {
+  queue "Kafka:\ndomain.events" as DE
+  queue "Kafka:\nreach.requested" as RR
+  queue "Kafka:\nDLQ" as DLQ
+  database "PostgreSQL\n(Campaign / ReachTask)" as DB
+}
+
+[Email Provider\n(SendGrid/SES)] as EP
+
+' ===== 垂直分層：強制 上→下 排列 =====
+EVAL -[hidden]down-> P_SHARED
+P_SHARED -[hidden]down-> ORC
+EA  -[hidden]down-> RR
+DB  -[hidden]down-> EP
+' 基礎設施鎖成同一橫排
+DE -[hidden]right-> RR
+RR -[hidden]right-> DB
+DB -[hidden]right-> DLQ
+
+' ===== 主幹互動（精簡，僅核心流）=====
+MK --> API : 設定活動 (REST)
+STORE --> DE : 發行為事件
+DE --> CC : 消費
+CC --> RR : ReachRequested
+SCH --> RR : ReachRequested
+RR --> ORC : 消費（唯一消費者）
+ORC --> DB : 建立 ReachTask
+DSP --> EA
+EA --> EP
+DSP --> DLQ : 重試耗盡
+
+' ===== 區塊意圖 note（置於兩側）=====
+note left of P_CAMPAIGN
+  **campaign 區用意**
+  只負責「定義活動 + 判定是否觸發」，
+  不碰發送；透過 Kafka 事件交棒給 reach。
+end note
+
+note right of INFRA
+  **為何單體內仍用 Kafka**
+  觸達需非同步、可重試、可削峰、可重放。
+  兩條觸發路徑收斂到同一 reach.requested topic，
+  下游發送邏輯只寫一次；也保留日後拆服務的縫。
+end note
+@enduml

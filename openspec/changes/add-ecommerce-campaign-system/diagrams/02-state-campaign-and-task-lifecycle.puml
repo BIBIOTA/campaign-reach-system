@@ -1,0 +1,42 @@
+@startuml
+title 狀態機：Campaign 生命週期 與 ReachTask 生命週期
+
+state "Campaign 生命週期" as Campaign {
+  [*] --> DRAFT : 建立活動
+  DRAFT --> SCHEDULED : 確認排程\n(規則驗證通過)
+  SCHEDULED --> RUNNING : 到達 startAt
+  RUNNING --> PAUSED : 行銷人員暫停
+  PAUSED --> RUNNING : 恢復
+  RUNNING --> ENDED : 到達 endAt
+  PAUSED --> ENDED : 提前結束
+  ENDED --> [*]
+
+  note right of PAUSED
+    進入 PAUSED 或 ENDED 時，
+    該活動未發送的 ReachTask
+    一律標記為 CANCELLED
+  end note
+}
+
+state "ReachTask 生命週期" as ReachTask {
+  [*] --> PENDING : orchestrator 建立\n(每位收件人一筆)
+  PENDING --> PROCESSING : dispatcher 取走\n(加鎖防搶單)
+  PROCESSING --> SENT : 發送成功
+  PROCESSING --> RETRY_SCHEDULED : 可重試失敗\n(429/5xx/timeout)
+  RETRY_SCHEDULED --> PROCESSING : 指數退避後重試\n(最多 3 次)
+  PROCESSING --> FAILED : 不可重試\n(無效地址/退訂)
+  RETRY_SCHEDULED --> FAILED : 重試耗盡
+  FAILED --> DLQ : 進 dead-letter
+  DLQ --> PENDING : 人工重放
+  PENDING --> CANCELLED : 活動暫停/結束
+  RETRY_SCHEDULED --> CANCELLED : 活動暫停/結束
+  SENT --> [*]
+  CANCELLED --> [*]
+
+  note right of PENDING
+    MVP 必做子集：
+    PENDING / PROCESSING /
+    SENT / FAILED / DLQ
+  end note
+}
+@enduml

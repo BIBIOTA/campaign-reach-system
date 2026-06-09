@@ -285,6 +285,14 @@ CANCELLED        活動暫停或結束，未發送任務取消
 
 **原則**：規則計算與冪等/重試用快速單元測試密集覆蓋；跨 Kafka/DB 行為用 Testcontainers 少量但真實地驗證，不 mock 掉 broker。
 
+## Diagrams
+
+- [Sequence: 觸達流程](./diagrams/01-sequence-reach-flow.puml) — 排程與事件兩條觸發路徑收斂、受眾展開、發送與重試/DLQ
+- [State: 活動與任務狀態機](./diagrams/02-state-campaign-and-task-lifecycle.puml) — Campaign 生命週期與 ReachTask 狀態機
+- [Class: 領域模型](./diagrams/03-class-domain-model.puml) — Campaign 聚合、兩類 Evaluator (Strategy)、ChannelAdapter (Adapter)、受眾展開
+- [Component: 整體架構](./diagrams/04-component-architecture.puml) — campaign/reach/shared 模組與 Kafka、PostgreSQL、Email provider 的關係
+- [ER: 資料庫綱要](./diagrams/05-er-database-schema.puml) — 活動、名單、觸達批次/任務、發送結果、優惠券三層與索引建議
+
 ## Probable next steps
 
 本章節同時作為 spec-driven-dev pipeline 的後續交付物清單與下游 skill 串接依據：
