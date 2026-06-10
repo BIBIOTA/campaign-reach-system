@@ -124,7 +124,7 @@ package "reach 模組（受眾展開與發送）" as P_REACH #E6F4EA {
     +status: ReachTaskStatus
     +retryCount: int
     --
-    idempotency: (campaignId,userId,sendCycle)
+    idempotency: (campaignId,userId,sendCycle,channel)
   }
   enum ReachTaskStatus {
     PENDING
@@ -164,7 +164,7 @@ note top of P_REACH
   **區塊 B 用意：吸收「觸達」面的變化**
   收到活動層級請求後才決定「發給誰、怎麼發」。
   • 一筆請求 → 展開成 N 筆 ReachTask（使用者層級）
-  • ReachTask 以 (campaignId,userId,sendCycle) 冪等去重，
+  • ReachTask 以 (campaignId,userId,sendCycle,channel) 冪等去重，
     是發送的 single source of truth
   • 新增通道 → 新增 ChannelAdapter，EmailAdapter 先行
 end note

@@ -30,7 +30,7 @@ ORC -> AR : 解析 targetSpec
 AR --> ORC : 收件人清單 [N]
 ORC -> ORC : 去重 / 頻控
 loop 每位收件人
-  ORC -> DB : 建立 ReachTask(PENDING)\nunique(campaignId,userId,sendCycle)
+  ORC -> DB : 建立 ReachTask(PENDING)\nunique(campaignId,userId,sendCycle,channel)\nON CONFLICT DO NOTHING
 end
 ORC -> DSP : 觸發發送
 

@@ -197,6 +197,19 @@ Reach.dispatcher    → SendResultRecorded  (使用者層級：發送結果)
 - `status`（PENDING/EXPANDING/DISPATCHING/DONE/FAILED/CANCELLED）+ `send_cycle_key`：支撐「批次重跑」與排程「已處理 cycle」補償。
 - 觸發語意以 `trigger_type`（SCHEDULED_BATCH/EVENT）與 `trigger_event_id` 表達，取代以 free-text 表示 cycle。
 
+#### send_cycle_key 命名與推導（冪等命脈）
+
+**命名對齊**：事件 payload 與領域物件用駝峰 `sendCycle`（一個字串），落庫欄位用 snake_case `send_cycle_key`。**兩者為同一個值**，僅命名風格差異；orchestrator 寫 reach_request / reach_task 時直接以事件的 `sendCycle` 值填入 `send_cycle_key`，不做任何轉換。
+
+**推導規則**（依 `trigger_type` 不同，且必須是**確定性、可重現**的，否則 unique constraint 失效會導致重複建立 task → 重複發送）：
+
+| trigger_type | send_cycle_key 推導 | 去重語意 |
+|---|---|---|
+| `SCHEDULED_BATCH` | `sched:{campaignId}:{cycleStart}`，其中 `cycleStart` 為「依活動排程週期將觸發時點向下取整（truncate）後的 ISO-8601 字串」 | 同一活動同一排程週期只會產生一把 key；scheduler 重啟、補掃、多實例（ShedLock）重跑皆推導出相同 key |
+| `EVENT` | `event:{triggerEventId}`，`triggerEventId` 為來源行為事件的唯一 ID | 同一來源事件重投只去重自身；**不同事件 id 不會互相去重**（跨事件的重複觸達由「頻控」處理，非冪等） |
+
+`cycleStart` 的 truncate 粒度由活動排程設定決定（例：每日批次 → 截到日；每小時 → 截到時）。**禁止**在 key 內放入 `now()` 級別的即時時間戳或 scheduler 啟動時間，否則同一邏輯週期會算出不同 key。
+
 ### 路徑 1：排程批次發送
 
 ```
@@ -219,11 +232,14 @@ Reach.dispatcher    → SendResultRecorded  (使用者層級：發送結果)
 
 ```
 [reach.orchestrator] 消費 reach.requested（活動層級）
-   ├─ 建立 reach_request 批次（凍結 snapshot）
+   ├─ upsert reach_request 批次（unique(campaign_id, send_cycle_key, trigger_type) 確保同事件只建一筆批次）
+   │    └─ 已存在且 status=DONE → 直接 ack 跳過（Kafka 重投保護）；否則進入/續跑展開
+   ├─ 凍結 snapshot（target_spec / reach_plan）
    ├─ AudienceResolver 解析 targetSpec → 收件人清單
-   ├─ 冪等去重（DB unique constraint 防同事件重複建立 task）
-   ├─ 頻控（orchestrator 在建立 ReachTask 前查詢時間窗口，防不同事件在短時間對同人重複發）
-   ├─ 為每個收件人建立 ReachTask(PENDING) 寫入 DB（使用者層級）
+   ├─ 分頁展開（每批 M 筆），逐批：
+   │    ├─ 頻控（建立 ReachTask 前查詢時間窗口，防不同事件在短時間對同人重複發）
+   │    └─ 批次 INSERT ReachTask(PENDING)，ON CONFLICT DO NOTHING（task unique 防重複，支援斷點續跑）
+   ├─ 更新 reach_request.status：EXPANDING → DISPATCHING；total_count 於展開完成時一次回填
    └─► 逐筆送 dispatcher
 
 [dispatcher] 以 FOR UPDATE SKIP LOCKED 撈可發送任務（兩階段事務，避免外部 I/O 佔用 DB 連線）
@@ -246,6 +262,24 @@ Reach.dispatcher    → SendResultRecorded  (使用者層級：發送結果)
   - **冪等（Idempotency）**：DB unique constraint `(campaign_id, user_id, send_cycle_key, channel)` 防止同一事件/週期重複建立 ReachTask。注意：事件觸發的 `send_cycle_key = event:{id}`，不同事件 id 不相同，unique constraint 無法跨事件去重。
   - **頻控（Frequency Capping）**：orchestrator 建立 ReachTask 前，查詢該用戶在指定時間窗口內的歷史 reach_task（`WHERE campaign_id = :cid AND user_id = :uid AND created_at > :threshold`），命中則跳過，確保短時間不重複觸達。
 
+#### 受眾展開（fan-out）可靠性
+
+單筆 `ReachRequested` 可能展開成 10 萬筆 task，展開過程須能承受 crash 與 Kafka at-least-once 重投：
+
+- **批次冪等**：`reach_request` 以 `unique(campaign_id, send_cycle_key, trigger_type)` 去重，同一事件重投不會建立第二筆批次，計數也不會被重複污染。
+- **斷點續跑**：展開分頁進行，task 以 `ON CONFLICT DO NOTHING` 寫入（落在 reach_task 的四欄 unique 上）。展開到一半 crash 後重投，已寫入的 task 不會重複，未寫入的續寫，最終收斂到完整 N 筆。
+- **狀態推進**：reach_request 走 `PENDING → EXPANDING → DISPATCHING → DONE`；只有 `DONE` 才視為展開完成，未完成者允許 orchestrator 重新接手續跑。
+
+#### reach_request 計數欄位的維護（避免第二個熱點）
+
+`total_count / pending_count / sent_count / failed_count` **不採「每筆 task 狀態變更即時 update 同一 reach_request row」**——否則單一批次列在 10 萬筆 task 高並發下會成為 row-lock 熱點（與 `coupon_campaign.used_count` 同類問題）。改採：
+
+- `total_count`：展開完成時一次回填。
+- `sent/failed/pending_count`：由背景排程**定期聚合 reach_task 回填**（近似即時，報表可接受秒級延遲），而非逐筆即時更新。
+- 需要精確即時數字的場景（少數）才直接 `COUNT(*)` reach_task（有 `reach_task(campaign_id, status)` 索引支撐）。
+
+詳見第 8 節 Scaling 風險清單。
+
 ## 6. 錯誤處理與韌性
 
 ### 發送層
@@ -267,7 +301,15 @@ Reach.dispatcher    → SendResultRecorded  (使用者層級：發送結果)
 
 ### 外部通道服務中斷
 
-- EmailAdapter 包 circuit breaker（Resilience4j）：服務掛掉時快速失敗並讓 ReachTask 留在 PENDING，恢復後由 dispatcher 重掃。
+- EmailAdapter 包 circuit breaker（Resilience4j）：breaker 開啟時，dispatcher 在**階段 1 標記 PROCESSING 前**即偵測 breaker 狀態，直接跳過該筆、任務維持 `PENDING`（未進入 PROCESSING），恢復後由 dispatcher 重掃。若 breaker 在已標 PROCESSING 後才於外部呼叫快速失敗，則比照可重試失敗走階段 2 回寫 `RETRY_SCHEDULED`，不會卡在 PROCESSING。
+
+### 活動暫停/結束的取消競態（與 dispatcher 的互動）
+
+活動進入 `PAUSED`/`ENDED` 時要取消未送 task（FR-017），但取消動作與 dispatcher 撈取存在競態，語意明確定義如下：
+
+- **取消只作用於尚未進入發送的任務**：批次 `UPDATE reach_task SET status='CANCELLED' WHERE campaign_id=:cid AND status IN ('PENDING','RETRY_SCHEDULED')`。`PROCESSING` 不在取消範圍。
+- **dispatcher 階段 1 設防**：撈取並標記 PROCESSING 的同一短事務內，重新檢查活動狀態（`campaign.status NOT IN ('PAUSED','ENDED')`）；活動已停用者不標 PROCESSING、改標 `CANCELLED`。如此「取消」與「撈取」由 DB 列鎖序列化，二者不會同時放行同一筆。
+- **已 PROCESSING 者放行（明示邊界）**：若某筆在取消發生前的瞬間已被標 PROCESSING（外部 send 進行中），則**允許其完成**，不強制中止。這是有界且極小的洩漏窗口（單筆外部呼叫時長），本系統明確接受此語意，不為消除它而引入分散式中止協定。
 
 ### ReachTask 狀態機
 
@@ -317,6 +359,69 @@ worker 友善欄位：`next_retry_at`、`processing_started_at`、`last_attempt_
 - 內部 REST 建立活動 → 觸發 → 查 `ReachTask` 與彙總報表，驗證全鏈路。
 
 **原則**：規則計算與冪等/重試用快速單元測試密集覆蓋；跨 Kafka/DB 行為用 Testcontainers 少量但真實地驗證，不 mock 掉 broker。
+
+## 8. Scaling 風險清單
+
+集中列出已知擴展瓶頸，避免讀者誤以為僅有單一熱點。MVP（10 萬筆級）皆可接受，標註演進方向：
+
+| # | 熱點 | 成因 | MVP 緩解 | 演進方向 |
+|---|---|---|---|---|
+| S-1 | `coupon_campaign.used_count` row lock | 熱門閃購高並發核銷對同一列 atomic update | 控總量正確性優先，接受序列化 | Redis 預扣 + 非同步回寫 |
+| S-2 | `reach_request` 計數欄位 | 逐筆 task 變更即時 update 同一批次列 | **不即時更新**，改背景定期聚合回填（見 §5） | 計數外移至 OLAP / 物化檢視 |
+| S-3 | 受眾展開 fan-out | 單事件展開 10 萬 task 的寫入與續跑 | 分頁批次 INSERT + ON CONFLICT，斷點續跑 | 拆多 partition 並行展開 |
+| S-4 | Kafka 熱分區 | 單一大型活動的事件集中到同一 partition | partition key 選擇見 §9，避免以 campaign_id 單鍵分區 | 動態子分區 / 加大分區數 |
+| S-5 | dispatcher DB 撈取爭用 | 大量 worker 對 reach_task 撈取 | `FOR UPDATE SKIP LOCKED` + 覆蓋索引 | 分片撈取 / 多隊列 |
+
+## 9. Kafka 規格（topic / 分區 / 消費者）
+
+| topic | producer | consumer group | 用途 | 訊息層級 |
+|---|---|---|---|---|
+| `domain.events` | 電商主站 | `campaign-trigger` | 行為事件（CartAbandoned, OrderPlaced…） | 使用者層級 |
+| `reach.requested` | campaign（scheduler + consumer） | `reach-orchestrator` | 觸發觸達請求 | 活動層級 |
+| `reach.dlq` | reach.dispatcher | 人工 / 重放工具 | 重試耗盡的 task | 使用者層級 |
+
+**分區鍵（partition key）**
+
+- `domain.events`：以 `user_id` 分區。保證同一使用者的行為事件有序，且自然分散，避免熱分區。
+- `reach.requested`：**以 `reach_request_id`（或 `campaign_id + send_cycle_key` 的雜湊）分區，而非單純 `campaign_id`**。理由：單純以 `campaign_id` 分區會使單一大型活動的所有請求集中到一個 partition，形成熱分區並拖累其他活動（違反 NFR-002「活動間互不影響」）。本系統 `reach.requested` 為活動層級、量少（每 cycle 一筆），分散後即可避免集中。
+- `reach.dlq`：沿用來源 task 的鍵即可，重放時保有原序。
+
+**Ordering 假設**
+
+- `domain.events` 需要 per-`user_id` 有序（同人行為先後語意）；跨 user 無序。
+- `reach.requested` **不依賴跨訊息順序**——每筆活動層級請求獨立展開，冪等由 DB constraint 保證，故無嚴格 ordering 需求。
+
+**消費者冪等**
+
+- 所有 consumer 採 at-least-once；冪等由消費端的 DB unique constraint 達成（reach_request 批次鍵、reach_task 四欄鍵），不依賴 broker exactly-once。
+- consumer offset 在「處理已落庫（含 reach_request upsert / task 寫入）」後才 commit，確保重投可安全續跑。
+
+## 10. PII、安全與資料保留
+
+Email 為個資（PII），本系統處理收件人資料，須定錨以下立場：
+
+**收件人資料來源與儲存**
+
+- `reach_task` 只存 `user_id`，**不落收件 email 等 PII**。實際 email 於 dispatcher 發送當下，由 user/profile 服務以 `user_id` 即時解析取得，發送後不持久化於 reach 表。
+- `send_result` 僅存 `provider_message_id` 與 outcome，不存信件內容與收件地址。
+
+**安全**
+
+- 內部 REST（活動 CRUD、重放工具）須經身分驗證與授權（營運後台角色），非公開端點；寫入操作記入 `created_by`/`updated_by` 稽核欄位。
+- 與 Email provider 的金鑰經 secret 管理（環境變數 / vault），不入庫、不入版控。
+- 傳輸層 TLS；DB 連線加密。
+
+**退訂與抑制名單（suppression）**
+
+- 發送前檢查抑制名單（退訂、硬退信、投訴）；命中者該 task 直接標 `FAILED`（不可重試原因），不送出。退訂屬第 6 節「不可重試」分類。
+- 抑制名單的維護與來源（消費者退訂入口）屬電商主站範疇，本系統僅消費其結果；MVP 以一張 `suppression`（user_id / channel / reason）查表，後續可演進。
+
+**資料保留**
+
+- `reach_task` / `send_result` 為觸達稽核軌跡，預設保留 N 個月（具體期限為 Open Question，待法遵確認）後歸檔或刪除。
+- 任何含 PII 的衍生快照（如未來若快照收件清單）須一併納入保留策略；目前設計刻意不落 PII 快照以降低暴露面。
+
+> 註：退訂入口 UI、抑制名單來源系統、確切保留月數仍為 Open Question（見 PRD），本節定錨設計立場，細節於 writing-spec 階段補實。
 
 ## Diagrams
 

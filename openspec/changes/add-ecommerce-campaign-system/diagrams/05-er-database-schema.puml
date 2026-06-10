@@ -74,6 +74,8 @@ entity "reach_request" as request {
   * created_at : timestamptz — 建立時間
   started_at : timestamptz — 開始展開時間
   finished_at : timestamptz — 完成時間
+  --
+  <<UNIQUE (campaign_id, send_cycle_key, trigger_type)>>
 }
 
 entity "reach_task" as task {
@@ -157,7 +159,10 @@ note bottom of request
   對應一筆 ReachRequested 事件。
   snapshot 凍結當下 target_spec / reach_plan，
   確保活動事後被改也能追溯當時發送依據。
-  計數欄位支撐活動報表，免每次聚合 reach_task。
+  計數欄位由背景定期聚合 reach_task 回填（近即時），
+  不逐筆即時 update，避免成為 row-lock 熱點。
+  unique(campaign_id, send_cycle_key, trigger_type)
+  確保同事件重投只建一筆批次（fan-out 冪等）。
   send_cycle_key 同時作排程「已處理 cycle」補償依據。
 end note
 

@@ -13,8 +13,12 @@ state "Campaign 生命週期" as Campaign {
 
   note right of PAUSED
     進入 PAUSED 或 ENDED 時，
-    該活動未發送的 ReachTask
-    一律標記為 CANCELLED
+    僅 PENDING / RETRY_SCHEDULED 的
+    ReachTask 標記為 CANCELLED；
+    已 PROCESSING 者放行至完成
+    （有界且極小的洩漏窗口）。
+    dispatcher 於標 PROCESSING 同一事務
+    re-check 活動狀態，序列化取消與撈取。
   end note
 }
 
