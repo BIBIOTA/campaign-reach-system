@@ -111,12 +111,12 @@
   - Depends on: 3.2
   - Independence: parallel-safe
   - status: passing
-- [ ] 5.2 實作 ReachTriggerEvaluator（行為事件 / 排程 cycle）觸發判定
+- [x] 5.2 實作 ReachTriggerEvaluator（行為事件 / 排程 cycle）觸發判定
   - Acceptance: WHEN 帶入 TriggerContext（行為事件或排程 cycle，無購物車）THEN `shouldTrigger` 判定該活動是否應產生觸達，不需 CartContext（§4，FR-008）
   - Acceptance: WHEN Evaluator 拋例外 THEN 該筆判定記為 skipped 並記錄原因，不影響同批其他對象（§6）
   - Depends on: 3.2
   - Independence: parallel-safe
-  - status: in_progress
+  - status: passing
 
 ## 6. Campaign 觸發來源 — 排程與事件
 

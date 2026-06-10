@@ -259,4 +259,16 @@
 - Transition: not_started → in_progress
 - Next action: 派發 implementer subagent，於 campaign/evaluation 建立 ReachTriggerEvaluator Strategy 介面 + TriggerContext（行為事件/排程 cycle，無 CartContext）、ScheduledTriggerEvaluator 與 BehaviorTriggerEvaluator 與 supports() 註冊 registry，並以例外隔離（evaluator 拋例外→該筆記 skipped + reason、不影響同批其他）封裝判定，完成後接 spec-reviewer 與 code-quality-reviewer。
 
+## Session 31 — 2026-06-10 22:10
+- Stage: SDD
+- Task: 5.2 實作 ReachTriggerEvaluator（行為事件 / 排程 cycle）觸發判定
+- Transition: in_progress → passing
+- Evidence:
+  - Commits: 1fb2f39 feat(campaign): add ReachTriggerEvaluator strategy with scheduled/behavior triggers and exception isolation (task 5.2)；feec9de docs: document scoped checkstyle SuppressWarningsFilter policy (task 5.2 review)
+  - Tests: ReachTriggerEvaluatorTest 7 tests green（@Nested 觸發判定無購物車：scheduled due/not-due + behavior match/no-match；觸發判定例外隔離：拋例外 evaluator 在三筆 batch 中只記自己 SKIPPED+reason、其餘兩筆仍 TRIGGER）；`:campaign:spotlessCheck checkstyleMain spotbugsMain test`、`:app:test` ArchUnit BUILD SUCCESSFUL
+  - Spec-reviewer: ✅ Spec compliant（5/5；介面保留 supports():CampaignType + shouldTrigger(TriggerContext)，新增 kind() 判定為忠於 diagram 的最小擴充；無 section-6 Kafka/scheduler/consumer 外洩）
+  - Code-quality-reviewer: ✅ Approved（無 Critical/Important；TriggerContext/TriggerDecision record 不可變、catch(RuntimeException) 為 §6 例外隔離所必需且 scoped 抑制、SLF4J 首例慣例正確；Minor #3 CLAUDE.md 留註已於 feec9de 補上）
+- Next action: Section 5（5.1、5.2）全數 passing；執行 final pass（`./gradlew check` + `openspec validate add-ecommerce-campaign-system --strict`）後 invoke spec-driven-dev:verification-before-completion。
+
+
 
