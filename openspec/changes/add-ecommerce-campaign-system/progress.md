@@ -180,6 +180,17 @@
 - Transition: not_started → in_progress
 - Next action: dispatch implementer subagent 以 Flyway migration 建立三表（含 code_type/coupon_code_status enum 與 unique(coupon_code_id,user_id,order_id)），JPA 實體與 repository，並實作 used_count atomic update 控總量與重複核銷唯一鍵阻擋（對齊 05-er-database-schema.puml）。
 
+## Session 22 — 2026-06-10 18:20
+- Stage: SDD
+- Task: 3.3 實作優惠券三層結構（coupon_campaign / coupon_code / coupon_redemption）
+- Transition: in_progress → passing
+- Evidence:
+  - Commits: 34a486d feat(campaign): add coupon three-table model with atomic usage control (task 3.3)
+  - Tests: CouponEnumContractTest（fast no-DB）green；`:campaign:spotlessCheck checkstyleMain spotbugsMain test`、`:app:test` ArchUnit BUILD SUCCESSFUL；CouponPersistenceIntegrationTest（真實 Postgres Testcontainers，4 tests：SHARED_CODE 單碼/UNIQUE_CODE 多碼含 assigned_user_id+status、重複核銷 unique 阻擋 DataIntegrityViolationException、atomic used_count 達上限回傳 0 拒絕且不超過 total_usage_limit）本沙箱無 Docker → SKIPPED 待 CI 實跑
+  - Spec-reviewer: ✅ Spec compliant（5/5；V2__coupon.sql 三表/兩 enum/FK/unique(coupon_code_id,user_id,order_id)/unique(lower(code)) 對齊 05-er，V1 未動）
+  - Code-quality-reviewer: ✅ Approved（無 Critical/Important；entity 對齊 3.1 NAMED_ENUM 風格、tryIncrementUsedCount 單一條件式 UPDATE 無 lost-update、clearAutomatically=true 讀新狀態；僅 cosmetic Minor）
+- Next action: Section 3（3.1–3.3）全數 passing；執行 final pass（`./gradlew check` + `openspec validate add-ecommerce-campaign-system --strict`）後 invoke spec-driven-dev:verification-before-completion。
+
 
 
 

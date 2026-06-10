@@ -79,12 +79,13 @@
   - Depends on: 3.1
   - Independence: serial
   - status: passing
-- [ ] 3.3 實作優惠券三層結構（coupon_campaign / coupon_code / coupon_redemption）
+- [x] 3.3 實作優惠券三層結構（coupon_campaign / coupon_code / coupon_redemption）
   - Acceptance: WHEN 設定優惠券活動 THEN 以 coupon_campaign 存 code_type(SHARED_CODE/UNIQUE_CODE)/total_usage_limit/per_user_limit/used_count；coupon_code 存個別碼與 status(AVAILABLE/ASSIGNED/REDEEMED/EXPIRED)（§4，FR-002/FR-004）
   - Acceptance: WHEN 同一 `(coupon_code_id, user_id, order_id)` 重複核銷 THEN 以唯一鍵阻擋，且 `used_count` 以 atomic update 控總量（§4，FR-004）
   - Depends on: 3.1
   - Independence: serial
-  - status: in_progress
+  - status: passing
+  - follow-up: per_user_limit 強制（counting check）與 coupon_code 輸入長度/格式驗證留待 redemption 流程/section-4 API 落地時於信任邊界補上（本任務僅交付 domain/persistence 層與 atomic/unique 保證）
 
 ## 4. Campaign API — CRUD 與生命週期
 
