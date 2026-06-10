@@ -1,0 +1,72 @@
+[versions]
+# JVM toolchain
+java = "21"
+
+# Spring Boot 3 (BOM-managed transitive versions)
+springBoot = "3.4.1"
+springDependencyManagement = "1.1.7"
+
+# Architecture guard
+archunit = "1.3.0"
+
+# Code formatting: Spotless plugin + Palantir Java Format (single-source format, no custom rules)
+spotless = "7.0.2"
+palantirJavaFormat = "2.50.0"
+
+# Static analysis & style (design.md §11.3): Checkstyle = google_checks base style
+# minus layout (Spotless owns layout); SpotBugs = bytecode-level bug detection.
+checkstyle = "10.21.1"
+# SpotBugs Gradle plugin (6.x) vs. SpotBugs core/annotations tool (4.x) version
+# lines differ; keep both pinned and aligned (plugin 6.0.x ships core 4.8.x).
+spotbugs = "6.0.27"
+spotbugsTool = "4.8.6"
+spotbugsAnnotations = "4.8.6"
+# Coverage (design.md §11.5): JaCoCo report + conservative MVP minimum gate.
+jacoco = "0.8.12"
+
+# PostgreSQL JDBC driver (runtime only; aligned with Spring Boot 3.4 BOM)
+postgresql = "42.7.4"
+
+# Test
+junit = "5.11.4"
+# Integration testing with real Kafka + PostgreSQL containers (design.md §7)
+testcontainers = "1.20.4"
+
+[libraries]
+# Spring Boot starters (versions managed by the Spring Boot BOM / dependency-management plugin)
+spring-boot-starter = { module = "org.springframework.boot:spring-boot-starter" }
+spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-starter-test" }
+# PostgreSQL DataSource + JPA (Kafka / DB base connectivity — design.md §3, §9)
+spring-boot-starter-data-jpa = { module = "org.springframework.boot:spring-boot-starter-data-jpa" }
+# Spring for Apache Kafka (broker connectivity; topic/partition defs are task 2.x)
+spring-kafka = { module = "org.springframework.kafka:spring-kafka" }
+# JSR-380 bean validation for fail-fast @ConfigurationProperties binding
+spring-boot-starter-validation = { module = "org.springframework.boot:spring-boot-starter-validation" }
+# PostgreSQL JDBC driver (runtime)
+postgresql = { module = "org.postgresql:postgresql", version.ref = "postgresql" }
+
+# ArchUnit (JUnit 5 integration)
+archunit-junit5 = { module = "com.tngtech.archunit:archunit-junit5", version.ref = "archunit" }
+
+# JUnit 5
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
+
+# Testcontainers (versions managed by the Testcontainers BOM below) — real Kafka
+# + PostgreSQL containers back the module-boundary integration tests; the broker
+# is NEVER mocked (design.md §7).
+testcontainers-bom = { module = "org.testcontainers:testcontainers-bom", version.ref = "testcontainers" }
+testcontainers-junit-jupiter = { module = "org.testcontainers:junit-jupiter" }
+testcontainers-postgresql = { module = "org.testcontainers:postgresql" }
+testcontainers-kafka = { module = "org.testcontainers:kafka" }
+# Spring Boot @ServiceConnection support for Testcontainers (auto-wires
+# spring.datasource.* and spring.kafka.bootstrap-servers from running containers).
+spring-boot-testcontainers = { module = "org.springframework.boot:spring-boot-testcontainers" }
+
+# SpotBugs annotations (@SuppressFBWarnings / @Nullable etc.) — compile-only.
+spotbugs-annotations = { module = "com.github.spotbugs:spotbugs-annotations", version.ref = "spotbugsAnnotations" }
+
+[plugins]
+spring-boot = { id = "org.springframework.boot", version.ref = "springBoot" }
+spring-dependency-management = { id = "io.spring.dependency-management", version.ref = "springDependencyManagement" }
+spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }
+spotbugs = { id = "com.github.spotbugs", version.ref = "spotbugs" }
