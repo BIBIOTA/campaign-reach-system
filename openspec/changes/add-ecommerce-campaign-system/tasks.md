@@ -60,7 +60,7 @@
   - Depends on: 2.1, 1.2
   - Independence: serial
   - status: passing
-  - follow-up: PartitionKeys 對 String 入參（sendCycle / sourceTaskKey）目前僅 requireNonNull 未擋空字串；空字串會默默破壞 ordering/冪等，待 producer 接線（6.x/7.x/9.x）前補 requireNonBlank 與對應測試（code-quality Minor）
+  - resolved: PartitionKeys 對 String 入參（sendCycle / sourceTaskKey）的 requireNonBlank 守衛已於 a6d11eb 補上並有對應測試（原 code-quality Minor follow-up 已關閉）
 
 ## 3. Campaign domain — 領域模型與持久化
 

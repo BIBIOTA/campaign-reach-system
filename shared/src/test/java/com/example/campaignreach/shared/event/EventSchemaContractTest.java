@@ -1,6 +1,7 @@
 package com.example.campaignreach.shared.event;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -120,5 +121,69 @@ class EventSchemaContractTest {
         assertThat(json.fieldNames())
                 .toIterable()
                 .containsExactlyInAnyOrder("reachTaskId", "providerMessageId", "outcome", "occurredAt");
+    }
+
+    // --- Compact-constructor validation: invalid events MUST fail at construction, before they can
+    // be serialized onto the wire (so a malformed event never reaches a consumer's deserializer). ---
+
+    @Test
+    void reachRequestedRejectsBlankRequiredFields() {
+        assertThatThrownBy(() -> new ReachRequested(null, "t", "p", TriggerType.SCHEDULED_BATCH, "sched:c", null))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() ->
+                        new ReachRequested(UUID.randomUUID(), " ", "p", TriggerType.SCHEDULED_BATCH, "sched:c", null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("targetSpec");
+        assertThatThrownBy(() ->
+                        new ReachRequested(UUID.randomUUID(), "t", "", TriggerType.SCHEDULED_BATCH, "sched:c", null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("reachPlan");
+        assertThatThrownBy(
+                        () -> new ReachRequested(UUID.randomUUID(), "t", "p", TriggerType.SCHEDULED_BATCH, " ", null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("sendCycle");
+    }
+
+    @Test
+    void reachRequestedRequiresTriggerEventIdOnlyForEventTrigger() {
+        // EVENT trigger: triggerEventId is mandatory.
+        assertThatThrownBy(() -> new ReachRequested(UUID.randomUUID(), "t", "p", TriggerType.EVENT, "event:e", null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("triggerEventId");
+        assertThatThrownBy(() -> new ReachRequested(UUID.randomUUID(), "t", "p", TriggerType.EVENT, "event:e", " "))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("triggerEventId");
+        // SCHEDULED_BATCH: null triggerEventId is valid (no behavior-event source).
+        assertThat(new ReachRequested(UUID.randomUUID(), "t", "p", TriggerType.SCHEDULED_BATCH, "sched:c", null)
+                        .triggerEventId())
+                .isNull();
+    }
+
+    @Test
+    void reachTaskCreatedRejectsNullIdsAndBlankSendCycle() {
+        UUID id = UUID.randomUUID();
+        assertThatThrownBy(() -> new ReachTaskCreated(null, id, id, id, "sched:c", Channel.EMAIL))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new ReachTaskCreated(id, id, id, id, " ", Channel.EMAIL))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("sendCycle");
+        assertThatThrownBy(() -> new ReachTaskCreated(id, id, id, id, "sched:c", null))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    void sendResultRecordedRejectsBlankOutcomeAndNullTimestamp() {
+        UUID id = UUID.randomUUID();
+        Instant now = Instant.parse("2026-06-09T10:00:00Z");
+        assertThatThrownBy(() -> new SendResultRecorded(null, "m", "SENT", now))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new SendResultRecorded(id, "m", " ", now))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("outcome");
+        assertThatThrownBy(() -> new SendResultRecorded(id, "m", "SENT", null))
+                .isInstanceOf(NullPointerException.class);
+        // providerMessageId is nullable (provider may return none on early failure).
+        assertThat(new SendResultRecorded(id, null, "FAILED", now).providerMessageId())
+                .isNull();
     }
 }

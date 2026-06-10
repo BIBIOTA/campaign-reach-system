@@ -4,6 +4,7 @@ import java.util.HashMap;
 import java.util.Map;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.kafka.ConcurrentKafkaListenerContainerFactoryConfigurer;
 import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
 import org.springframework.boot.ssl.SslBundles;
@@ -30,10 +31,20 @@ import org.springframework.kafka.listener.ContainerProperties;
  *
  * <p>On re-delivery the consumer can safely resume; idempotency is provided by the consumers' DB
  * unique constraints (reach_request batch key, reach_task four-column key), not by broker
- * exactly-once. This class defines policy only — it wires no {@code @KafkaListener}, producer, or
- * topic-admin bean (those belong to tasks 6.x / 7.x / 9.x).
+ * exactly-once. This class wires no {@code @KafkaListener}, producer, or topic-admin bean (those
+ * belong to tasks 6.x / 7.x / 9.x) — it only contributes the consumer/container <em>policy</em> beans.
+ *
+ * <p><strong>This is active Spring configuration, not a passive contract.</strong> Because the
+ * shared kernel is under the application's component-scan root, this class would otherwise build its
+ * beans in every context. It is therefore gated behind {@code campaignreach.kafka.at-least-once.enabled}
+ * (default off): until a consumer module (6.x) opts in, no beans are created and Spring Boot's Kafka
+ * auto-configuration is left untouched. The container-factory bean is deliberately named
+ * {@code atLeastOnceKafkaListenerContainerFactory} (not the auto-config default
+ * {@code kafkaListenerContainerFactory}) so it never silently overrides the default; consumers
+ * reference it explicitly via {@code @KafkaListener(containerFactory = "atLeastOnceKafkaListenerContainerFactory")}.
  */
 @Configuration
+@ConditionalOnProperty(name = "campaignreach.kafka.at-least-once.enabled", havingValue = "true")
 public class KafkaConsumerConfig {
 
     /**
@@ -61,12 +72,16 @@ public class KafkaConsumerConfig {
      * {@code spring.kafka.listener.*} auto-configuration first; the ack-mode override follows to
      * guarantee MANUAL_IMMEDIATE regardless of what the property file sets.
      *
+     * <p>Named {@code atLeastOnceKafkaListenerContainerFactory} rather than the auto-config default
+     * {@code kafkaListenerContainerFactory} so it never silently shadows the default bean; consumers
+     * must opt in explicitly via {@code @KafkaListener(containerFactory = "atLeastOnceKafkaListenerContainerFactory")}.
+     *
      * @param configurer Spring Boot configurer that applies {@code spring.kafka.listener.*} settings
      * @param consumerFactory the auto-commit-disabled consumer factory
      * @return a container factory enforcing manual, post-persistence offset commits
      */
     @Bean
-    public ConcurrentKafkaListenerContainerFactory<Object, Object> kafkaListenerContainerFactory(
+    public ConcurrentKafkaListenerContainerFactory<Object, Object> atLeastOnceKafkaListenerContainerFactory(
             ConcurrentKafkaListenerContainerFactoryConfigurer configurer,
             ConsumerFactory<Object, Object> consumerFactory) {
         ConcurrentKafkaListenerContainerFactory<Object, Object> factory =

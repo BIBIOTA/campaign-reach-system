@@ -45,7 +45,7 @@ class KafkaConsumerConfigTest {
                 mock(ConcurrentKafkaListenerContainerFactoryConfigurer.class);
 
         ConcurrentKafkaListenerContainerFactory<Object, Object> listenerFactory =
-                config.kafkaListenerContainerFactory(configurer, consumerFactory);
+                config.atLeastOnceKafkaListenerContainerFactory(configurer, consumerFactory);
 
         assertThat(listenerFactory.getContainerProperties().getAckMode())
                 .isEqualTo(ContainerProperties.AckMode.MANUAL_IMMEDIATE);
