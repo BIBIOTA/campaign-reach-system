@@ -8,6 +8,5 @@ package com.example.campaignreach.shared.event;
  */
 public final class SharedEventMarker {
 
-    private SharedEventMarker() {
-    }
+    private SharedEventMarker() {}
 }

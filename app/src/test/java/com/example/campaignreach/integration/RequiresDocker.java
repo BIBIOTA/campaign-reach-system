@@ -21,5 +21,4 @@ import org.junit.jupiter.api.condition.EnabledIf;
 @Retention(RetentionPolicy.RUNTIME)
 @Inherited
 @EnabledIf("com.example.campaignreach.integration.DockerAvailability#isDockerAvailable")
-@interface RequiresDocker {
-}
+@interface RequiresDocker {}

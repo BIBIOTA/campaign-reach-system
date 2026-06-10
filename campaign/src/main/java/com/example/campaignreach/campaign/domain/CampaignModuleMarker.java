@@ -9,6 +9,5 @@ package com.example.campaignreach.campaign.domain;
  */
 public final class CampaignModuleMarker {
 
-    private CampaignModuleMarker() {
-    }
+    private CampaignModuleMarker() {}
 }

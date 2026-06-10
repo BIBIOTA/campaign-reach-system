@@ -1,6 +1,7 @@
 plugins {
     java
     id("io.spring.dependency-management")
+    id("com.diffplug.spotless")
 }
 
 // Resolve the version catalog at runtime so this precompiled script plugin does
@@ -32,4 +33,16 @@ dependencies {
 
 tasks.withType<Test>().configureEach {
     useJUnitPlatform()
+}
+
+// Code formatting — single source of truth: Palantir Java Format (4-space indent).
+// No custom layout rules, no per-file/per-block toggles (design.md §11.2).
+spotless {
+    java {
+        target("src/**/*.java")
+        palantirJavaFormat(libs.findVersion("palantirJavaFormat").get().requiredVersion)
+        removeUnusedImports()
+        trimTrailingWhitespace()
+        endWithNewline()
+    }
 }

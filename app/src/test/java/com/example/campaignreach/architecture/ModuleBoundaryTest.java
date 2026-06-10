@@ -32,8 +32,11 @@ class ModuleBoundaryTest {
     @Test
     void campaignMustNotDependOnReach() {
         ArchRule rule = noClasses()
-                .that().resideInAPackage("..campaign..")
-                .should().dependOnClassesThat().resideInAPackage("..reach..")
+                .that()
+                .resideInAPackage("..campaign..")
+                .should()
+                .dependOnClassesThat()
+                .resideInAPackage("..reach..")
                 .because("campaign and reach must communicate only through shared.event (design.md §3)");
 
         rule.check(importedClasses);
@@ -42,8 +45,11 @@ class ModuleBoundaryTest {
     @Test
     void reachMustNotDependOnCampaign() {
         ArchRule rule = noClasses()
-                .that().resideInAPackage("..reach..")
-                .should().dependOnClassesThat().resideInAPackage("..campaign..")
+                .that()
+                .resideInAPackage("..reach..")
+                .should()
+                .dependOnClassesThat()
+                .resideInAPackage("..campaign..")
                 .because("campaign and reach must communicate only through shared.event (design.md §3)");
 
         rule.check(importedClasses);

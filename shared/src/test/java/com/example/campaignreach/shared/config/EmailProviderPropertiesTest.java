@@ -20,8 +20,7 @@ class EmailProviderPropertiesTest {
 
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(
-                    ConfigurationPropertiesAutoConfiguration.class,
-                    ValidationAutoConfiguration.class))
+                    ConfigurationPropertiesAutoConfiguration.class, ValidationAutoConfiguration.class))
             .withUserConfiguration(TestConfig.class);
 
     @Test
@@ -57,6 +56,5 @@ class EmailProviderPropertiesTest {
     }
 
     @EnableConfigurationProperties(EmailProviderProperties.class)
-    static class TestConfig {
-    }
+    static class TestConfig {}
 }

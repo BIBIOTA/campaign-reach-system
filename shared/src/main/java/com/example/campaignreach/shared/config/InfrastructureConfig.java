@@ -39,12 +39,10 @@ public class InfrastructureConfig {
      * at context startup so a missing value fails fast with a clear error.
      */
     @Bean
-    RequiredInfrastructurePropertiesValidator requiredInfrastructurePropertiesValidator(
-            Environment environment) {
+    RequiredInfrastructurePropertiesValidator requiredInfrastructurePropertiesValidator(Environment environment) {
         RequiredInfrastructurePropertiesValidator validator =
                 new RequiredInfrastructurePropertiesValidator(environment);
         validator.validate();
         return validator;
     }
 }
-

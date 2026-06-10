@@ -46,15 +46,14 @@ class InfrastructureSmokeIntegrationTest extends AbstractIntegrationTest {
     @Test
     void integrationContextStartsWithRealKafkaAndPostgres() {
         assertThat(applicationContext).isNotNull();
-        assertThat(applicationContext.getBean(
-                "requiredInfrastructurePropertiesValidator")).isNotNull();
+        assertThat(applicationContext.getBean("requiredInfrastructurePropertiesValidator"))
+                .isNotNull();
 
         assertThat(POSTGRES.isRunning()).isTrue();
         assertThat(KAFKA.isRunning()).isTrue();
 
         // The injected broker address is the real container, not a mock.
-        assertThat(kafkaProperties.getBootstrapServers())
-                .containsExactly(KAFKA.getBootstrapServers());
+        assertThat(kafkaProperties.getBootstrapServers()).containsExactly(KAFKA.getBootstrapServers());
     }
 
     /**
@@ -86,16 +85,14 @@ class InfrastructureSmokeIntegrationTest extends AbstractIntegrationTest {
         props.put("value.deserializer", StringDeserializer.class);
         props.remove(JsonDeserializer.TRUSTED_PACKAGES);
         ConsumerFactory<String, String> factory =
-                new DefaultKafkaConsumerFactory<>(
-                        props, new StringDeserializer(), new StringDeserializer());
+                new DefaultKafkaConsumerFactory<>(props, new StringDeserializer(), new StringDeserializer());
         return factory.createConsumer();
     }
 
     private ConsumerRecord<String, String> pollSingle(Consumer<String, String> consumer) {
         long deadline = System.currentTimeMillis() + Duration.ofSeconds(20).toMillis();
         while (System.currentTimeMillis() < deadline) {
-            ConsumerRecords<String, String> records =
-                    consumer.poll(Duration.ofMillis(500));
+            ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(500));
             if (!records.isEmpty()) {
                 return records.iterator().next();
             }

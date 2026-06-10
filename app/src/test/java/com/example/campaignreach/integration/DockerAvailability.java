@@ -14,8 +14,7 @@ import org.testcontainers.DockerClientFactory;
  */
 final class DockerAvailability {
 
-    private DockerAvailability() {
-    }
+    private DockerAvailability() {}
 
     /**
      * @return {@code true} only when a Docker daemon is actually reachable (this

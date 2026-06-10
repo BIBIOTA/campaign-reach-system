@@ -24,8 +24,9 @@ public class EmailProviderProperties {
      * Email provider API key. Supplied via the {@code EMAIL_PROVIDER_API_KEY}
      * environment variable / vault — never hard-coded, never version-controlled.
      */
-    @NotBlank(message = "campaignreach.email-provider.api-key must be provided "
-            + "via the EMAIL_PROVIDER_API_KEY environment variable / vault and must not be blank")
+    @NotBlank(
+            message = "campaignreach.email-provider.api-key must be provided "
+                    + "via the EMAIL_PROVIDER_API_KEY environment variable / vault and must not be blank")
     private String apiKey;
 
     public String getApiKey() {

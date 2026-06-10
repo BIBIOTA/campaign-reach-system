@@ -9,6 +9,5 @@ package com.example.campaignreach.reach.orchestrator;
  */
 public final class ReachModuleMarker {
 
-    private ReachModuleMarker() {
-    }
+    private ReachModuleMarker() {}
 }

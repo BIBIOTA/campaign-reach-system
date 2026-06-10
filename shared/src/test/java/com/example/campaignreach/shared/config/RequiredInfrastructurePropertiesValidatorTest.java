@@ -16,9 +16,7 @@ class RequiredInfrastructurePropertiesValidatorTest {
 
     private MockEnvironment fullyConfiguredEnvironment() {
         return new MockEnvironment()
-                .withProperty(
-                        RequiredInfrastructurePropertiesValidator.KAFKA_BOOTSTRAP_SERVERS,
-                        "localhost:9092")
+                .withProperty(RequiredInfrastructurePropertiesValidator.KAFKA_BOOTSTRAP_SERVERS, "localhost:9092")
                 .withProperty(
                         RequiredInfrastructurePropertiesValidator.DATASOURCE_URL,
                         "jdbc:postgresql://localhost:5432/campaignreach");
@@ -26,8 +24,7 @@ class RequiredInfrastructurePropertiesValidatorTest {
 
     @Test
     void startupSucceedsWhenAllRequiredPropertiesPresent() {
-        var validator =
-                new RequiredInfrastructurePropertiesValidator(fullyConfiguredEnvironment());
+        var validator = new RequiredInfrastructurePropertiesValidator(fullyConfiguredEnvironment());
 
         assertThatCode(validator::validate).doesNotThrowAnyException();
     }
@@ -35,18 +32,15 @@ class RequiredInfrastructurePropertiesValidatorTest {
     @Test
     void startupFailsWhenKafkaBrokerMissing() {
         var environment = fullyConfiguredEnvironment();
-        environment.withProperty(
-                RequiredInfrastructurePropertiesValidator.KAFKA_BOOTSTRAP_SERVERS, "");
+        environment.withProperty(RequiredInfrastructurePropertiesValidator.KAFKA_BOOTSTRAP_SERVERS, "");
         var validator = new RequiredInfrastructurePropertiesValidator(environment);
 
         assertThatThrownBy(validator::validate)
                 .isInstanceOf(MissingInfrastructureConfigException.class)
-                .hasMessageContaining(
-                        RequiredInfrastructurePropertiesValidator.KAFKA_BOOTSTRAP_SERVERS)
+                .hasMessageContaining(RequiredInfrastructurePropertiesValidator.KAFKA_BOOTSTRAP_SERVERS)
                 .extracting(ex -> ((MissingInfrastructureConfigException) ex).getMissingProperties())
                 .asList()
-                .containsExactly(
-                        RequiredInfrastructurePropertiesValidator.KAFKA_BOOTSTRAP_SERVERS);
+                .containsExactly(RequiredInfrastructurePropertiesValidator.KAFKA_BOOTSTRAP_SERVERS);
     }
 
     @Test
@@ -62,13 +56,11 @@ class RequiredInfrastructurePropertiesValidatorTest {
 
     @Test
     void startupFailureListsEveryMissingPropertyAtOnce() {
-        var validator =
-                new RequiredInfrastructurePropertiesValidator(new MockEnvironment());
+        var validator = new RequiredInfrastructurePropertiesValidator(new MockEnvironment());
 
         assertThatThrownBy(validator::validate)
                 .isInstanceOf(MissingInfrastructureConfigException.class)
-                .satisfies(ex -> assertThat(
-                                ((MissingInfrastructureConfigException) ex).getMissingProperties())
+                .satisfies(ex -> assertThat(((MissingInfrastructureConfigException) ex).getMissingProperties())
                         .containsExactlyInAnyOrder(
                                 RequiredInfrastructurePropertiesValidator.KAFKA_BOOTSTRAP_SERVERS,
                                 RequiredInfrastructurePropertiesValidator.DATASOURCE_URL));
