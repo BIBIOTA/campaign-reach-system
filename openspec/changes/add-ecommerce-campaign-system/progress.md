@@ -163,6 +163,23 @@
 - Transition: not_started → in_progress
 - Next action: dispatch implementer subagent 建立 DiscountRuleConfig/GiftAddonRuleConfig/FlashSaleRuleConfig DTO（含 schema_version）、依 type 路由的 schema 驗證（拒絕負折扣/百分比>100%/結束早於開始/門檻條件保存）與舊版 schema_version 的應用層 upcaster（不需 DB migration）。
 
+## Session 20 — 2026-06-10 17:30
+- Stage: SDD
+- Task: 3.2 實作各 CampaignType 的 RuleConfig DTO 與 schema 驗證 + upcaster
+- Transition: in_progress → passing
+- Evidence:
+  - Commits: ba5bbb6 feat(campaign): add RuleConfig DTOs, schema validation and upcaster (task 3.2)；1a7e5bb refactor(campaign): drop unused JSR-310, guard rule_config read boundary (task 3.2 review)
+  - Tests: RuleConfigMapperTest 9 fast non-DB tests green（合法三型序列化含 schema_version、負折扣/百分比>100%/endAt<startAt 各帶 reason 拒絕、NONE/MIN_SPEND 門檻 round-trip、舊版 schema_version upcast、blank/非物件 JSON read 守衛）；`:campaign:spotlessCheck checkstyleMain spotbugsMain test`、`:app:test` ArchUnit BUILD SUCCESSFUL
+  - Spec-reviewer: ✅ Spec compliant（5/5；RuleConfig sealed + 三 record 對齊 03-class，未提前實作 4.1/3.3/section-5）
+  - Code-quality-reviewer: ✅ Approved（無 Critical/Important；BigDecimal 金額正確、discriminator 讀取健壯、upcaster 最小化；Minor #1 dead JSR-310 與 #2 read 守衛 #3 annotation 已於 1a7e5bb 修正）
+- Next action: dispatch implementer subagent for task 3.3（優惠券三層 coupon_campaign/coupon_code/coupon_redemption + 唯一鍵防重複核銷 + used_count atomic 控總量）。
+
+## Session 21 — 2026-06-10 17:35
+- Stage: SDD
+- Task: 3.3 實作優惠券三層結構（coupon_campaign / coupon_code / coupon_redemption）
+- Transition: not_started → in_progress
+- Next action: dispatch implementer subagent 以 Flyway migration 建立三表（含 code_type/coupon_code_status enum 與 unique(coupon_code_id,user_id,order_id)），JPA 實體與 repository，並實作 used_count atomic update 控總量與重複核銷唯一鍵阻擋（對齊 05-er-database-schema.puml）。
+
 
 
 
