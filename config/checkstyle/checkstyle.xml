@@ -119,5 +119,12 @@
         </module>
         <module name="SimplifyBooleanExpression"/>
         <module name="SimplifyBooleanReturn"/>
+
+        <!-- Honour @SuppressWarnings("checkstyle:...") at the point of use (paired with the
+             Checker-level SuppressWarningsFilter below). Used sparingly for deliberate broad
+             catches that implement per-item exception isolation. -->
+        <module name="SuppressWarningsHolder"/>
     </module>
+
+    <module name="SuppressWarningsFilter"/>
 </module>

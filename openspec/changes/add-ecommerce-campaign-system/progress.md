@@ -236,4 +236,39 @@
   - 重跑 run 27264878795 ✅ BUILD SUCCESSFUL（:app:test 實跑真實 PostgreSQL 容器 ~2m53s，過 JaCoCo verification）
 - Next action: PR #6 CI 綠燈；待 review 合併後接 Section 4（Campaign API CRUD 與生命週期）。
 
+## Session 28 — 2026-06-10 21:00
+- Stage: SDD
+- Task: 5.1 實作 PromotionEvaluator（折扣/滿贈加價購/閃購）優惠計算
+- Transition: not_started → in_progress
+- Next action: 於新分支 feat/section-5-evaluators 派發 implementer subagent，於 campaign/evaluation 建立 PromotionEvaluator Strategy 介面 + CartContext/PromotionResult、DiscountPromotionEvaluator（依 DiscountRuleConfig 算折扣金額與門檻）與 stub 級 FlashSalePromotionEvaluator（回傳已售罄/不適用），以 supports()→CampaignType 註冊、OCP 不改既有，完成後接 spec-reviewer 與 code-quality-reviewer。
+
+## Session 29 — 2026-06-10 21:30
+- Stage: SDD
+- Task: 5.1 實作 PromotionEvaluator（折扣/滿贈加價購/閃購）優惠計算
+- Transition: in_progress → passing
+- Evidence:
+  - Commits: 6f1a3f6 feat(campaign): add PromotionEvaluator strategy with discount calc and flash-sale stub (task 5.1)
+  - Tests: PromotionEvaluatorTest 11 tests green（@Nested 對應三 scenario：結帳時計算折扣 AMOUNT/PERCENTAGE HALF_UP scale2/AMOUNT cap/MIN_SPEND 達/未達、閃購 stub 回 not-applicable 不丟例外、registry 依 supports() 解析含未註冊型別降級）；`:campaign:spotlessCheck checkstyleMain spotbugsMain test`、`:app:test` ArchUnit BUILD SUCCESSFUL
+  - Spec-reviewer: ✅ Spec compliant（5/5；介面簽章對齊 03-class，無 GIFT_ADDON/ReachTrigger 外洩，PromotionResult YAGNI）
+  - Code-quality-reviewer: ✅ Approved（無 Critical/Important；BigDecimal scale/rounding、負值防護、record 不可變、測試行為導向皆達標；3 項 Minor 觀察不阻擋）
+- Next action: dispatch implementer subagent for task 5.2（ReachTriggerEvaluator：TriggerContext shouldTrigger 行為事件/排程 cycle 判定 + 例外隔離記 skipped）。
+
+## Session 30 — 2026-06-10 21:35
+- Stage: SDD
+- Task: 5.2 實作 ReachTriggerEvaluator（行為事件 / 排程 cycle）觸發判定
+- Transition: not_started → in_progress
+- Next action: 派發 implementer subagent，於 campaign/evaluation 建立 ReachTriggerEvaluator Strategy 介面 + TriggerContext（行為事件/排程 cycle，無 CartContext）、ScheduledTriggerEvaluator 與 BehaviorTriggerEvaluator 與 supports() 註冊 registry，並以例外隔離（evaluator 拋例外→該筆記 skipped + reason、不影響同批其他）封裝判定，完成後接 spec-reviewer 與 code-quality-reviewer。
+
+## Session 31 — 2026-06-10 22:10
+- Stage: SDD
+- Task: 5.2 實作 ReachTriggerEvaluator（行為事件 / 排程 cycle）觸發判定
+- Transition: in_progress → passing
+- Evidence:
+  - Commits: 1fb2f39 feat(campaign): add ReachTriggerEvaluator strategy with scheduled/behavior triggers and exception isolation (task 5.2)；feec9de docs: document scoped checkstyle SuppressWarningsFilter policy (task 5.2 review)
+  - Tests: ReachTriggerEvaluatorTest 7 tests green（@Nested 觸發判定無購物車：scheduled due/not-due + behavior match/no-match；觸發判定例外隔離：拋例外 evaluator 在三筆 batch 中只記自己 SKIPPED+reason、其餘兩筆仍 TRIGGER）；`:campaign:spotlessCheck checkstyleMain spotbugsMain test`、`:app:test` ArchUnit BUILD SUCCESSFUL
+  - Spec-reviewer: ✅ Spec compliant（5/5；介面保留 supports():CampaignType + shouldTrigger(TriggerContext)，新增 kind() 判定為忠於 diagram 的最小擴充；無 section-6 Kafka/scheduler/consumer 外洩）
+  - Code-quality-reviewer: ✅ Approved（無 Critical/Important；TriggerContext/TriggerDecision record 不可變、catch(RuntimeException) 為 §6 例外隔離所必需且 scoped 抑制、SLF4J 首例慣例正確；Minor #3 CLAUDE.md 留註已於 feec9de 補上）
+- Next action: Section 5（5.1、5.2）全數 passing；執行 final pass（`./gradlew check` + `openspec validate add-ecommerce-campaign-system --strict`）後 invoke spec-driven-dev:verification-before-completion。
+
+
 

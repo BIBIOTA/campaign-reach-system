@@ -41,7 +41,7 @@ All checks are centrally configured and applied to each module via the buildSrc 
 | --- | --- |
 | `./gradlew spotlessApply` | **Auto-format locally** (run this before committing). |
 | `./gradlew spotlessCheck` | Formatting check. **Spotless (Palantir Java Format) is the single source of truth for formatting.** |
-| `./gradlew checkstyleMain` | Style check (derived from google_checks, **formatting rules removed** to avoid overlap with Spotless). `maxErrors=0`. |
+| `./gradlew checkstyleMain` | Style check (derived from google_checks, **formatting rules removed** to avoid overlap with Spotless). `maxErrors=0`. A `SuppressWarningsFilter` is enabled, so a scoped `@SuppressWarnings("checkstyle:<RuleName>")` suppresses that one rule at the annotated element — use it only for documented, justified cases (e.g. the deliberate broad `catch (RuntimeException)` that implements per-item exception isolation), never to broadly relax `maxErrors=0`. |
 | `./gradlew spotbugsMain` | Static analysis (`effort=MAX` / `reportLevel=MEDIUM`). **High and Normal severity bugs are blocking.** |
 | `./gradlew test` | Unit tests + **ArchUnit** boundary guards + **Testcontainers** integration tests. |
 | `./gradlew check` | **Aggregate gate**: all of the above + JaCoCo coverage verification (`jacocoTestCoverageVerification`). |
