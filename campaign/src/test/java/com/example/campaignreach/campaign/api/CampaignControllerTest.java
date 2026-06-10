@@ -269,7 +269,78 @@ class CampaignControllerTest {
                 .andExpect(status().isForbidden());
     }
 
+    // --- 4.2 活動狀態切換 (FR-011, US-002) ---
+
+    @Test
+    void 合法狀態切換() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(repository.save(any(Campaign.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        // DRAFT → SCHEDULED
+        when(repository.findById(id)).thenReturn(Optional.of(discountCampaign(id, CampaignStatus.DRAFT)));
+        mockMvc.perform(post("/internal/campaigns/" + id + "/status")
+                        .with(httpBasic("op", "pw"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("targetStatus", "SCHEDULED", "version", 0))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("SCHEDULED"));
+
+        // RUNNING → PAUSED (a later edge in the chain)
+        when(repository.findById(id)).thenReturn(Optional.of(discountCampaign(id, CampaignStatus.RUNNING)));
+        mockMvc.perform(post("/internal/campaigns/" + id + "/status")
+                        .with(httpBasic("op", "pw"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("targetStatus", "PAUSED", "version", 0))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PAUSED"));
+    }
+
+    @Test
+    void 不合理狀態切換被擋下() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(repository.findById(id)).thenReturn(Optional.of(discountCampaign(id, CampaignStatus.ENDED)));
+
+        // ENDED is terminal: ENDED → RUNNING is illegal → 422.
+        mockMvc.perform(post("/internal/campaigns/" + id + "/status")
+                        .with(httpBasic("op", "pw"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("targetStatus", "RUNNING", "version", 0))))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.error").value("illegal_transition"))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("ENDED -> RUNNING")));
+    }
+
+    @Test
+    void staleVersionTransitionReturnsConflict() throws Exception {
+        UUID id = UUID.randomUUID();
+        Campaign stored = discountCampaign(id, CampaignStatus.DRAFT); // stored version is 0
+        when(repository.findById(id)).thenReturn(Optional.of(stored));
+
+        mockMvc.perform(post("/internal/campaigns/" + id + "/status")
+                        .with(httpBasic("op", "pw"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("targetStatus", "SCHEDULED", "version", 1))))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error").value("conflict"));
+    }
+
+    @Test
+    void missingTargetStatusIsRejected() throws Exception {
+        UUID id = UUID.randomUUID();
+
+        mockMvc.perform(post("/internal/campaigns/" + id + "/status")
+                        .with(httpBasic("op", "pw"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("version", 0))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("validation_failed"));
+    }
+
     private Campaign discountCampaign(UUID id) {
+        return discountCampaign(id, CampaignStatus.DRAFT);
+    }
+
+    private Campaign discountCampaign(UUID id, CampaignStatus status) {
         DiscountRuleConfig rule = new DiscountRuleConfig(
                 DiscountRuleConfig.CURRENT_SCHEMA_VERSION,
                 DiscountKind.AMOUNT,
@@ -281,14 +352,6 @@ class CampaignControllerTest {
         String targetJson = "{\"kind\":\"STATIC_LIST\",\"listId\":\"" + UUID.randomUUID() + "\"}";
         String reachJson = "{\"channel\":\"EMAIL\",\"templateRef\":\"tpl-1\",\"timing\":\"SCHEDULED\"}";
         return new Campaign(
-                id,
-                "Spring Sale",
-                CampaignType.DISCOUNT,
-                CampaignStatus.DRAFT,
-                START,
-                END,
-                ruleJson,
-                targetJson,
-                reachJson);
+                id, "Spring Sale", CampaignType.DISCOUNT, status, START, END, ruleJson, targetJson, reachJson);
     }
 }

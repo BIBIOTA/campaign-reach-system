@@ -1,5 +1,6 @@
 package com.example.campaignreach.campaign.api;
 
+import com.example.campaignreach.campaign.domain.IllegalCampaignStatusTransitionException;
 import com.example.campaignreach.campaign.domain.rule.RuleConfigValidationException;
 import java.util.List;
 import org.springframework.http.HttpStatus;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  * <ul>
  *   <li>{@link RuleConfigValidationException} / bean-validation failure → 400 with the reasons (FR-005)
  *   <li>{@link CampaignNotFoundException} → 404
+ *   <li>{@link IllegalCampaignStatusTransitionException} → 422 (illegal lifecycle edge, FR-011)
  *   <li>{@link ObjectOptimisticLockingFailureException} → 409 (concurrent stale-version edit, FR-001)
  * </ul>
  *
@@ -41,6 +43,16 @@ public class CampaignApiExceptionHandler {
     @ExceptionHandler(CampaignNotFoundException.class)
     public ResponseEntity<ApiError> handleNotFound(CampaignNotFoundException ex) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ApiError("not_found", List.of(ex.getMessage())));
+    }
+
+    /**
+     * Maps an illegal lifecycle transition to 422 (semantically invalid given the current state),
+     * kept distinct from the 409 stale-version conflict (FR-011).
+     */
+    @ExceptionHandler(IllegalCampaignStatusTransitionException.class)
+    public ResponseEntity<ApiError> handleIllegalTransition(IllegalCampaignStatusTransitionException ex) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(new ApiError("illegal_transition", List.of(ex.getMessage())));
     }
 
     /** Maps a concurrent stale-version edit to 409 so the later writer fails rather than overwrites (FR-001). */

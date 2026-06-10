@@ -49,4 +49,13 @@ public class CampaignController {
     public CampaignView update(@PathVariable UUID id, @Valid @RequestBody UpdateCampaignRequest request) {
         return service.update(id, request);
     }
+
+    /**
+     * Performs an operator-driven lifecycle transition (task 4.2, FR-011): 422 on an illegal edge,
+     * 409 on a stale version.
+     */
+    @PostMapping("/{id}/status")
+    public CampaignView changeStatus(@PathVariable UUID id, @Valid @RequestBody ChangeCampaignStatusRequest request) {
+        return service.transition(id, request);
+    }
 }

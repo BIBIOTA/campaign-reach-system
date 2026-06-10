@@ -7,6 +7,10 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.time.Instant;
+import java.util.Collections;
+import java.util.EnumMap;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
@@ -34,6 +38,19 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Table(name = "campaign")
 @EntityListeners(AuditingEntityListener.class)
 public class Campaign {
+
+    /**
+     * Legal lifecycle edges (FR-011), per the state-machine diagram
+     * {@code diagrams/02-state-campaign-and-task-lifecycle.puml}: each key maps to the statuses
+     * reachable from it. {@code ENDED} is terminal (absent ⇒ no outgoing edge). The same guard is
+     * reused by the scheduler's time-driven transitions (task 6.1).
+     */
+    private static final Map<CampaignStatus, Set<CampaignStatus>> ALLOWED_TRANSITIONS =
+            Collections.unmodifiableMap(new EnumMap<>(Map.of(
+                    CampaignStatus.DRAFT, Set.of(CampaignStatus.SCHEDULED),
+                    CampaignStatus.SCHEDULED, Set.of(CampaignStatus.RUNNING),
+                    CampaignStatus.RUNNING, Set.of(CampaignStatus.PAUSED, CampaignStatus.ENDED),
+                    CampaignStatus.PAUSED, Set.of(CampaignStatus.RUNNING, CampaignStatus.ENDED))));
 
     @Id
     @Column(name = "id", nullable = false, updatable = false)
@@ -148,6 +165,24 @@ public class Campaign {
 
     public void setStatus(CampaignStatus status) {
         this.status = status;
+    }
+
+    /**
+     * Moves the campaign to {@code target} if the edge {@code current→target} is a legal lifecycle
+     * transition (FR-011), otherwise rejects with {@link IllegalCampaignStatusTransitionException}.
+     * Self-transitions and any edge out of the terminal {@code ENDED} state are illegal. The
+     * operator-driven status API (task 4.2) and the scheduler (task 6.1) both route through here.
+     *
+     * @param target the requested next status
+     */
+    public void transitionTo(CampaignStatus target) {
+        if (target == null) {
+            throw new IllegalArgumentException("target status must not be null");
+        }
+        if (!ALLOWED_TRANSITIONS.getOrDefault(status, Set.of()).contains(target)) {
+            throw new IllegalCampaignStatusTransitionException(status, target);
+        }
+        this.status = target;
     }
 
     public Instant getStartAt() {

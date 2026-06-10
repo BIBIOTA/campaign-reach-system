@@ -110,6 +110,23 @@ public class CampaignApplicationService {
         return toView(saved);
     }
 
+    /**
+     * Performs an operator-driven lifecycle transition (FR-011). Loads the campaign (404 if absent),
+     * enforces read-then-update optimistic locking exactly like {@link #update} (a stale {@code
+     * version} fails with {@link ObjectOptimisticLockingFailureException} → HTTP 409), then delegates
+     * to {@link Campaign#transitionTo} which rejects illegal edges (→ HTTP 422). Status is the only
+     * field changed.
+     */
+    @Transactional
+    public CampaignView transition(UUID id, ChangeCampaignStatusRequest request) {
+        Campaign campaign = require(id);
+        if (request.version() != campaign.getVersion()) {
+            throw new ObjectOptimisticLockingFailureException(Campaign.class, id);
+        }
+        campaign.transitionTo(request.targetStatus());
+        return toView(repository.save(campaign));
+    }
+
     private Campaign require(UUID id) {
         return repository.findById(id).orElseThrow(() -> new CampaignNotFoundException(id));
     }
