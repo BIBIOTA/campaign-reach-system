@@ -57,6 +57,32 @@ class RuleConfigMapperTest {
         assertThat(json).contains("\"schema_version\":1").contains("\"ruleType\":\"FLASH_SALE\"");
     }
 
+    @Test
+    void giftAddonConfigRoundTripsThroughFromJson() {
+        GiftAddonRuleConfig config =
+                new GiftAddonRuleConfig(GiftAddonRuleConfig.CURRENT_SCHEMA_VERSION, "SKU-GIFT-1", 3);
+
+        String json = mapper.toJson(config, CampaignType.GIFT_ADDON, START, END);
+        GiftAddonRuleConfig read = (GiftAddonRuleConfig) mapper.fromJson(CampaignType.GIFT_ADDON, json);
+
+        assertThat(read.schemaVersion()).isEqualTo(GiftAddonRuleConfig.CURRENT_SCHEMA_VERSION);
+        assertThat(read.giftSku()).isEqualTo("SKU-GIFT-1");
+        assertThat(read.quantity()).isEqualTo(3);
+    }
+
+    @Test
+    void flashSaleConfigRoundTripsThroughFromJson() {
+        FlashSaleRuleConfig config =
+                new FlashSaleRuleConfig(FlashSaleRuleConfig.CURRENT_SCHEMA_VERSION, new BigDecimal("49.90"), 2);
+
+        String json = mapper.toJson(config, CampaignType.FLASH_SALE, START, END);
+        FlashSaleRuleConfig read = (FlashSaleRuleConfig) mapper.fromJson(CampaignType.FLASH_SALE, json);
+
+        assertThat(read.schemaVersion()).isEqualTo(FlashSaleRuleConfig.CURRENT_SCHEMA_VERSION);
+        assertThat(read.salePrice()).isEqualByComparingTo("49.90");
+        assertThat(read.purchaseLimit()).isEqualTo(2);
+    }
+
     // --- 不合理規則被拒絕 (含明確原因) ---
 
     @Test

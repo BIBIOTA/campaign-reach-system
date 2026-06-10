@@ -2,6 +2,7 @@ package com.example.campaignreach.campaign.domain.rule;
 
 import com.example.campaignreach.campaign.domain.CampaignType;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -28,9 +29,17 @@ public class RuleConfigMapper {
     private final RuleConfigValidator validator;
     private final RuleConfigUpcaster upcaster;
 
-    /** Wires the validator and upcaster and configures the {@link ObjectMapper}. */
+    /**
+     * Wires the validator and upcaster.
+     *
+     * <p>Uses a <b>dedicated</b> {@link ObjectMapper} deliberately decoupled from the web-layer
+     * mapper: this codec owns the persisted {@code rule_config} JSONB format, so its serialization
+     * settings must not drift when the HTTP {@code ObjectMapper} is reconfigured. {@code
+     * FAIL_ON_UNKNOWN_PROPERTIES} is kept enabled so an unexpected field in a persisted/old payload
+     * surfaces as a validation error at this trust boundary rather than being silently dropped.
+     */
     public RuleConfigMapper(RuleConfigValidator validator, RuleConfigUpcaster upcaster) {
-        this.objectMapper = new ObjectMapper();
+        this.objectMapper = new ObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, true);
         this.validator = validator;
         this.upcaster = upcaster;
     }
