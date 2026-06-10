@@ -51,6 +51,12 @@ archunit-junit5 = { module = "com.tngtech.archunit:archunit-junit5", version.ref
 # JUnit 5
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
 
+# Jackson (BOM-managed version) — exercises the JSON wire contract of the
+# shared event schemas in tests; the production serializer wiring (Kafka
+# JsonSerializer/JsonDeserializer) is task 2.2.
+jackson-databind = { module = "com.fasterxml.jackson.core:jackson-databind" }
+jackson-datatype-jsr310 = { module = "com.fasterxml.jackson.datatype:jackson-datatype-jsr310" }
+
 # Testcontainers (versions managed by the Testcontainers BOM below) — real Kafka
 # + PostgreSQL containers back the module-boundary integration tests; the broker
 # is NEVER mocked (design.md §7).

@@ -106,6 +106,12 @@
   - Code-quality-reviewer: ✅ Approved（無 Critical/Important，3 項 Minor polish）
 - Next action: Section 1（1.1–1.6）全數 passing；執行 final pass（`./gradlew check` + `openspec validate --strict`）後 invoke spec-driven-dev:verification-before-completion。
 
+## Session 13 — 2026-06-10 14:40
+- Stage: SDD
+- Task: 2.1 定義 Kafka 事件 schema 與 topic 契約（shared/event）
+- Transition: not_started → in_progress
+- Next action: dispatch implementer subagent 於 shared/event 定義 ReachRequested / ReachTaskCreated / SendResultRecorded 強型別 schema（駝峰 sendCycle，對齊落庫 send_cycle_key）。
+
 
 
 
