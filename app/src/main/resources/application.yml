@@ -12,9 +12,9 @@ spring:
   # PostgreSQL DataSource (design.md §3, §9). URL has no real default so a
   # missing value fails fast rather than silently using an embedded DB.
   datasource:
-    url: ${DB_URL}
-    username: ${DB_USERNAME}
-    password: ${DB_PASSWORD}
+    url: ${DB_URL:}
+    username: ${DB_USERNAME:}
+    password: ${DB_PASSWORD:}
     driver-class-name: org.postgresql.Driver
 
   jpa:
@@ -26,9 +26,9 @@ spring:
   # Kafka broker connectivity (design.md §9). Topics, partition keys and
   # consumer groups are defined by later tasks (2.x), not here.
   kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:}
 
 # Email provider secret — supplied from environment / vault, never committed.
 campaignreach:
   email-provider:
-    api-key: ${EMAIL_PROVIDER_API_KEY}
+    api-key: ${EMAIL_PROVIDER_API_KEY:}
