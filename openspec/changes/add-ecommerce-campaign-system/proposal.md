@@ -11,8 +11,8 @@
 
 ## Impact
 
-- Affected specs: `specs/campaign/`、`specs/reach/`
-- Affected code: 新建 `campaign/`、`reach/`、`shared/` 三個 bounded module 與其資料表、Kafka topic（`domain.events`、`reach.requested`、`reach.dlq`）。
+- Affected specs: `specs/campaign/`、`specs/reach/`、`specs/engineering/`
+- Affected code: 新建 `campaign/`、`reach/`、`shared/` 三個 bounded module 與其資料表、Kafka topic（`domain.events`、`reach.requested`、`reach.dlq`），以及 repo 根目錄 `CLAUDE.md` 與 `AGENTS.md`（symlink）。
 - Breaking changes: No（全新系統，無既有相容性負擔）。
 
 ## Open Questions

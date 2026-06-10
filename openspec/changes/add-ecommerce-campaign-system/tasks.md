@@ -35,6 +35,14 @@
   - Depends on: 1.1, 1.3
   - Independence: serial
   - status: not_started
+- [ ] 1.6 建立 repo 根目錄 `CLAUDE.md` 與 symlink `AGENTS.md`（AI 協作指引）
+  - Acceptance: WHEN 在 repo 根目錄 THEN 存在 `CLAUDE.md`，內容涵蓋三個 bounded module（campaign / reach / shared）邊界與「僅透過 `shared/event` 溝通、禁止 campaign↔reach 直接 import」之約束（§3，呼應 1.1 ArchUnit）
+  - Acceptance: WHEN 開發者或 agent 讀 `CLAUDE.md` THEN 取得標準建置/檢查指令（`./gradlew spotlessApply`、`spotlessCheck`、`checkstyleMain`、`spotbugsMain`、`test`）與 CI gate 規則，與 §11.2／§11.3／§11.5 及任務 1.4／1.5 一致為單一事實來源
+  - Acceptance: WHEN 檢視 `AGENTS.md` THEN 其為指向 `CLAUDE.md` 的 symlink（`ls -l` 顯示 `AGENTS.md -> CLAUDE.md`），兩者內容不分歧、僅維護一份
+  - Acceptance: WHEN 慣例（module 邊界、lint/CI 指令）變更 THEN 同步更新 `CLAUDE.md`，避免文件與 build script 落差（§11）
+  - Depends on: 1.1, 1.4, 1.5
+  - Independence: parallel-safe
+  - status: not_started
 
 ## 2. Shared kernel — 事件契約
 
