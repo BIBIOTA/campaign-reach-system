@@ -54,4 +54,17 @@ class ModuleBoundaryTest {
 
         rule.check(importedClasses);
     }
+
+    @Test
+    void sharedMustNotDependOnCampaignOrReach() {
+        ArchRule rule = noClasses()
+                .that()
+                .resideInAPackage("..shared..")
+                .should()
+                .dependOnClassesThat()
+                .resideInAnyPackage("..campaign..", "..reach..")
+                .because("shared is the stable kernel; it must not depend on campaign or reach (design.md §3)");
+
+        rule.check(importedClasses);
+    }
 }

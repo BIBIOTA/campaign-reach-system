@@ -29,7 +29,7 @@ containing three bounded modules. All packages are rooted at `com.example.campai
 - Both campaign and reach **may** depend on `shared`; they **must not** depend on each other's domain.
 - `shared` contains only cross-module stable contracts (`event` / `config`) — campaign/reach entities, repositories, and services **must not** be placed here.
 - These constraints are enforced by **ArchUnit**: `com.example.campaignreach.architecture.ModuleBoundaryTest` in `:app`
-  verifies `campaign ↛ reach` and `reach ↛ campaign`. Any violation fails the test and blocks the gate.
+  verifies `campaign ↛ reach`, `reach ↛ campaign`, and `shared ↛ campaign/reach` (the kernel stays free of any dependency on either module). Any violation fails the test and blocks the gate.
 
 > When modifying module boundaries, always update this section and `ModuleBoundaryTest` together to keep documentation and guard tests in sync.
 

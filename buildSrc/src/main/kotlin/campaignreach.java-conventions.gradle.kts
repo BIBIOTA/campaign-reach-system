@@ -102,12 +102,14 @@ tasks.named<com.github.spotbugs.snom.SpotBugsTask>("spotbugsTest") {
 
 // ---------------------------------------------------------------------------
 // Coverage — JaCoCo (design.md §11.5).
-// Reports + a conservative MVP minimum gate wired into `check`. The percentage
-// is an intentionally low baseline that the current code passes (integration
-// tests skip without Docker, so real coverage is concentrated in shared/config);
-// later tasks raise it as core logic (Evaluator / idempotency key / retry
-// classification) lands. Keep below the current measured coverage so a clean
-// checkout never "bare-fails".
+// Reports + a minimum instruction-coverage gate wired into `check`. Each module
+// sets its own floor via the `jacocoMinCoverage` project property: modules with
+// real production logic (e.g. :shared) enforce a meaningful floor, while modules
+// that today hold only package-info / marker types report 0/0 instructions and
+// must keep the default 0.00 (JaCoCo treats 0/0 as a failure against any positive
+// minimum). As core logic lands in later tasks, raise each module's floor.
+// Floors are kept at or below the current measured coverage so a clean checkout
+// never "bare-fails".
 // ---------------------------------------------------------------------------
 jacoco {
     toolVersion = libs.findVersion("jacoco").get().requiredVersion
@@ -128,10 +130,14 @@ tasks.named<JacocoCoverageVerification>("jacocoTestCoverageVerification") {
             limit {
                 counter = "INSTRUCTION"
                 value = "COVEREDRATIO"
-                // MVP baseline only — see comment above. Modules with no executable
-                // production code (pure package-info / marker types) report 0/0 and
-                // are tolerated by the 0.0 floor; modules with logic are well above.
-                minimum = "0.00".toBigDecimal()
+                // Per-module floor: a module sets `jacocoMinCoverage` in its own
+                // build script to enforce a meaningful minimum (see :shared). The
+                // default 0.00 applies to marker-only modules that report 0/0
+                // instructions, which JaCoCo would fail against any positive floor.
+                // Read lazily here so the module's value (set after the plugin is
+                // applied) is honoured.
+                minimum = (findProperty("jacocoMinCoverage") as String?)?.toBigDecimal()
+                    ?: "0.00".toBigDecimal()
             }
         }
     }

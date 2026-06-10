@@ -1,7 +1,6 @@
 package com.example.campaignreach.integration;
 
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -19,13 +18,20 @@ import org.testcontainers.utility.DockerImageName;
  *
  * <p>Wiring decisions:
  * <ul>
- *   <li>{@link ServiceConnection} auto-wires {@code spring.datasource.*} (from the
- *       PostgreSQL container) and {@code spring.kafka.bootstrap-servers} (from the
- *       Kafka container) into the {@code Environment}. This satisfies the
- *       fail-fast {@code RequiredInfrastructurePropertiesValidator} without any
- *       manual property plumbing.</li>
+ *   <li>Connectivity is published via {@link DynamicPropertySource} into the exact
+ *       standard properties Spring Boot and the fail-fast
+ *       {@code RequiredInfrastructurePropertiesValidator} both read —
+ *       {@code spring.datasource.url/username/password} and
+ *       {@code spring.kafka.bootstrap-servers}. We deliberately do <em>not</em> use
+ *       {@code @ServiceConnection}: it injects {@code ConnectionDetails} beans
+ *       consumed directly by the auto-configurations but never populates these
+ *       {@code Environment} properties, so the validator (which reads the
+ *       {@code Environment}) would see them as missing and fail startup. Sourcing
+ *       both the real wiring and the validator from one property set keeps a single
+ *       source of truth and mirrors how production resolves them from
+ *       {@code application.yml}.</li>
  *   <li>The Email provider API key has no container source, so a non-secret test
- *       value is supplied via {@link DynamicPropertySource} to pass the
+ *       value is supplied via the same {@link DynamicPropertySource} to pass the
  *       {@code @NotBlank} binding on {@code EmailProviderProperties}.</li>
  *   <li>Containers are started once in a static initialiser (Singleton Containers
  *       Pattern) and live for the entire JVM lifetime. This prevents Spring context
@@ -46,11 +52,9 @@ import org.testcontainers.utility.DockerImageName;
 @RequiresDocker
 public abstract class AbstractIntegrationTest {
 
-    @ServiceConnection
     protected static final PostgreSQLContainer<?> POSTGRES =
             new PostgreSQLContainer<>(DockerImageName.parse("postgres:16-alpine"));
 
-    @ServiceConnection
     protected static final KafkaContainer KAFKA =
             new KafkaContainer(DockerImageName.parse("apache/kafka-native:3.8.0"));
 
@@ -62,12 +66,19 @@ public abstract class AbstractIntegrationTest {
     }
 
     /**
-     * Supplies a non-secret placeholder for the Email provider API key so the
-     * validated {@code @NotBlank} binding passes during context startup. This is a
-     * test fixture value, never a real credential.
+     * Publishes the running containers' connectivity into the standard Spring Boot
+     * properties that both the auto-configurations and the fail-fast
+     * {@code RequiredInfrastructurePropertiesValidator} read, plus a non-secret
+     * placeholder for the Email provider API key so the {@code @NotBlank} binding on
+     * {@code EmailProviderProperties} passes. All values are test fixtures, never
+     * real credentials.
      */
     @DynamicPropertySource
-    static void emailProviderProperties(DynamicPropertyRegistry registry) {
+    static void infrastructureProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
+        registry.add("spring.datasource.username", POSTGRES::getUsername);
+        registry.add("spring.datasource.password", POSTGRES::getPassword);
+        registry.add("spring.kafka.bootstrap-servers", KAFKA::getBootstrapServers);
         registry.add("campaignreach.email-provider.api-key", () -> "test-email-provider-api-key");
     }
 }
