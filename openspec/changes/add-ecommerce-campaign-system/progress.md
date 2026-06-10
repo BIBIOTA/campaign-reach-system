@@ -191,6 +191,12 @@
   - Code-quality-reviewer: ✅ Approved（無 Critical/Important；entity 對齊 3.1 NAMED_ENUM 風格、tryIncrementUsedCount 單一條件式 UPDATE 無 lost-update、clearAutomatically=true 讀新狀態；僅 cosmetic Minor）
 - Next action: Section 3（3.1–3.3）全數 passing；執行 final pass（`./gradlew check` + `openspec validate add-ecommerce-campaign-system --strict`）後 invoke spec-driven-dev:verification-before-completion。
 
+## Session 24 — 2026-06-10 19:00
+- Stage: SDD
+- Task: 4.1 實作活動 CRUD 內部 REST（含驗證與稽核）
+- Transition: not_started → in_progress
+- Next action: 於新分支 feat/section-4-campaign-api 派發 implementer subagent 實作 Campaign CRUD 內部 REST（建立預設 DRAFT、RuleConfig 驗證落庫、樂觀鎖稽核、未驗證/未授權拒絕存取），完成後接 spec-reviewer 與 code-quality-reviewer。
+
 ## Session 23 — 2026-06-10 17:00
 - Stage: SDD（post-verification CI fix）
 - Task: 3.1 / 3.3 — Docker 整合測試於 GitHub Actions 實跑後修正兩處缺陷
