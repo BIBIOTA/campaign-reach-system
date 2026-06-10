@@ -3,7 +3,10 @@ package com.example.campaignreach.shared.config;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.autoconfigure.kafka.ConcurrentKafkaListenerContainerFactoryConfigurer;
 import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
+import org.springframework.boot.ssl.SslBundles;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
@@ -35,14 +38,18 @@ public class KafkaConsumerConfig {
 
     /**
      * Consumer factory with broker auto-commit disabled. Concrete deserializers and the bootstrap
-     * server list are taken from the standard {@code spring.kafka.consumer.*} properties.
+     * server list are taken from the standard {@code spring.kafka.consumer.*} properties. SSL bundles
+     * are forwarded when configured so TLS connections apply the right trust material.
      *
      * @param kafkaProperties Spring Boot's bound {@code spring.kafka.*} configuration
+     * @param sslBundles optional SSL bundle registry; absent when SSL is not configured
      * @return a consumer factory that never auto-commits offsets
      */
     @Bean
-    public ConsumerFactory<Object, Object> atLeastOnceConsumerFactory(KafkaProperties kafkaProperties) {
-        Map<String, Object> config = new HashMap<>(kafkaProperties.buildConsumerProperties(null));
+    public ConsumerFactory<Object, Object> atLeastOnceConsumerFactory(
+            KafkaProperties kafkaProperties, ObjectProvider<SslBundles> sslBundles) {
+        Map<String, Object> config =
+                new HashMap<>(kafkaProperties.buildConsumerProperties(sslBundles.getIfAvailable()));
         // At-least-once: offsets are advanced only after the listener persists and acknowledges.
         config.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
         return new DefaultKafkaConsumerFactory<>(config);
@@ -50,17 +57,21 @@ public class KafkaConsumerConfig {
 
     /**
      * Listener container factory whose ack mode is {@link ContainerProperties.AckMode#MANUAL_IMMEDIATE},
-     * so offsets commit only on explicit post-persistence acknowledgement.
+     * so offsets commit only on explicit post-persistence acknowledgement. The configurer applies all
+     * {@code spring.kafka.listener.*} auto-configuration first; the ack-mode override follows to
+     * guarantee MANUAL_IMMEDIATE regardless of what the property file sets.
      *
+     * @param configurer Spring Boot configurer that applies {@code spring.kafka.listener.*} settings
      * @param consumerFactory the auto-commit-disabled consumer factory
      * @return a container factory enforcing manual, post-persistence offset commits
      */
     @Bean
     public ConcurrentKafkaListenerContainerFactory<Object, Object> kafkaListenerContainerFactory(
+            ConcurrentKafkaListenerContainerFactoryConfigurer configurer,
             ConsumerFactory<Object, Object> consumerFactory) {
         ConcurrentKafkaListenerContainerFactory<Object, Object> factory =
                 new ConcurrentKafkaListenerContainerFactory<>();
-        factory.setConsumerFactory(consumerFactory);
+        configurer.configure(factory, consumerFactory);
         factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL_IMMEDIATE);
         return factory;
     }

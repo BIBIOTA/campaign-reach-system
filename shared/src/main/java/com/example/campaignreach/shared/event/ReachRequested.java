@@ -1,5 +1,6 @@
 package com.example.campaignreach.shared.event;
 
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -33,4 +34,23 @@ public record ReachRequested(
         String reachPlan,
         TriggerType triggerType,
         String sendCycle,
-        String triggerEventId) {}
+        String triggerEventId) {
+
+    /** Validates required fields at construction time so invalid events fail before being serialized. */
+    public ReachRequested {
+        Objects.requireNonNull(campaignId, "campaignId must not be null");
+        if (targetSpec == null || targetSpec.isBlank()) {
+            throw new IllegalArgumentException("targetSpec must not be blank");
+        }
+        if (reachPlan == null || reachPlan.isBlank()) {
+            throw new IllegalArgumentException("reachPlan must not be blank");
+        }
+        Objects.requireNonNull(triggerType, "triggerType must not be null");
+        if (sendCycle == null || sendCycle.isBlank()) {
+            throw new IllegalArgumentException("sendCycle must not be blank");
+        }
+        if (triggerType == TriggerType.EVENT && (triggerEventId == null || triggerEventId.isBlank())) {
+            throw new IllegalArgumentException("triggerEventId must not be blank when triggerType is EVENT");
+        }
+    }
+}

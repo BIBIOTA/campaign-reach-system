@@ -1,5 +1,6 @@
 package com.example.campaignreach.shared.event;
 
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -18,4 +19,17 @@ import java.util.UUID;
  * @param channel delivery channel (ER {@code reach_task.channel})
  */
 public record ReachTaskCreated(
-        UUID reachTaskId, UUID reachRequestId, UUID campaignId, UUID userId, String sendCycle, Channel channel) {}
+        UUID reachTaskId, UUID reachRequestId, UUID campaignId, UUID userId, String sendCycle, Channel channel) {
+
+    /** Validates required fields at construction time so invalid events fail before being serialized. */
+    public ReachTaskCreated {
+        Objects.requireNonNull(reachTaskId, "reachTaskId must not be null");
+        Objects.requireNonNull(reachRequestId, "reachRequestId must not be null");
+        Objects.requireNonNull(campaignId, "campaignId must not be null");
+        Objects.requireNonNull(userId, "userId must not be null");
+        if (sendCycle == null || sendCycle.isBlank()) {
+            throw new IllegalArgumentException("sendCycle must not be blank");
+        }
+        Objects.requireNonNull(channel, "channel must not be null");
+    }
+}

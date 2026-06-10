@@ -59,7 +59,7 @@ public final class PartitionKeys {
      * @return the deterministic partition key
      */
     public static String forReachRequested(UUID campaignId, String sendCycle) {
-        return requireNonNull(campaignId, "campaignId") + ":" + requireNonNull(sendCycle, "sendCycle");
+        return requireNonNull(campaignId, "campaignId") + ":" + requireNonBlank(sendCycle, "sendCycle");
     }
 
     /**
@@ -83,12 +83,19 @@ public final class PartitionKeys {
      * @return the same key, unchanged
      */
     public static String forReachDlq(String sourceTaskKey) {
-        return requireNonNull(sourceTaskKey, "sourceTaskKey");
+        return requireNonBlank(sourceTaskKey, "sourceTaskKey");
     }
 
     private static <T> T requireNonNull(T value, String name) {
         if (value == null) {
             throw new IllegalArgumentException(name + " must not be null");
+        }
+        return value;
+    }
+
+    private static String requireNonBlank(String value, String name) {
+        if (requireNonNull(value, name).isBlank()) {
+            throw new IllegalArgumentException(name + " must not be blank");
         }
         return value;
     }
