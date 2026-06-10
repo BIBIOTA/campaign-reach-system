@@ -236,4 +236,10 @@
   - 重跑 run 27264878795 ✅ BUILD SUCCESSFUL（:app:test 實跑真實 PostgreSQL 容器 ~2m53s，過 JaCoCo verification）
 - Next action: PR #6 CI 綠燈；待 review 合併後接 Section 4（Campaign API CRUD 與生命週期）。
 
+## Session 28 — 2026-06-10 21:00
+- Stage: SDD
+- Task: 5.1 實作 PromotionEvaluator（折扣/滿贈加價購/閃購）優惠計算
+- Transition: not_started → in_progress
+- Next action: 於新分支 feat/section-5-evaluators 派發 implementer subagent，於 campaign/evaluation 建立 PromotionEvaluator Strategy 介面 + CartContext/PromotionResult、DiscountPromotionEvaluator（依 DiscountRuleConfig 算折扣金額與門檻）與 stub 級 FlashSalePromotionEvaluator（回傳已售罄/不適用），以 supports()→CampaignType 註冊、OCP 不改既有，完成後接 spec-reviewer 與 code-quality-reviewer。
+
 
