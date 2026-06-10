@@ -105,6 +105,12 @@ public class Campaign {
             String ruleConfig,
             String targetSpec,
             String reachPlan) {
+        if (id == null) throw new IllegalArgumentException("id must not be null");
+        if (name == null || name.isBlank()) throw new IllegalArgumentException("name must not be null or blank");
+        if (type == null) throw new IllegalArgumentException("type must not be null");
+        if (status == null) throw new IllegalArgumentException("status must not be null");
+        if (startAt == null) throw new IllegalArgumentException("startAt must not be null");
+        if (endAt == null) throw new IllegalArgumentException("endAt must not be null");
         this.id = id;
         this.name = name;
         this.type = type;

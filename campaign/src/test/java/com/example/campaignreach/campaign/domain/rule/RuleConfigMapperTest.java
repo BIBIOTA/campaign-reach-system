@@ -90,6 +90,36 @@ class RuleConfigMapperTest {
     }
 
     @Test
+    void amountKindWithExtraPercentageRejectedWithReason() {
+        DiscountRuleConfig config = new DiscountRuleConfig(
+                DiscountRuleConfig.CURRENT_SCHEMA_VERSION,
+                DiscountKind.AMOUNT,
+                new BigDecimal("100"),
+                new BigDecimal("10"),
+                ThresholdMode.NONE,
+                null);
+
+        assertThatThrownBy(() -> mapper.toJson(config, CampaignType.DISCOUNT, START, END))
+                .isInstanceOf(RuleConfigValidationException.class)
+                .hasMessageContaining("discount percentage must be absent when kind is AMOUNT");
+    }
+
+    @Test
+    void percentageKindWithExtraAmountRejectedWithReason() {
+        DiscountRuleConfig config = new DiscountRuleConfig(
+                DiscountRuleConfig.CURRENT_SCHEMA_VERSION,
+                DiscountKind.PERCENTAGE,
+                new BigDecimal("50"),
+                new BigDecimal("10"),
+                ThresholdMode.NONE,
+                null);
+
+        assertThatThrownBy(() -> mapper.toJson(config, CampaignType.DISCOUNT, START, END))
+                .isInstanceOf(RuleConfigValidationException.class)
+                .hasMessageContaining("discount amount must be absent when kind is PERCENTAGE");
+    }
+
+    @Test
     void endAtBeforeStartAtRejectedWithReason() {
         DiscountRuleConfig config = new DiscountRuleConfig(
                 DiscountRuleConfig.CURRENT_SCHEMA_VERSION,

@@ -4,7 +4,6 @@ import com.example.campaignreach.campaign.domain.CampaignType;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
-import jakarta.validation.ValidatorFactory;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -34,11 +33,13 @@ public class RuleConfigValidator {
 
     private final Validator beanValidator;
 
-    /** Builds the default JSR-380 validator factory once and retains its {@link Validator}. */
-    public RuleConfigValidator() {
-        try (ValidatorFactory factory = Validation.buildDefaultValidatorFactory()) {
-            this.beanValidator = factory.getValidator();
-        }
+    public RuleConfigValidator(Validator beanValidator) {
+        this.beanValidator = beanValidator;
+    }
+
+    /** Package-private for unit tests without a Spring context. */
+    RuleConfigValidator() {
+        this.beanValidator = Validation.buildDefaultValidatorFactory().getValidator();
     }
 
     /**
@@ -72,11 +73,21 @@ public class RuleConfigValidator {
     }
 
     private void collectDiscountReasons(DiscountRuleConfig discount, List<String> reasons) {
-        if (discount.kind() == DiscountKind.AMOUNT && discount.amount() == null) {
-            reasons.add("discount amount must be provided when kind is AMOUNT");
+        if (discount.kind() == DiscountKind.AMOUNT) {
+            if (discount.amount() == null) {
+                reasons.add("discount amount must be provided when kind is AMOUNT");
+            }
+            if (discount.percentage() != null) {
+                reasons.add("discount percentage must be absent when kind is AMOUNT");
+            }
         }
-        if (discount.kind() == DiscountKind.PERCENTAGE && discount.percentage() == null) {
-            reasons.add("discount percentage must be provided when kind is PERCENTAGE");
+        if (discount.kind() == DiscountKind.PERCENTAGE) {
+            if (discount.percentage() == null) {
+                reasons.add("discount percentage must be provided when kind is PERCENTAGE");
+            }
+            if (discount.amount() != null) {
+                reasons.add("discount amount must be absent when kind is PERCENTAGE");
+            }
         }
         if (discount.thresholdMode() == ThresholdMode.MIN_SPEND && discount.minSpend() == null) {
             reasons.add("minSpend must be provided when thresholdMode is MIN_SPEND");

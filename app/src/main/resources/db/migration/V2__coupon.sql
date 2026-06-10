@@ -12,9 +12,13 @@ CREATE TABLE coupon_campaign (
     campaign_id       UUID        NOT NULL REFERENCES campaign (id),  -- 所屬活動 (task 3.1)
     code_type         code_type   NOT NULL,                           -- SHARED_CODE | UNIQUE_CODE
     shared_code       TEXT,                                           -- 共用碼 (SHARED_CODE 用)
-    total_usage_limit INT         NOT NULL,
-    per_user_limit    INT         NOT NULL,
-    used_count        INT         NOT NULL DEFAULT 0                   -- atomic 控總量 (FR-004)
+    total_usage_limit INT         NOT NULL CHECK (total_usage_limit > 0),
+    per_user_limit    INT         NOT NULL CHECK (per_user_limit > 0),
+    used_count        INT         NOT NULL DEFAULT 0 CHECK (used_count >= 0 AND used_count <= total_usage_limit), -- atomic 控總量 (FR-004)
+    CONSTRAINT chk_shared_code CHECK (
+        (code_type = 'SHARED_CODE' AND shared_code IS NOT NULL AND length(trim(shared_code)) > 0) OR
+        (code_type = 'UNIQUE_CODE' AND shared_code IS NULL)
+    )
 );
 
 CREATE TABLE coupon_code (
@@ -38,3 +42,6 @@ CREATE TABLE coupon_redemption (
     -- Blocks the same user redeeming the same code on the same order twice (FR-004).
     CONSTRAINT ux_coupon_redemption_code_user_order UNIQUE (coupon_code_id, user_id, order_id)
 );
+
+CREATE INDEX idx_coupon_campaign_campaign_id ON coupon_campaign (campaign_id);
+CREATE INDEX idx_coupon_code_coupon_campaign_id ON coupon_code (coupon_campaign_id);

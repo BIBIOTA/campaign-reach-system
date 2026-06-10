@@ -56,6 +56,15 @@ public class CouponCampaign {
      */
     public CouponCampaign(
             UUID id, UUID campaignId, CodeType codeType, String sharedCode, int totalUsageLimit, int perUserLimit) {
+        if (id == null) throw new IllegalArgumentException("id must not be null");
+        if (campaignId == null) throw new IllegalArgumentException("campaignId must not be null");
+        if (codeType == null) throw new IllegalArgumentException("codeType must not be null");
+        if (codeType == CodeType.SHARED_CODE && (sharedCode == null || sharedCode.isBlank()))
+            throw new IllegalArgumentException("sharedCode must be provided for SHARED_CODE");
+        if (codeType == CodeType.UNIQUE_CODE && sharedCode != null)
+            throw new IllegalArgumentException("sharedCode must be null for UNIQUE_CODE");
+        if (totalUsageLimit <= 0) throw new IllegalArgumentException("totalUsageLimit must be positive");
+        if (perUserLimit <= 0) throw new IllegalArgumentException("perUserLimit must be positive");
         this.id = id;
         this.campaignId = campaignId;
         this.codeType = codeType;
