@@ -233,7 +233,7 @@ Reach.dispatcher    → SendResultRecorded  (使用者層級：發送結果)
 ```
 [reach.orchestrator] 消費 reach.requested（活動層級）
    ├─ upsert reach_request 批次（unique(campaign_id, send_cycle_key, trigger_type) 確保同事件只建一筆批次）
-   │    └─ 已存在且 status=DONE → 直接 ack 跳過（Kafka 重投保護）；否則進入/續跑展開
+   │    └─ 已存在且 status IN (DISPATCHING, DONE) → 直接 ack 跳過（Kafka 重投保護，fan-out 已完成）；否則（PENDING/EXPANDING）進入/續跑展開
    ├─ 凍結 snapshot（target_spec / reach_plan）
    ├─ AudienceResolver 解析 targetSpec → 收件人清單
    ├─ 分頁展開（每批 M 筆），逐批：
@@ -268,7 +268,7 @@ Reach.dispatcher    → SendResultRecorded  (使用者層級：發送結果)
 
 - **批次冪等**：`reach_request` 以 `unique(campaign_id, send_cycle_key, trigger_type)` 去重，同一事件重投不會建立第二筆批次，計數也不會被重複污染。
 - **斷點續跑**：展開分頁進行，task 以 `ON CONFLICT DO NOTHING` 寫入（落在 reach_task 的四欄 unique 上）。展開到一半 crash 後重投，已寫入的 task 不會重複，未寫入的續寫，最終收斂到完整 N 筆。
-- **狀態推進**：reach_request 走 `PENDING → EXPANDING → DISPATCHING → DONE`；只有 `DONE` 才視為展開完成，未完成者允許 orchestrator 重新接手續跑。
+- **狀態推進**：reach_request 走 `PENDING → EXPANDING → DISPATCHING → DONE`。`total_count` 於展開完成、推進至 `DISPATCHING` 時一次回填，故 `DISPATCHING`/`DONE` 皆視為展開（fan-out）已完成、重投時直接跳過；只有 `PENDING`/`EXPANDING` 視為未完成，允許 orchestrator 重新接手續跑。
 
 #### reach_request 計數欄位的維護（避免第二個熱點）
 

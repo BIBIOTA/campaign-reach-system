@@ -79,7 +79,7 @@
 - [ ] 5.1 實作 PromotionEvaluator（折扣/滿贈加價購/閃購）優惠計算
   - Acceptance: WHEN 結帳流程帶入 CartContext THEN 對應 CampaignType 的 PromotionEvaluator 算出 PromotionResult（折扣金額/贈品/加價購/閃購價）（§4，FR-002）
   - Acceptance: WHEN 新增一種活動類型 THEN 僅新增對應 Evaluator 並註冊，不修改既有 Evaluator（OCP，§4）
-  - Acceptance: WHEN 閃購庫存=0 或活動已結束 THEN 回傳「已售罄」/不適用而非錯誤（§6 邊界）
+  - Acceptance: WHEN 帶入 FLASH_SALE 活動 THEN 由 stub 級 FlashSaleEvaluator 回傳「已售罄」/不適用而非錯誤；真實庫存判定與閃購定價不在 MVP 範圍，僅保留型別與擴充點（§6 邊界，FR-019）
   - Depends on: 3.2
   - Independence: parallel-safe
   - status: not_started
@@ -114,7 +114,7 @@
 
 - [ ] 7.1 實作 reach_request 批次落庫與批次冪等
   - Acceptance: WHEN orchestrator 消費 `reach.requested` THEN 先 upsert 一筆 reach_request，以 `unique(campaign_id, send_cycle_key, trigger_type)` 去重，同事件重投不建立第二筆批次（§5，NFR-003）
-  - Acceptance: WHEN reach_request 已存在且 status=DONE THEN 直接 ack 跳過（Kafka 重投保護）；否則進入/續跑展開（§5）
+  - Acceptance: WHEN reach_request 已存在且 status IN (DISPATCHING, DONE) THEN 直接 ack 跳過（Kafka 重投保護，fan-out 已完成不重做受眾解析與 insert）；否則（PENDING/EXPANDING）進入/續跑展開（§5）
   - Acceptance: WHEN 建立批次 THEN 凍結 `target_spec_snapshot`/`reach_plan_snapshot`，活動事後被改仍可追溯當時依據（§5）
   - Depends on: 2.2, 3.1
   - Independence: serial

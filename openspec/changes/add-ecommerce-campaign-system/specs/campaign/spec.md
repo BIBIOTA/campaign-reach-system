@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: 活動優惠規則建立、查詢與修改
-The system SHALL allow marketing users to create, query, and modify a campaign's promotion rules — including name, period (start/end), promotion type, promotion content, usage threshold, and usage limits — and SHALL persist the rule parameters as validated JSONB. (FR-001)
+The system SHALL allow marketing users to create, query, and modify a campaign's promotion rules — including name, period (start/end), promotion type, promotion content, usage threshold, and usage limits — and SHALL persist the rule parameters as validated JSONB. A newly created campaign SHALL default to DRAFT and SHALL only be scheduled for reach after explicit confirmation. (FR-001, FR-006)
 
 #### Scenario: 建立折扣活動並落為草稿
 - **WHEN** 行銷人員以合法欄位呼叫建立活動 API（名稱、起訖時間、優惠類型、優惠內容、門檻、限制、觸達對象、發送計畫）
@@ -12,7 +12,7 @@ The system SHALL allow marketing users to create, query, and modify a campaign's
 > See: ../../diagrams/03-class-domain-model.puml
 > See: ../../diagrams/05-er-database-schema.puml
 
-#### Scenario: 草稿需確認才排入發送
+#### Scenario: 草稿需確認才排入發送 (FR-006)
 - **WHEN** 一筆活動仍為 DRAFT
 - **THEN** the system 不對其執行任何觸達掃描或發送
 - **AND** 僅在經確認轉為 SCHEDULED 後才排入發送
@@ -105,9 +105,10 @@ The system SHALL compute the actual promotion (discount amount, gift, add-on, fl
 
 > See: ../../diagrams/03-class-domain-model.puml
 
-#### Scenario: 閃購售罄與已結束邊界
-- **WHEN** 閃購活動庫存為 0 或活動已結束
-- **THEN** the system 回傳「已售罄」或不適用，而非系統錯誤
+#### Scenario: 閃購擴充點之邊界降級（MVP stub 級）
+- **WHEN** 帶入 FLASH_SALE 活動進行優惠計算（MVP 僅有 stub 級 evaluator，不實作真實庫存與閃購定價）
+- **THEN** the system 由 stub 級 FlashSaleEvaluator 回傳「已售罄／不適用」而非系統錯誤
+- **AND** 完整閃購功能（真實庫存判定、閃購價計算）不在 MVP 交付範圍，僅保留型別與擴充點（對齊「MVP 範圍界定」FR-019）
 
 #### Scenario: 新增活動類型不動既有程式
 - **WHEN** 新增一種活動類型

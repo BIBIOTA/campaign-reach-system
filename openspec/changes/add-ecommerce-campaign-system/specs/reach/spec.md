@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: 觸達批次落庫與 fan-out 冪等
-The system SHALL, upon consuming a `ReachRequested` event, first upsert a single activity-level `reach_request` record deduplicated by `unique(campaign_id, send_cycle_key, trigger_type)`, freeze the target_spec / reach_plan snapshots, and SHALL skip re-processing when the batch is already DONE so that Kafka at-least-once redelivery does not create a second batch or pollute counts. (FR-013, NFR-003)
+The system SHALL, upon consuming a `ReachRequested` event, first upsert a single activity-level `reach_request` record deduplicated by `unique(campaign_id, send_cycle_key, trigger_type)`, freeze the target_spec / reach_plan snapshots, and SHALL skip re-expansion when the batch is already in DISPATCHING or DONE (fan-out completed, total_count backfilled) so that Kafka at-least-once redelivery does not re-resolve the audience or re-run inserts; only PENDING/EXPANDING batches are resumed. (FR-013, NFR-003)
 
 #### Scenario: 同事件重投只建一筆批次
 - **WHEN** orchestrator 消費 `reach.requested` 且同一 `(campaign_id, send_cycle_key, trigger_type)` 已存在
@@ -11,9 +11,10 @@ The system SHALL, upon consuming a `ReachRequested` event, first upsert a single
 > See: ../../diagrams/01-sequence-reach-flow.puml
 > See: ../../diagrams/05-er-database-schema.puml
 
-#### Scenario: 已完成批次直接跳過
-- **WHEN** 對應 reach_request 已存在且 status=DONE
-- **THEN** the system 直接 ack 並跳過展開
+#### Scenario: 已展開完成的批次直接跳過
+- **WHEN** 對應 reach_request 已存在且 status IN (DISPATCHING, DONE)
+- **THEN** the system 直接 ack 並跳過展開（fan-out 已完成、total_count 已回填，避免重投時重做受眾解析與 insert）
+- **AND** 僅 PENDING/EXPANDING 批次進入/續跑展開
 
 #### Scenario: 凍結快照以利追溯
 - **WHEN** 建立 reach_request 批次
