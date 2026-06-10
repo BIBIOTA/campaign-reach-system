@@ -38,3 +38,12 @@ spring:
 campaignreach:
   email-provider:
     api-key: ${EMAIL_PROVIDER_API_KEY:}
+
+  # Back-office operator accounts for the internal campaign REST (task 4.1, §10).
+  # Username/password come from env/vault; the per-operator UUID is deterministic so
+  # audit columns (created_by/updated_by) are stable. Never commit real credentials.
+  security:
+    operators:
+      - username: ${OPERATOR_USERNAME:}
+        password: ${OPERATOR_PASSWORD:}
+        id: ${OPERATOR_ID:}

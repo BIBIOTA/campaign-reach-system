@@ -20,6 +20,14 @@ java {
     }
 }
 
+// Retain method/constructor parameter names in the bytecode. Spring MVC relies on them
+// to infer @PathVariable / @RequestParam names without an explicit value, and Spring Data
+// binds @ConfigurationProperties record components by name. Only :app applies the Spring
+// Boot plugin (which would add this), so set it centrally for every module here.
+tasks.withType<JavaCompile>().configureEach {
+    options.compilerArgs.add("-parameters")
+}
+
 repositories {
     mavenCentral()
 }

@@ -66,12 +66,15 @@ public class RuleConfigMapper {
      *
      * @param campaignType the owning campaign's type, used to dispatch and to upcast
      * @param json the persisted JSONB string
+     * @throws RuleConfigPersistenceException if the stored value is malformed/un-upcastable (→ 500);
+     *     this method reads the database, never client input, so a failure is a server-side data
+     *     problem, not a validation error
      */
     public RuleConfig fromJson(CampaignType campaignType, String json) {
         try {
             JsonNode parsed = objectMapper.readTree(json);
             if (parsed == null || parsed.isMissingNode() || parsed.isNull() || !parsed.isObject()) {
-                throw new RuleConfigValidationException(List.of("rule_config JSON is not a valid object"));
+                throw new RuleConfigPersistenceException("stored rule_config JSON is not a valid object");
             }
             JsonNode upcasted = upcaster.upcast(campaignType, parsed);
             // Ensure the polymorphic discriminator matches the owning campaign type so reads do not
@@ -81,7 +84,10 @@ public class RuleConfigMapper {
             }
             return objectMapper.treeToValue(upcasted, targetType(campaignType));
         } catch (JsonProcessingException e) {
-            throw new RuleConfigValidationException(List.of("failed to parse ruleConfig: " + e.getOriginalMessage()));
+            // The argument is always the persisted column, never client input, so a parse failure is
+            // server-side data corruption (→ 500), not a client validation error (→ 400).
+            throw new RuleConfigPersistenceException(
+                    "failed to parse stored rule_config: " + e.getOriginalMessage(), e);
         }
     }
 

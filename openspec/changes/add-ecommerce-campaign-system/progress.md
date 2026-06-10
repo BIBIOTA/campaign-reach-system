@@ -191,6 +191,40 @@
   - Code-quality-reviewer: ✅ Approved（無 Critical/Important；entity 對齊 3.1 NAMED_ENUM 風格、tryIncrementUsedCount 單一條件式 UPDATE 無 lost-update、clearAutomatically=true 讀新狀態；僅 cosmetic Minor）
 - Next action: Section 3（3.1–3.3）全數 passing；執行 final pass（`./gradlew check` + `openspec validate add-ecommerce-campaign-system --strict`）後 invoke spec-driven-dev:verification-before-completion。
 
+## Session 24 — 2026-06-10 19:00
+- Stage: SDD
+- Task: 4.1 實作活動 CRUD 內部 REST（含驗證與稽核）
+- Transition: not_started → in_progress
+- Next action: 於新分支 feat/section-4-campaign-api 派發 implementer subagent 實作 Campaign CRUD 內部 REST（建立預設 DRAFT、RuleConfig 驗證落庫、樂觀鎖稽核、未驗證/未授權拒絕存取），完成後接 spec-reviewer 與 code-quality-reviewer。
+
+## Session 25 — 2026-06-10 19:45
+- Stage: SDD
+- Task: 4.1 實作活動 CRUD 內部 REST（含驗證與稽核）
+- Transition: in_progress → passing
+- Evidence:
+  - Commits: b387797 feat(campaign): add campaign CRUD internal REST with validation, audit and operator auth (task 4.1); 23fa3aa fix(campaign): enforce read-then-update optimistic locking on campaign update (task 4.1 review)
+  - Tests: CampaignControllerTest 8/8 green（建立折扣活動並落為草稿 → 201+DRAFT+id；rule/reach 設定可分別修改；不合法規則 400；stale version → 409 走真實版本檢查；GET 缺失 404；未驗證 401；非 OPERATOR 403）。完整 `./gradlew check` BUILD SUCCESSFUL（spotless/checkstyle/spotbugs/ArchUnit/JaCoCo 全綠；Docker-gated 整合測試本沙箱 skip）。
+  - Spec-reviewer: ✅ Spec compliant（5/5：scenario 覆蓋、class-diagram DTO 對齊、§10 auth+稽核、無超範圍端點、無缺漏 scenario）
+  - Code-quality-reviewer: ✅ Approved（首輪提出 1 Important：UpdateCampaignRequest.version 文件化為樂觀鎖守衛卻未實作；已於 23fa3aa 修正為 @NotNull 必填 + service 版本比對丟 ObjectOptimisticLockingFailureException(→409)，stale 測試改驗真實邏輯；再審 ✅）
+- Next action: 接續實作 task 4.2（活動狀態切換 API 與守衛 DRAFT→SCHEDULED→RUNNING→PAUSED/ENDED），依賴 4.1。
+
+## Session 26 — 2026-06-10 19:50
+- Stage: SDD
+- Task: 4.2 實作活動狀態切換 API 與守衛（啟用/暫停/結束）
+- Transition: not_started → in_progress
+- Next action: 派發 implementer subagent，於 Campaign 聚合加入 transitionTo(state) 守衛（依 02-state 圖合法邊：DRAFT→SCHEDULED→RUNNING→PAUSED↔RUNNING、RUNNING/PAUSED→ENDED），新增 /internal/campaigns/{id}/status 端點（帶 version 樂觀鎖），不合法轉換回明確錯誤；完成後接 spec-reviewer 與 code-quality-reviewer。
+
+## Session 27 — 2026-06-10 20:15
+- Stage: SDD
+- Task: 4.2 實作活動狀態切換 API 與守衛（啟用/暫停/結束）
+- Transition: in_progress → passing
+- Evidence:
+  - Commits: 0f95379 feat(campaign): add campaign status-transition API with legal-transition guard (task 4.2)
+  - Tests: Domain CampaignStatusTransitionTest（合法整鏈 DRAFT→SCHEDULED→RUNNING→PAUSED→RUNNING→ENDED；ENDED→RUNNING 終態被擋；skip-ahead/self-transition 被擋）；CampaignControllerTest 新增 合法狀態切換(200)/不合理狀態切換被擋下(422 illegal_transition + from→to reason)/stale version(409 走真實版本檢查)/缺 targetStatus(400)。完整 `./gradlew check` BUILD SUCCESSFUL。
+  - Spec-reviewer: ✅ Spec compliant（5/5：合法/非法 scenario 覆蓋、ALLOWED_TRANSITIONS 恰為 02-state 圖 6 條合法邊、ENDED 終態、拒絕附 from→to 原因、無越界建排程；狀態僅經 guarded transitionTo 變更，CRUD update 不動 status）
+  - Code-quality-reviewer: ✅ Approved（無 Critical/Important；守衛置於 aggregate 合 DDD、靜態 map 真不可變滿足 SpotBugs、422/409 語意分離、stale 測試走真實邏輯未重蹈 4.1 覆轍；僅 3 點 Minor 觀察不需修改）
+- Next action: Section 4（4.1、4.2）全數 passing；執行 final pass（openspec validate --strict）後 invoke spec-driven-dev:verification-before-completion。
+
 ## Session 23 — 2026-06-10 17:00
 - Stage: SDD（post-verification CI fix）
 - Task: 3.1 / 3.3 — Docker 整合測試於 GitHub Actions 實跑後修正兩處缺陷

@@ -80,5 +80,10 @@ public abstract class AbstractIntegrationTest {
         registry.add("spring.datasource.password", POSTGRES::getPassword);
         registry.add("spring.kafka.bootstrap-servers", KAFKA::getBootstrapServers);
         registry.add("campaignreach.email-provider.api-key", () -> "test-email-provider-api-key");
+        // A throwaway back-office operator so OperatorProperties' @NotBlank/@NotNull binding passes
+        // when the full context boots (production resolves these from env/vault, never defaults).
+        registry.add("campaignreach.security.operators[0].username", () -> "it-operator");
+        registry.add("campaignreach.security.operators[0].password", () -> "it-operator-secret");
+        registry.add("campaignreach.security.operators[0].id", () -> "00000000-0000-0000-0000-0000000000ab");
     }
 }
