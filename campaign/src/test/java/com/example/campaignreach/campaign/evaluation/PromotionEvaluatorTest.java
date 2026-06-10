@@ -6,6 +6,7 @@ import com.example.campaignreach.campaign.domain.CampaignType;
 import com.example.campaignreach.campaign.domain.rule.DiscountKind;
 import com.example.campaignreach.campaign.domain.rule.DiscountRuleConfig;
 import com.example.campaignreach.campaign.domain.rule.FlashSaleRuleConfig;
+import com.example.campaignreach.campaign.domain.rule.GiftAddonRuleConfig;
 import com.example.campaignreach.campaign.domain.rule.ThresholdMode;
 import java.math.BigDecimal;
 import java.util.List;
@@ -82,6 +83,31 @@ class PromotionEvaluatorTest {
         }
 
         @Test
+        void minSpendThresholdExactlyMetAppliesDiscount() {
+            // Boundary: subtotal == minSpend is inclusive (the gate is subtotal < minSpend).
+            CartContext ctx = new CartContext(
+                    new BigDecimal("300"),
+                    amount(new BigDecimal("50"), ThresholdMode.MIN_SPEND, new BigDecimal("300")));
+
+            PromotionResult result = discountEvaluator.evaluate(ctx);
+
+            assertThat(result.applicable()).isTrue();
+            assertThat(result.discountAmount()).isEqualByComparingTo("50");
+        }
+
+        @Test
+        void percentageDiscountRoundsHalfUpAtTheHalfwayBoundary() {
+            // 333.35 × 10% = 33.335 → HALF_UP at the 3rd decimal rounds the .5 up to 33.34.
+            CartContext ctx = new CartContext(
+                    new BigDecimal("333.35"), percentage(new BigDecimal("10"), ThresholdMode.NONE, null));
+
+            PromotionResult result = discountEvaluator.evaluate(ctx);
+
+            assertThat(result.applicable()).isTrue();
+            assertThat(result.discountAmount()).isEqualByComparingTo("33.34");
+        }
+
+        @Test
         void minSpendThresholdNotMetReturnsNotApplicable() {
             CartContext ctx = new CartContext(
                     new BigDecimal("200"),
@@ -141,6 +167,19 @@ class PromotionEvaluatorTest {
         void registryReturnsNotApplicableForUnregisteredType() {
             // GIFT_ADDON intentionally has no PromotionEvaluator in MVP; registry must not break.
             assertThat(registry.find(CampaignType.GIFT_ADDON)).isEmpty();
+        }
+
+        @Test
+        void registryEvaluateReturnsNotApplicableForUnregisteredType() {
+            // End-to-end: dispatching a GIFT_ADDON context falls back to notApplicable() rather than throwing.
+            CartContext ctx = new CartContext(
+                    new BigDecimal("199"),
+                    new GiftAddonRuleConfig(GiftAddonRuleConfig.CURRENT_SCHEMA_VERSION, "GIFT-SKU-1", 1));
+
+            PromotionResult result = registry.evaluate(ctx);
+
+            assertThat(result.applicable()).isFalse();
+            assertThat(result.discountAmount()).isEqualByComparingTo("0");
         }
     }
 }

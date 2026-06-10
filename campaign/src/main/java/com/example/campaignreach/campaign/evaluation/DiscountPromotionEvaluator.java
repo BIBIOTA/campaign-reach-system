@@ -5,6 +5,7 @@ import com.example.campaignreach.campaign.domain.rule.DiscountRuleConfig;
 import com.example.campaignreach.campaign.domain.rule.ThresholdMode;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.Objects;
 import org.springframework.stereotype.Component;
 
 /**
@@ -44,8 +45,10 @@ public class DiscountPromotionEvaluator implements PromotionEvaluator {
 
         BigDecimal discount =
                 switch (rule.kind()) {
-                    case AMOUNT -> rule.amount().min(subtotal);
-                    case PERCENTAGE -> subtotal.multiply(rule.percentage())
+                    case AMOUNT -> Objects.requireNonNull(rule.amount(), "amount is required for an AMOUNT discount")
+                            .min(subtotal);
+                    case PERCENTAGE -> subtotal.multiply(Objects.requireNonNull(
+                                    rule.percentage(), "percentage is required for a PERCENTAGE discount"))
                             .divide(HUNDRED, MONEY_SCALE, RoundingMode.HALF_UP);
                 };
 
