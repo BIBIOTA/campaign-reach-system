@@ -34,7 +34,6 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
-import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.web.servlet.MockMvc;
 
 /**
@@ -181,8 +180,9 @@ class CampaignControllerTest {
         when(repository.save(any(Campaign.class))).thenAnswer(inv -> inv.getArgument(0));
 
         // Update only reachPlan; ruleConfig is omitted (null) → must be left unchanged.
-        String body = objectMapper.writeValueAsString(
-                Map.of("reachPlan", Map.of("channel", "SMS", "templateRef", "tpl-2", "timing", "EVENT")));
+        String body = objectMapper.writeValueAsString(Map.of(
+                "version", stored.getVersion(),
+                "reachPlan", Map.of("channel", "SMS", "templateRef", "tpl-2", "timing", "EVENT")));
 
         mockMvc.perform(put("/internal/campaigns/" + id)
                         .with(httpBasic("op", "pw"))
@@ -203,6 +203,8 @@ class CampaignControllerTest {
 
         // Update only ruleConfig; reachPlan omitted → must be left unchanged (EMAIL/tpl-1/SCHEDULED).
         String body = objectMapper.writeValueAsString(Map.of(
+                "version",
+                stored.getVersion(),
                 "ruleConfig",
                 Map.of(
                         "ruleType",
@@ -229,12 +231,11 @@ class CampaignControllerTest {
     @Test
     void staleVersionUpdateReturnsConflict() throws Exception {
         UUID id = UUID.randomUUID();
-        Campaign stored = discountCampaign(id);
+        Campaign stored = discountCampaign(id); // stored version is 0
         when(repository.findById(id)).thenReturn(Optional.of(stored));
-        when(repository.save(any(Campaign.class)))
-                .thenThrow(new ObjectOptimisticLockingFailureException(Campaign.class, id));
 
-        String body = objectMapper.writeValueAsString(Map.of("name", "Renamed"));
+        // Client echoes a version that a concurrent edit has already advanced past → 409, no save.
+        String body = objectMapper.writeValueAsString(Map.of("version", stored.getVersion() + 1, "name", "Renamed"));
 
         mockMvc.perform(put("/internal/campaigns/" + id)
                         .with(httpBasic("op", "pw"))

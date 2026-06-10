@@ -10,6 +10,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -71,10 +72,18 @@ public class CampaignApplicationService {
      * Modifies a campaign. Each {@code null} field is left unchanged so offer-rule settings and
      * reach/target settings can be saved independently. Re-validates the rule when changed. Status is
      * never altered here (task 4.2 owns lifecycle).
+     *
+     * <p>Enforces read-then-update optimistic locking (FR-001): the client must echo the {@code
+     * version} it read; if a concurrent edit has since advanced the stored version, the later writer
+     * fails with {@link ObjectOptimisticLockingFailureException} (mapped to HTTP 409) rather than
+     * silently overwriting the other operator's change.
      */
     @Transactional
     public CampaignView update(UUID id, UpdateCampaignRequest request) {
         Campaign campaign = require(id);
+        if (request.version() != campaign.getVersion()) {
+            throw new ObjectOptimisticLockingFailureException(Campaign.class, id);
+        }
 
         if (request.name() != null) {
             campaign.setName(request.name());
