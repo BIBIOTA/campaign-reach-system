@@ -24,6 +24,7 @@ doc_language: 繁體中文
 |---|---|
 | 系統定位 | 內部行銷後台，僅後端 |
 | 框架 | Spring Boot 3（Java 17/21） |
+| 建置工具 | Gradle（Kotlin DSL）+ version catalog（見 §11） |
 | 儲存 | PostgreSQL |
 | 訊息佇列 | Kafka |
 | 活動類型 | 折扣/優惠券、滿額贈禮/加價購、限時特賣/閃購 |
@@ -233,7 +234,7 @@ Reach.dispatcher    → SendResultRecorded  (使用者層級：發送結果)
 ```
 [reach.orchestrator] 消費 reach.requested（活動層級）
    ├─ upsert reach_request 批次（unique(campaign_id, send_cycle_key, trigger_type) 確保同事件只建一筆批次）
-   │    └─ 已存在且 status=DONE → 直接 ack 跳過（Kafka 重投保護）；否則進入/續跑展開
+   │    └─ 已存在且 status IN (DISPATCHING, DONE) → 直接 ack 跳過（Kafka 重投保護，fan-out 已完成）；否則（PENDING/EXPANDING）進入/續跑展開
    ├─ 凍結 snapshot（target_spec / reach_plan）
    ├─ AudienceResolver 解析 targetSpec → 收件人清單
    ├─ 分頁展開（每批 M 筆），逐批：
@@ -268,7 +269,7 @@ Reach.dispatcher    → SendResultRecorded  (使用者層級：發送結果)
 
 - **批次冪等**：`reach_request` 以 `unique(campaign_id, send_cycle_key, trigger_type)` 去重，同一事件重投不會建立第二筆批次，計數也不會被重複污染。
 - **斷點續跑**：展開分頁進行，task 以 `ON CONFLICT DO NOTHING` 寫入（落在 reach_task 的四欄 unique 上）。展開到一半 crash 後重投，已寫入的 task 不會重複，未寫入的續寫，最終收斂到完整 N 筆。
-- **狀態推進**：reach_request 走 `PENDING → EXPANDING → DISPATCHING → DONE`；只有 `DONE` 才視為展開完成，未完成者允許 orchestrator 重新接手續跑。
+- **狀態推進**：reach_request 走 `PENDING → EXPANDING → DISPATCHING → DONE`。`total_count` 於展開完成、推進至 `DISPATCHING` 時一次回填，故 `DISPATCHING`/`DONE` 皆視為展開（fan-out）已完成、重投時直接跳過；只有 `PENDING`/`EXPANDING` 視為未完成，允許 orchestrator 重新接手續跑。
 
 #### reach_request 計數欄位的維護（避免第二個熱點）
 
@@ -422,6 +423,57 @@ Email 為個資（PII），本系統處理收件人資料，須定錨以下立�
 - 任何含 PII 的衍生快照（如未來若快照收件清單）須一併納入保留策略；目前設計刻意不落 PII 快照以降低暴露面。
 
 > 註：退訂入口 UI、抑制名單來源系統、確切保留月數的細節於 writing-spec 階段補實；本節定錨設計立場。
+
+## 11. 工程規範與開發約定
+
+本節定錨 Java 開發的建置、格式、靜態分析與 CI gate，使三個 bounded module（`campaign`/`reach`/`shared`）的程式碼風格、品質門檻一致且可機器強制。**原則：規範由工具強制、CI 擋關，而非靠人工 review 抓格式**，把風格爭論成本降到零。
+
+### 11.1 建置工具：Gradle（Kotlin DSL）
+
+採 **Gradle + Kotlin DSL（`build.gradle.kts`）**，理由與被否決方案：
+
+- 多模組增量編譯 + build cache + 守護程序，模組數成長後 build 速度優於 Maven；契合「模組化單體、保留拆微服務縫」的演進路徑。
+- 依賴以 **version catalog（`gradle/libs.versions.toml`）集中宣告**，三個 module 共用同一份版本來源，避免版本漂移。
+- 被否決：**Maven** —— 零學習成本、宣告式可預測，但多模組全量建置較慢、XML 冗長；本案模組會成長且需與 ArchUnit/靜態分析緊密整合，Gradle 回報較高。
+- build 邏輯約束：**禁止在 build script 寫「聰明但難維護」的命令式邏輯**；共用設定收斂到 convention plugin（`buildSrc` 或 `build-logic`），各 module 的 `build.gradle.kts` 維持薄、宣告式。
+
+### 11.2 程式碼格式化：Spotless + Palantir Java Format
+
+- 以 **Spotless** 掛載 **Palantir Java Format**（4 空格縮排、對 builder/fluent/stream 換行更友善），**無客製規則、不可個別關閉**——格式由工具單一來源決定。
+- 同時管理 import 排序（移除未使用 import）、移除多餘空白、檔尾換行。
+- 本地：`./gradlew spotlessApply` 自動修正；CI：`./gradlew spotlessCheck` 不合即 fail。
+- 建議搭配 pre-commit hook，把格式修正前移到提交當下，減少 CI 來回。
+
+### 11.3 風格檢查與靜態分析
+
+| 工具 | 角色 | 門檻 |
+|---|---|---|
+| **Checkstyle** | 命名、檔案結構、可見度、Javadoc 等 google_checks 基礎風格（格式交給 Spotless，Checkstyle 不重複管排版） | violation = build fail |
+| **SpotBugs** | bytecode 級潛在 bug（null、資源未關、並發誤用） | High/Normal 等級 = build fail |
+| **ArchUnit** | 架構守護：`campaign` 與 `reach` 不得互相 import domain，僅透過 `shared/event` 溝通（呼應 §3 邊界規則） | 違規測試 fail |
+
+> ArchUnit 已於 task 1.1 acceptance 要求；本節將其與格式/靜態分析併入同一道工程品質 gate。
+
+### 11.4 命名與套件約定
+
+- 套件根 `com.example.campaignreach`，下分 `campaign`/`reach`/`shared`，再依 §3 模組內結構（api/domain/evaluation/scheduler、orchestrator/audience/channel/dispatcher、event/config）。
+- 類別命名沿用設計詞彙：Strategy 介面以角色命名（`PromotionEvaluator`、`ReachTriggerEvaluator`）、Adapter 以 `XxxAdapter`、Kafka event 以動作完成式（`ReachRequested`、`ReachTaskCreated`、`SendResultRecorded`）。
+- **跨層命名對齊**：Java 物件/事件 payload 用駝峰（`sendCycle`），DB 欄位用 snake_case（`send_cycle_key`），兩者為同一值僅命名風格差異（見 §5），不做隱式轉換。
+- 列舉值全大寫（活動 `status`、`trigger_type`、ReachTask 狀態機），與 §4/§5/§6 一致。
+
+### 11.5 CI 品質 gate
+
+每次 PR 觸發、全部通過才可合併（任一 fail 即擋）：
+
+```
+./gradlew spotlessCheck      # 格式
+./gradlew checkstyleMain     # 風格
+./gradlew spotbugsMain       # 靜態分析
+./gradlew test               # 單元 + 整合（Testcontainers，見 §7）+ ArchUnit
+```
+
+- 測試覆蓋率以 **JaCoCo** 量測，核心邏輯（Evaluator、冪等鍵、重試分類）為高覆蓋重點（見 §7）；MVP 設一條最低門檻避免裸退，確切百分比於實作期校準。
+- 上述指令亦提供單一聚合任務（如 `./gradlew check`）供本地一次跑完。
 
 ## Diagrams
 
