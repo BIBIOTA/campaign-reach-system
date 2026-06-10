@@ -242,4 +242,21 @@
 - Transition: not_started → in_progress
 - Next action: 於新分支 feat/section-5-evaluators 派發 implementer subagent，於 campaign/evaluation 建立 PromotionEvaluator Strategy 介面 + CartContext/PromotionResult、DiscountPromotionEvaluator（依 DiscountRuleConfig 算折扣金額與門檻）與 stub 級 FlashSalePromotionEvaluator（回傳已售罄/不適用），以 supports()→CampaignType 註冊、OCP 不改既有，完成後接 spec-reviewer 與 code-quality-reviewer。
 
+## Session 29 — 2026-06-10 21:30
+- Stage: SDD
+- Task: 5.1 實作 PromotionEvaluator（折扣/滿贈加價購/閃購）優惠計算
+- Transition: in_progress → passing
+- Evidence:
+  - Commits: 6f1a3f6 feat(campaign): add PromotionEvaluator strategy with discount calc and flash-sale stub (task 5.1)
+  - Tests: PromotionEvaluatorTest 11 tests green（@Nested 對應三 scenario：結帳時計算折扣 AMOUNT/PERCENTAGE HALF_UP scale2/AMOUNT cap/MIN_SPEND 達/未達、閃購 stub 回 not-applicable 不丟例外、registry 依 supports() 解析含未註冊型別降級）；`:campaign:spotlessCheck checkstyleMain spotbugsMain test`、`:app:test` ArchUnit BUILD SUCCESSFUL
+  - Spec-reviewer: ✅ Spec compliant（5/5；介面簽章對齊 03-class，無 GIFT_ADDON/ReachTrigger 外洩，PromotionResult YAGNI）
+  - Code-quality-reviewer: ✅ Approved（無 Critical/Important；BigDecimal scale/rounding、負值防護、record 不可變、測試行為導向皆達標；3 項 Minor 觀察不阻擋）
+- Next action: dispatch implementer subagent for task 5.2（ReachTriggerEvaluator：TriggerContext shouldTrigger 行為事件/排程 cycle 判定 + 例外隔離記 skipped）。
+
+## Session 30 — 2026-06-10 21:35
+- Stage: SDD
+- Task: 5.2 實作 ReachTriggerEvaluator（行為事件 / 排程 cycle）觸發判定
+- Transition: not_started → in_progress
+- Next action: 派發 implementer subagent，於 campaign/evaluation 建立 ReachTriggerEvaluator Strategy 介面 + TriggerContext（行為事件/排程 cycle，無 CartContext）、ScheduledTriggerEvaluator 與 BehaviorTriggerEvaluator 與 supports() 註冊 registry，並以例外隔離（evaluator 拋例外→該筆記 skipped + reason、不影響同批其他）封裝判定，完成後接 spec-reviewer 與 code-quality-reviewer。
+
 

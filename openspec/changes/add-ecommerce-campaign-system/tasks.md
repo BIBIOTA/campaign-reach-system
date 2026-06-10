@@ -104,19 +104,19 @@
 
 ## 5. Campaign evaluation — 兩類 Evaluator（Strategy）
 
-- [ ] 5.1 實作 PromotionEvaluator（折扣/滿贈加價購/閃購）優惠計算
+- [x] 5.1 實作 PromotionEvaluator（折扣/滿贈加價購/閃購）優惠計算
   - Acceptance: WHEN 結帳流程帶入 CartContext THEN 對應 CampaignType 的 PromotionEvaluator 算出 PromotionResult（折扣金額/贈品/加價購/閃購價）（§4，FR-002）
   - Acceptance: WHEN 新增一種活動類型 THEN 僅新增對應 Evaluator 並註冊，不修改既有 Evaluator（OCP，§4）
   - Acceptance: WHEN 帶入 FLASH_SALE 活動 THEN 由 stub 級 FlashSaleEvaluator 回傳「已售罄」/不適用而非錯誤；真實庫存判定與閃購定價不在 MVP 範圍，僅保留型別與擴充點（§6 邊界，FR-019）
   - Depends on: 3.2
   - Independence: parallel-safe
-  - status: in_progress
+  - status: passing
 - [ ] 5.2 實作 ReachTriggerEvaluator（行為事件 / 排程 cycle）觸發判定
   - Acceptance: WHEN 帶入 TriggerContext（行為事件或排程 cycle，無購物車）THEN `shouldTrigger` 判定該活動是否應產生觸達，不需 CartContext（§4，FR-008）
   - Acceptance: WHEN Evaluator 拋例外 THEN 該筆判定記為 skipped 並記錄原因，不影響同批其他對象（§6）
   - Depends on: 3.2
   - Independence: parallel-safe
-  - status: not_started
+  - status: in_progress
 
 ## 6. Campaign 觸發來源 — 排程與事件
 
