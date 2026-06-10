@@ -96,9 +96,12 @@ class CampaignPersistenceIntegrationTest extends AbstractIntegrationTest {
         assertThat(created.getUpdatedBy()).isEqualTo(OPERATOR_A);
         assertThat(created.getCreatedAt()).isNotNull();
         assertThat(created.getUpdatedAt()).isNotNull();
-        Instant createdAt = created.getCreatedAt();
 
         Campaign reread = repository.findById(id).orElseThrow();
+        // Baseline created_at sourced from the DB (timestamptz = microsecond precision) so the
+        // post-update comparison is precision-consistent, rather than matching the in-memory
+        // nanosecond Instant that auditing set before the round-trip (Postgres truncates to micros).
+        Instant createdAt = reread.getCreatedAt();
         CurrentOperator.set(OPERATOR_B);
         reread.setName("Edited");
         Campaign updated = repository.saveAndFlush(reread);
