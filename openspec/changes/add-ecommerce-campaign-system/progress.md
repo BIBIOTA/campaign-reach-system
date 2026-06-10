@@ -140,6 +140,12 @@
   - Code-quality-reviewer: ✅ Approved（無 Critical/Important；1 項 Minor：PartitionKeys 未擋空字串，列 follow-up）
 - Next action: Section 2（2.1–2.2）全數 passing；執行 final pass（`./gradlew check` + `openspec validate add-ecommerce-campaign-system --strict`）後 invoke spec-driven-dev:verification-before-completion。
 
+## Session 17 — 2026-06-10 16:00
+- Stage: SDD
+- Task: 3.1 建立 Campaign 聚合與資料表（含樂觀鎖與稽核欄位）
+- Transition: not_started → in_progress
+- Next action: dispatch implementer subagent 於 campaign/domain 建立 Campaign JPA 聚合（id/name/type/status/period/ruleConfig JSONB/targetSpec/reachPlan + @Version 樂觀鎖 + created_by/updated_by/updated_at 稽核），並以 Flyway migration 建立 campaign 表（對齊 05-er-database-schema.puml）。
+
 
 
 

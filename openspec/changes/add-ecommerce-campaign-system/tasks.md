@@ -69,7 +69,7 @@
   - Acceptance: WHEN 兩名營運同時編輯同一活動 THEN 以 `version` 樂觀鎖使後寫入者失敗，避免互相覆蓋；寫入記錄 `created_by`/`updated_by`/`updated_at`（§4，FR-001）
   - Depends on: 1.2
   - Independence: serial
-  - status: not_started
+  - status: in_progress
 - [ ] 3.2 實作各 CampaignType 的 RuleConfig DTO 與 schema 驗證 + upcaster
   - Acceptance: WHEN 建立/更新活動 THEN 先依 type 對應 DiscountRuleConfig/GiftAddonRuleConfig/FlashSaleRuleConfig 做 schema validation，通過後才序列化存入 JSONB（含 `schema_version`）（§4，FR-005）
   - Acceptance: WHEN 規則不合理（折扣為負、百分比>100%、結束早於開始）THEN 驗證失敗、拒絕儲存並回報原因（FR-005，US-001）

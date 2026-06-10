@@ -5,6 +5,11 @@ plugins {
 dependencies {
     implementation(libs.spring.boot.starter)
 
+    // The Campaign aggregate is JPA-persisted (task 3.1). The PostgreSQL driver is
+    // a runtime concern; the schema itself is owned by Flyway migrations in :app.
+    implementation(libs.spring.boot.starter.data.jpa)
+    runtimeOnly(libs.postgresql)
+
     // campaign may only talk to reach through the shared kernel (event/config).
     // It must NOT depend on :reach — enforced by the ArchUnit guard in :app.
     implementation(project(":shared"))

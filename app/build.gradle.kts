@@ -14,6 +14,14 @@ dependencies {
     implementation(project(":reach"))
     implementation(project(":shared"))
 
+    // Flyway owns the schema (Hibernate ddl-auto: none). The deployable runs the
+    // migrations on startup; PostgreSQL 16 requires the -postgresql module too.
+    // JPA + driver are needed at runtime so the migrated Campaign entity persists.
+    implementation(libs.spring.boot.starter.data.jpa)
+    implementation(libs.flyway.core)
+    implementation(libs.flyway.database.postgresql)
+    runtimeOnly(libs.postgresql)
+
     // Architecture guard.
     testImplementation(libs.archunit.junit5)
 
