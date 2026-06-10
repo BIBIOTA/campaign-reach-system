@@ -109,11 +109,13 @@ FLASH_SALE  → FlashSaleRuleConfig
 
 JSONB 提供彈性儲存，DTO 提供型別安全與驗證，兩者互補。
 
+JSONB 結構須含固定欄位 `schema_version`（例如 `"schema_version": 1`），以支援未來欄位演進時的向後相容讀取。當讀取到舊版 JSONB 時，應用層負責轉換至當前 DTO 結構（upcaster），無需資料庫 migration。
+
 #### 優惠券三層結構
 
 折扣/優惠券的「使用限制」與「一人一碼 vs 共用碼」拆成三層，避免把代碼、限制與核銷混在單一表（完整綱要見 ER 圖）：
 
-- **coupon_campaign**：規則與總量——`code_type`(SHARED_CODE/UNIQUE_CODE)、`total_usage_limit`、`per_user_limit`、`used_count`（核銷時 atomic update 控總量）。
+- **coupon_campaign**：規則與總量——`code_type`(SHARED_CODE/UNIQUE_CODE)、`total_usage_limit`、`per_user_limit`、`used_count`（核銷時 atomic update 控總量。**已知瓶頸**：熱門閃購高並發下此欄為熱點 row lock，MVP 規模可接受；未來量大時需考慮引入 Redis 預扣機制）。
 - **coupon_code**：個別優惠碼——共用碼一筆；一人一碼多筆，含 `assigned_user_id` 與 `status`(AVAILABLE/ASSIGNED/REDEEMED/EXPIRED)。
 - **coupon_redemption**：核銷紀錄——唯一鍵 `(coupon_code_id, user_id, order_id)` 防同單重複核銷；每人限用 N 次以 transaction + 計數檢查。
 
@@ -219,16 +221,19 @@ Reach.dispatcher    → SendResultRecorded  (使用者層級：發送結果)
 [reach.orchestrator] 消費 reach.requested（活動層級）
    ├─ 建立 reach_request 批次（凍結 snapshot）
    ├─ AudienceResolver 解析 targetSpec → 收件人清單
-   ├─ 去重/頻控（同人同活動短時間內不重複發）
+   ├─ 冪等去重（DB unique constraint 防同事件重複建立 task）
+   ├─ 頻控（orchestrator 在建立 ReachTask 前查詢時間窗口，防不同事件在短時間對同人重複發）
    ├─ 為每個收件人建立 ReachTask(PENDING) 寫入 DB（使用者層級）
    └─► 逐筆送 dispatcher
 
-[dispatcher] 以 FOR UPDATE SKIP LOCKED 撈可發送任務
-   ├─ 條件：status IN (PENDING, RETRY_SCHEDULED) AND next_retry_at <= now()
-   ├─ 標記 PROCESSING（locked_by / locked_until 防多 worker 搶同一筆）
-   ├─ 依 channel 選 ChannelAdapter → send()
-   ├─ 成功 → ReachTask=SENT，寫 send_result
-   └─ 失敗 → RETRY_SCHEDULED(設 next_retry_at, 指數退避)，超限 → FAILED + 進 DLQ
+[dispatcher] 以 FOR UPDATE SKIP LOCKED 撈可發送任務（兩階段事務，避免外部 I/O 佔用 DB 連線）
+   ├─ 階段 1（短事務）：撈 status IN (PENDING, RETRY_SCHEDULED) AND next_retry_at <= now()
+   │    └─ 更新 PROCESSING + locked_by/locked_until（租約，如 5 min）→ 立即 commit，釋放 DB 連線
+   ├─ 外部呼叫（事務外）：依 channel 選 ChannelAdapter → send()
+   ├─ 階段 2（短事務）：依呼叫結果開新事務回寫
+   │    ├─ 成功 → ReachTask=SENT，寫 send_result，清除 locked_by
+   │    └─ 失敗 → RETRY_SCHEDULED(設 next_retry_at, 指數退避)，超限 → FAILED + 進 DLQ
+   └─ Reaper job（背景排程）：定期掃描 status=PROCESSING AND locked_until < now()，重置為 PENDING，防 worker crash 導致任務卡死
 ```
 
 ### 關鍵設計點
@@ -237,7 +242,9 @@ Reach.dispatcher    → SendResultRecorded  (使用者層級：發送結果)
 - 受眾解析一律在 reach 完成，campaign 不展開收件人。
 - 一筆 `ReachRequested` → 一筆 `reach_request`（批次） → N 筆 `ReachTask`（任務）。
 - `ReachTask` 落 DB 是發送的 source of truth，支撐重試、報表、冪等。
-- 冪等鍵：`(campaign_id, user_id, send_cycle_key, channel)`——含 channel 以支援未來同週期多通道；`send_cycle_key` 排程為時間鍵、事件為 `event:{id}`。
+- **冪等與頻控分層處理**（語意不同，實作機制不同）：
+  - **冪等（Idempotency）**：DB unique constraint `(campaign_id, user_id, send_cycle_key, channel)` 防止同一事件/週期重複建立 ReachTask。注意：事件觸發的 `send_cycle_key = event:{id}`，不同事件 id 不相同，unique constraint 無法跨事件去重。
+  - **頻控（Frequency Capping）**：orchestrator 建立 ReachTask 前，查詢該用戶在指定時間窗口內的歷史 reach_task（`WHERE campaign_id = :cid AND user_id = :uid AND created_at > :threshold`），命中則跳過，確保短時間不重複觸達。
 
 ## 6. 錯誤處理與韌性
 
