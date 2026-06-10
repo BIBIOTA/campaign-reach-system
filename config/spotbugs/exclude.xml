@@ -15,4 +15,12 @@
         <Class name="~.*\.config\..*"/>
         <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2"/>
     </Match>
+
+    <!-- JPA entities use protected no-arg constructors for Hibernate proxies and do not
+         override finalize(), so the finalizer-attack vector in CT_CONSTRUCTOR_THROW does
+         not apply. Constructor-level null checks are intentional domain invariants. -->
+    <Match>
+        <Class name="~.*\.domain\..*"/>
+        <Bug pattern="CT_CONSTRUCTOR_THROW"/>
+    </Match>
 </FindBugsFilter>

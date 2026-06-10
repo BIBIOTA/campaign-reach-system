@@ -19,9 +19,15 @@ spring:
 
   jpa:
     hibernate:
-      # Schema is owned by migrations (task 3+), not by Hibernate auto-DDL.
+      # Schema is owned by Flyway migrations (task 3+), not by Hibernate auto-DDL.
       ddl-auto: none
     open-in-view: false
+
+  # Flyway owns the schema: migrations under classpath:db/migration run on startup
+  # (task 3.1 onward). Baseline-on-migrate lets it adopt a pre-existing empty DB.
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
 
   # Kafka broker connectivity (design.md §9). Topics, partition keys and
   # consumer groups are defined by later tasks (2.x), not here.

@@ -45,6 +45,12 @@ spring-boot-starter-validation = { module = "org.springframework.boot:spring-boo
 # PostgreSQL JDBC driver (runtime)
 postgresql = { module = "org.postgresql:postgresql", version.ref = "postgresql" }
 
+# Flyway DB migrations — the schema owner (Hibernate ddl-auto: none, design.md/task 3).
+# Versions are managed by the Spring Boot 3.4 BOM. PostgreSQL 16 requires the
+# flyway-database-postgresql module in addition to flyway-core.
+flyway-core = { module = "org.flywaydb:flyway-core" }
+flyway-database-postgresql = { module = "org.flywaydb:flyway-database-postgresql" }
+
 # ArchUnit (JUnit 5 integration)
 archunit-junit5 = { module = "com.tngtech.archunit:archunit-junit5", version.ref = "archunit" }
 

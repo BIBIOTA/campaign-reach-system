@@ -140,8 +140,66 @@
   - Code-quality-reviewer: ✅ Approved（無 Critical/Important；1 項 Minor：PartitionKeys 未擋空字串，列 follow-up）
 - Next action: Section 2（2.1–2.2）全數 passing；執行 final pass（`./gradlew check` + `openspec validate add-ecommerce-campaign-system --strict`）後 invoke spec-driven-dev:verification-before-completion。
 
+## Session 17 — 2026-06-10 16:00
+- Stage: SDD
+- Task: 3.1 建立 Campaign 聚合與資料表（含樂觀鎖與稽核欄位）
+- Transition: not_started → in_progress
+- Next action: dispatch implementer subagent 於 campaign/domain 建立 Campaign JPA 聚合（id/name/type/status/period/ruleConfig JSONB/targetSpec/reachPlan + @Version 樂觀鎖 + created_by/updated_by/updated_at 稽核），並以 Flyway migration 建立 campaign 表（對齊 05-er-database-schema.puml）。
 
+## Session 18 — 2026-06-10 16:40
+- Stage: SDD
+- Task: 3.1 建立 Campaign 聚合與資料表（含樂觀鎖與稽核欄位）
+- Transition: in_progress → passing
+- Evidence:
+  - Commits: 7330e78 feat(campaign): add Campaign aggregate, JPA persistence and Flyway schema (task 3.1)；27d7573 docs(campaign): note CurrentOperator thread-local leak-safety contract (task 3.1 review)
+  - Tests: `:campaign:spotlessCheck checkstyleMain spotbugsMain check` PASS、CampaignEnumContractTest 3 fast tests green、`:app:test` ArchUnit green；CampaignPersistenceIntegrationTest（真實 Postgres Testcontainers，涵蓋 stale-version OptimisticLock 失敗、updated_by/updated_at 稽核、5 status+3 type enum round-trip）4 tests 於本沙箱無 Docker → SKIPPED（非 fail），待 CI 實跑
+  - Spec-reviewer: ✅ Spec compliant（5/5；V1__campaign.sql 與 entity 欄位/enum 對齊 05-er，未提前實作 3.2/3.3/section-4）
+  - Code-quality-reviewer: ✅ Approved（無 Critical；1 項 Important = CurrentOperator thread-local 洩漏為 deferred-wiring，已補 Javadoc 契約並列 follow-up；其餘 Minor）
+- Next action: dispatch implementer subagent for task 3.2（各 CampaignType RuleConfig DTO + schema 驗證 + upcaster）。
 
+## Session 19 — 2026-06-10 16:45
+- Stage: SDD
+- Task: 3.2 實作各 CampaignType 的 RuleConfig DTO 與 schema 驗證 + upcaster
+- Transition: not_started → in_progress
+- Next action: dispatch implementer subagent 建立 DiscountRuleConfig/GiftAddonRuleConfig/FlashSaleRuleConfig DTO（含 schema_version）、依 type 路由的 schema 驗證（拒絕負折扣/百分比>100%/結束早於開始/門檻條件保存）與舊版 schema_version 的應用層 upcaster（不需 DB migration）。
 
+## Session 20 — 2026-06-10 17:30
+- Stage: SDD
+- Task: 3.2 實作各 CampaignType 的 RuleConfig DTO 與 schema 驗證 + upcaster
+- Transition: in_progress → passing
+- Evidence:
+  - Commits: ba5bbb6 feat(campaign): add RuleConfig DTOs, schema validation and upcaster (task 3.2)；1a7e5bb refactor(campaign): drop unused JSR-310, guard rule_config read boundary (task 3.2 review)
+  - Tests: RuleConfigMapperTest 9 fast non-DB tests green（合法三型序列化含 schema_version、負折扣/百分比>100%/endAt<startAt 各帶 reason 拒絕、NONE/MIN_SPEND 門檻 round-trip、舊版 schema_version upcast、blank/非物件 JSON read 守衛）；`:campaign:spotlessCheck checkstyleMain spotbugsMain test`、`:app:test` ArchUnit BUILD SUCCESSFUL
+  - Spec-reviewer: ✅ Spec compliant（5/5；RuleConfig sealed + 三 record 對齊 03-class，未提前實作 4.1/3.3/section-5）
+  - Code-quality-reviewer: ✅ Approved（無 Critical/Important；BigDecimal 金額正確、discriminator 讀取健壯、upcaster 最小化；Minor #1 dead JSR-310 與 #2 read 守衛 #3 annotation 已於 1a7e5bb 修正）
+- Next action: dispatch implementer subagent for task 3.3（優惠券三層 coupon_campaign/coupon_code/coupon_redemption + 唯一鍵防重複核銷 + used_count atomic 控總量）。
+
+## Session 21 — 2026-06-10 17:35
+- Stage: SDD
+- Task: 3.3 實作優惠券三層結構（coupon_campaign / coupon_code / coupon_redemption）
+- Transition: not_started → in_progress
+- Next action: dispatch implementer subagent 以 Flyway migration 建立三表（含 code_type/coupon_code_status enum 與 unique(coupon_code_id,user_id,order_id)），JPA 實體與 repository，並實作 used_count atomic update 控總量與重複核銷唯一鍵阻擋（對齊 05-er-database-schema.puml）。
+
+## Session 22 — 2026-06-10 18:20
+- Stage: SDD
+- Task: 3.3 實作優惠券三層結構（coupon_campaign / coupon_code / coupon_redemption）
+- Transition: in_progress → passing
+- Evidence:
+  - Commits: 34a486d feat(campaign): add coupon three-table model with atomic usage control (task 3.3)
+  - Tests: CouponEnumContractTest（fast no-DB）green；`:campaign:spotlessCheck checkstyleMain spotbugsMain test`、`:app:test` ArchUnit BUILD SUCCESSFUL；CouponPersistenceIntegrationTest（真實 Postgres Testcontainers，4 tests：SHARED_CODE 單碼/UNIQUE_CODE 多碼含 assigned_user_id+status、重複核銷 unique 阻擋 DataIntegrityViolationException、atomic used_count 達上限回傳 0 拒絕且不超過 total_usage_limit）本沙箱無 Docker → SKIPPED 待 CI 實跑
+  - Spec-reviewer: ✅ Spec compliant（5/5；V2__coupon.sql 三表/兩 enum/FK/unique(coupon_code_id,user_id,order_id)/unique(lower(code)) 對齊 05-er，V1 未動）
+  - Code-quality-reviewer: ✅ Approved（無 Critical/Important；entity 對齊 3.1 NAMED_ENUM 風格、tryIncrementUsedCount 單一條件式 UPDATE 無 lost-update、clearAutomatically=true 讀新狀態；僅 cosmetic Minor）
+- Next action: Section 3（3.1–3.3）全數 passing；執行 final pass（`./gradlew check` + `openspec validate add-ecommerce-campaign-system --strict`）後 invoke spec-driven-dev:verification-before-completion。
+
+## Session 23 — 2026-06-10 17:00
+- Stage: SDD（post-verification CI fix）
+- Task: 3.1 / 3.3 — Docker 整合測試於 GitHub Actions 實跑後修正兩處缺陷
+- Transition: passing → passing（CI 驗證後修正，狀態不變）
+- Evidence:
+  - Commits: 9121bde fix(campaign): make used_count increment transactional and fix audit timestamp assertion (tasks 3.1, 3.3)
+  - CI: PR #6 首跑（run 27264181692）於 Docker runner 實跑被本地 skip 的 @RequiresDocker 測試，揭露 2 個失敗：(1) CouponPersistenceIntegrationTest.atomicUsedCountIncrementNeverExceedsTotalUsageLimit → TransactionRequiredException（@Modifying UPDATE 無交易邊界）；(2) CampaignPersistenceIntegrationTest.successfulWriteRecordsUpdatedByAndUpdatedAt → 記憶體 nanosecond Instant vs DB microsecond timestamptz 精度不一致
+  - 修正: tryIncrementUsedCount 加 @Transactional（REQUIRED，自成工作單元/可參與呼叫端交易）；測試以 DB re-read 的 created_at 為比較基準
+  - 重跑 run 27264878795 ✅ BUILD SUCCESSFUL（:app:test 實跑真實 PostgreSQL 容器 ~2m53s，過 JaCoCo verification）
+- Next action: PR #6 CI 綠燈；待 review 合併後接 Section 4（Campaign API CRUD 與生命週期）。
 
 
