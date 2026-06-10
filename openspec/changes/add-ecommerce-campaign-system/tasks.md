@@ -64,12 +64,13 @@
 
 ## 3. Campaign domain — 領域模型與持久化
 
-- [ ] 3.1 建立 Campaign 聚合與資料表（含樂觀鎖與稽核欄位）
+- [x] 3.1 建立 Campaign 聚合與資料表（含樂觀鎖與稽核欄位）
   - Acceptance: WHEN 建立活動 THEN 持久化 id/name/status/type/period/ruleConfig(JSONB)/targetSpec/reachPlan，狀態枚舉為 DRAFT/SCHEDULED/RUNNING/ENDED/PAUSED（§4）
   - Acceptance: WHEN 兩名營運同時編輯同一活動 THEN 以 `version` 樂觀鎖使後寫入者失敗，避免互相覆蓋；寫入記錄 `created_by`/`updated_by`/`updated_at`（§4，FR-001）
   - Depends on: 1.2
   - Independence: serial
-  - status: in_progress
+  - status: passing
+  - follow-up: CurrentOperator thread-local 待後續 security filter 落地時於 finally 統一 clear()（避免 pooled thread 稽核洩漏）；Campaign entity 之 startAt/endAt 等不變式驗證隨 3.2 RuleConfig 驗證一併補強
 - [ ] 3.2 實作各 CampaignType 的 RuleConfig DTO 與 schema 驗證 + upcaster
   - Acceptance: WHEN 建立/更新活動 THEN 先依 type 對應 DiscountRuleConfig/GiftAddonRuleConfig/FlashSaleRuleConfig 做 schema validation，通過後才序列化存入 JSONB（含 `schema_version`）（§4，FR-005）
   - Acceptance: WHEN 規則不合理（折扣為負、百分比>100%、結束早於開始）THEN 驗證失敗、拒絕儲存並回報原因（FR-005，US-001）
@@ -77,7 +78,7 @@
   - Acceptance: WHEN 讀取到舊版 `schema_version` 的 JSONB THEN 應用層 upcaster 轉換至當前 DTO 結構，無需資料庫 migration（§4）
   - Depends on: 3.1
   - Independence: serial
-  - status: not_started
+  - status: in_progress
 - [ ] 3.3 實作優惠券三層結構（coupon_campaign / coupon_code / coupon_redemption）
   - Acceptance: WHEN 設定優惠券活動 THEN 以 coupon_campaign 存 code_type(SHARED_CODE/UNIQUE_CODE)/total_usage_limit/per_user_limit/used_count；coupon_code 存個別碼與 status(AVAILABLE/ASSIGNED/REDEEMED/EXPIRED)（§4，FR-002/FR-004）
   - Acceptance: WHEN 同一 `(coupon_code_id, user_id, order_id)` 重複核銷 THEN 以唯一鍵阻擋，且 `used_count` 以 atomic update 控總量（§4，FR-004）

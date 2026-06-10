@@ -146,6 +146,23 @@
 - Transition: not_started → in_progress
 - Next action: dispatch implementer subagent 於 campaign/domain 建立 Campaign JPA 聚合（id/name/type/status/period/ruleConfig JSONB/targetSpec/reachPlan + @Version 樂觀鎖 + created_by/updated_by/updated_at 稽核），並以 Flyway migration 建立 campaign 表（對齊 05-er-database-schema.puml）。
 
+## Session 18 — 2026-06-10 16:40
+- Stage: SDD
+- Task: 3.1 建立 Campaign 聚合與資料表（含樂觀鎖與稽核欄位）
+- Transition: in_progress → passing
+- Evidence:
+  - Commits: 7330e78 feat(campaign): add Campaign aggregate, JPA persistence and Flyway schema (task 3.1)；27d7573 docs(campaign): note CurrentOperator thread-local leak-safety contract (task 3.1 review)
+  - Tests: `:campaign:spotlessCheck checkstyleMain spotbugsMain check` PASS、CampaignEnumContractTest 3 fast tests green、`:app:test` ArchUnit green；CampaignPersistenceIntegrationTest（真實 Postgres Testcontainers，涵蓋 stale-version OptimisticLock 失敗、updated_by/updated_at 稽核、5 status+3 type enum round-trip）4 tests 於本沙箱無 Docker → SKIPPED（非 fail），待 CI 實跑
+  - Spec-reviewer: ✅ Spec compliant（5/5；V1__campaign.sql 與 entity 欄位/enum 對齊 05-er，未提前實作 3.2/3.3/section-4）
+  - Code-quality-reviewer: ✅ Approved（無 Critical；1 項 Important = CurrentOperator thread-local 洩漏為 deferred-wiring，已補 Javadoc 契約並列 follow-up；其餘 Minor）
+- Next action: dispatch implementer subagent for task 3.2（各 CampaignType RuleConfig DTO + schema 驗證 + upcaster）。
+
+## Session 19 — 2026-06-10 16:45
+- Stage: SDD
+- Task: 3.2 實作各 CampaignType 的 RuleConfig DTO 與 schema 驗證 + upcaster
+- Transition: not_started → in_progress
+- Next action: dispatch implementer subagent 建立 DiscountRuleConfig/GiftAddonRuleConfig/FlashSaleRuleConfig DTO（含 schema_version）、依 type 路由的 schema 驗證（拒絕負折扣/百分比>100%/結束早於開始/門檻條件保存）與舊版 schema_version 的應用層 upcaster（不需 DB migration）。
+
 
 
 
