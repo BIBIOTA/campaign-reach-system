@@ -42,4 +42,12 @@ dependencies {
     testImplementation(libs.spring.kafka)
     testImplementation(libs.spring.boot.starter.data.jpa)
     testRuntimeOnly(libs.postgresql)
+
+    // The campaign HTTP API integration test (CampaignApiIntegrationTest) drives the
+    // real /internal/campaigns endpoints through MockMvc + the full Spring Security
+    // filter chain. :campaign's web/security starters are `implementation`-scoped, so
+    // MockMvc and the httpBasic test post-processor are not on this compile classpath
+    // transitively — declare them here for the test sources.
+    testImplementation(libs.spring.boot.starter.web)
+    testImplementation(libs.spring.security.test)
 }

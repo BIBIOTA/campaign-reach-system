@@ -197,13 +197,15 @@ class RuleConfigMapperTest {
     }
 
     @Test
-    void blankOrNonObjectJsonRejectedWithReason() {
+    void blankOrNonObjectStoredJsonFailsAsServerSideCorruption() {
+        // fromJson reads the persisted column, so malformed stored data is a server-side fault
+        // (RuleConfigPersistenceException → 500), not a client validation error (→ 400).
         assertThatThrownBy(() -> mapper.fromJson(CampaignType.DISCOUNT, ""))
-                .isInstanceOf(RuleConfigValidationException.class)
+                .isInstanceOf(RuleConfigPersistenceException.class)
                 .hasMessageContaining("rule_config JSON is not a valid object");
 
         assertThatThrownBy(() -> mapper.fromJson(CampaignType.DISCOUNT, "42"))
-                .isInstanceOf(RuleConfigValidationException.class)
+                .isInstanceOf(RuleConfigPersistenceException.class)
                 .hasMessageContaining("rule_config JSON is not a valid object");
     }
 

@@ -81,9 +81,7 @@ public class CampaignApplicationService {
     @Transactional
     public CampaignView update(UUID id, UpdateCampaignRequest request) {
         Campaign campaign = require(id);
-        if (request.version() == null || request.version() != campaign.getVersion()) {
-            throw new ObjectOptimisticLockingFailureException(Campaign.class, id);
-        }
+        assertVersionMatches(campaign, request.version());
 
         if (request.name() != null) {
             if (request.name().isBlank()) {
@@ -128,15 +126,25 @@ public class CampaignApplicationService {
     @Transactional
     public CampaignView transition(UUID id, ChangeCampaignStatusRequest request) {
         Campaign campaign = require(id);
-        if (request.version() == null || request.version() != campaign.getVersion()) {
-            throw new ObjectOptimisticLockingFailureException(Campaign.class, id);
-        }
+        assertVersionMatches(campaign, request.version());
         campaign.transitionTo(request.targetStatus());
         return toView(repository.save(campaign));
     }
 
     private Campaign require(UUID id) {
         return repository.findById(id).orElseThrow(() -> new CampaignNotFoundException(id));
+    }
+
+    /**
+     * Enforces read-then-update optimistic locking (FR-001): the client-echoed {@code version} must
+     * match the loaded campaign's current version. A {@code null} or stale value fails with {@link
+     * ObjectOptimisticLockingFailureException} (mapped to HTTP 409) so a concurrent writer cannot
+     * silently overwrite another operator's change.
+     */
+    private void assertVersionMatches(Campaign campaign, Integer expectedVersion) {
+        if (expectedVersion == null || expectedVersion != campaign.getVersion()) {
+            throw new ObjectOptimisticLockingFailureException(Campaign.class, campaign.getId());
+        }
     }
 
     private CampaignView toView(Campaign campaign) {

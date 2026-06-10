@@ -16,7 +16,7 @@ import java.util.UUID;
  * @param id campaign identity
  * @param name campaign name
  * @param type offer type
- * @param status lifecycle status (always {@code DRAFT} until task 4.2 lifecycle transitions)
+ * @param status current lifecycle status (advanced via the status-transition endpoint, task 4.2)
  * @param startAt active-period start
  * @param endAt active-period end
  * @param ruleConfig parsed strongly-typed offer rule

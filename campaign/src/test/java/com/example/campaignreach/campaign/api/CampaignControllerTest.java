@@ -5,8 +5,8 @@ import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -184,7 +184,7 @@ class CampaignControllerTest {
                 "version", stored.getVersion(),
                 "reachPlan", Map.of("channel", "SMS", "templateRef", "tpl-2", "timing", "EVENT")));
 
-        mockMvc.perform(put("/internal/campaigns/" + id)
+        mockMvc.perform(patch("/internal/campaigns/" + id)
                         .with(httpBasic("op", "pw"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
@@ -218,7 +218,7 @@ class CampaignControllerTest {
                         "thresholdMode",
                         "NONE")));
 
-        mockMvc.perform(put("/internal/campaigns/" + id)
+        mockMvc.perform(patch("/internal/campaigns/" + id)
                         .with(httpBasic("op", "pw"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
@@ -237,7 +237,7 @@ class CampaignControllerTest {
         // Client echoes a version that a concurrent edit has already advanced past → 409, no save.
         String body = objectMapper.writeValueAsString(Map.of("version", stored.getVersion() + 1, "name", "Renamed"));
 
-        mockMvc.perform(put("/internal/campaigns/" + id)
+        mockMvc.perform(patch("/internal/campaigns/" + id)
                         .with(httpBasic("op", "pw"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))

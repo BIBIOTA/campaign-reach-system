@@ -30,9 +30,11 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
  * ({@code created_by} / {@code updated_by} / {@code created_at} / {@code updated_at})
  * are populated automatically by Spring Data JPA auditing.
  *
- * <p>Scope note (task 3.1): {@code ruleConfig} / {@code targetSpec} / {@code reachPlan}
- * are stored as raw JSONB ({@link String}) without per-type DTO validation — that
- * validation and the RuleConfig upcaster arrive in task 3.2.
+ * <p>{@code ruleConfig} / {@code targetSpec} / {@code reachPlan} are stored as raw
+ * JSONB ({@link String}); the strongly-typed per-type DTO validation and the
+ * RuleConfig upcaster live at the API trust boundary ({@code RuleConfigMapper}),
+ * keeping the aggregate persistence-focused. Lifecycle edges are guarded by
+ * {@link #transitionTo} (FR-011).
  */
 @Entity
 @Table(name = "campaign")
