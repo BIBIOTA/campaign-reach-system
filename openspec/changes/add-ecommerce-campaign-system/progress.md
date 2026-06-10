@@ -197,6 +197,17 @@
 - Transition: not_started → in_progress
 - Next action: 於新分支 feat/section-4-campaign-api 派發 implementer subagent 實作 Campaign CRUD 內部 REST（建立預設 DRAFT、RuleConfig 驗證落庫、樂觀鎖稽核、未驗證/未授權拒絕存取），完成後接 spec-reviewer 與 code-quality-reviewer。
 
+## Session 25 — 2026-06-10 19:45
+- Stage: SDD
+- Task: 4.1 實作活動 CRUD 內部 REST（含驗證與稽核）
+- Transition: in_progress → passing
+- Evidence:
+  - Commits: b387797 feat(campaign): add campaign CRUD internal REST with validation, audit and operator auth (task 4.1); 23fa3aa fix(campaign): enforce read-then-update optimistic locking on campaign update (task 4.1 review)
+  - Tests: CampaignControllerTest 8/8 green（建立折扣活動並落為草稿 → 201+DRAFT+id；rule/reach 設定可分別修改；不合法規則 400；stale version → 409 走真實版本檢查；GET 缺失 404；未驗證 401；非 OPERATOR 403）。完整 `./gradlew check` BUILD SUCCESSFUL（spotless/checkstyle/spotbugs/ArchUnit/JaCoCo 全綠；Docker-gated 整合測試本沙箱 skip）。
+  - Spec-reviewer: ✅ Spec compliant（5/5：scenario 覆蓋、class-diagram DTO 對齊、§10 auth+稽核、無超範圍端點、無缺漏 scenario）
+  - Code-quality-reviewer: ✅ Approved（首輪提出 1 Important：UpdateCampaignRequest.version 文件化為樂觀鎖守衛卻未實作；已於 23fa3aa 修正為 @NotNull 必填 + service 版本比對丟 ObjectOptimisticLockingFailureException(→409)，stale 測試改驗真實邏輯；再審 ✅）
+- Next action: 接續實作 task 4.2（活動狀態切換 API 與守衛 DRAFT→SCHEDULED→RUNNING→PAUSED/ENDED），依賴 4.1。
+
 ## Session 23 — 2026-06-10 17:00
 - Stage: SDD（post-verification CI fix）
 - Task: 3.1 / 3.3 — Docker 整合測試於 GitHub Actions 實跑後修正兩處缺陷

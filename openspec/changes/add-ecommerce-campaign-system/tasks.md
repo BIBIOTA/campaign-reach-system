@@ -89,13 +89,13 @@
 
 ## 4. Campaign API — CRUD 與生命週期
 
-- [ ] 4.1 實作活動 CRUD 內部 REST（含驗證與稽核）
+- [x] 4.1 實作活動 CRUD 內部 REST（含驗證與稽核）
   - Acceptance: WHEN 呼叫建立/查詢/修改活動 API THEN 可設定名稱/起訖/優惠類型/內容/門檻/限制/觸達對象/發送計畫，且優惠規則設定與觸達發送設定可分別儲存與修改（FR-001/FR-007/FR-010，US-003）
   - Acceptance: WHEN 活動建立完成 THEN 預設狀態為 DRAFT，需經確認才會排入發送（FR-006，US-001）
   - Acceptance: WHEN 未經身分驗證/授權呼叫內部 REST THEN 拒絕存取（營運後台角色，§10）
   - Depends on: 3.2, 3.3
   - Independence: serial
-  - status: in_progress
+  - status: passing
 - [ ] 4.2 實作活動狀態切換 API 與守衛（啟用/暫停/結束）
   - Acceptance: WHEN 請求狀態切換 THEN 僅允許合理轉換（DRAFT→SCHEDULED→RUNNING→PAUSED/ENDED），不合理切換被擋並提示（FR-011，US-002）
   - Depends on: 4.1
