@@ -14,6 +14,8 @@ postgresql = "42.7.4"
 
 # Test
 junit = "5.11.4"
+# Integration testing with real Kafka + PostgreSQL containers (design.md §7)
+testcontainers = "1.20.4"
 
 [libraries]
 # Spring Boot starters (versions managed by the Spring Boot BOM / dependency-management plugin)
@@ -33,6 +35,17 @@ archunit-junit5 = { module = "com.tngtech.archunit:archunit-junit5", version.ref
 
 # JUnit 5
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
+
+# Testcontainers (versions managed by the Testcontainers BOM below) — real Kafka
+# + PostgreSQL containers back the module-boundary integration tests; the broker
+# is NEVER mocked (design.md §7).
+testcontainers-bom = { module = "org.testcontainers:testcontainers-bom", version.ref = "testcontainers" }
+testcontainers-junit-jupiter = { module = "org.testcontainers:junit-jupiter" }
+testcontainers-postgresql = { module = "org.testcontainers:postgresql" }
+testcontainers-kafka = { module = "org.testcontainers:kafka" }
+# Spring Boot @ServiceConnection support for Testcontainers (auto-wires
+# spring.datasource.* and spring.kafka.bootstrap-servers from running containers).
+spring-boot-testcontainers = { module = "org.springframework.boot:spring-boot-testcontainers" }
 
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "springBoot" }
