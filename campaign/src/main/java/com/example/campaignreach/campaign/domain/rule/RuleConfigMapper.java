@@ -5,7 +5,6 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import java.time.Instant;
 import java.util.List;
 import org.springframework.stereotype.Component;
@@ -29,9 +28,9 @@ public class RuleConfigMapper {
     private final RuleConfigValidator validator;
     private final RuleConfigUpcaster upcaster;
 
-    /** Wires the validator and upcaster and configures a JSR-310-aware {@link ObjectMapper}. */
+    /** Wires the validator and upcaster and configures the {@link ObjectMapper}. */
     public RuleConfigMapper(RuleConfigValidator validator, RuleConfigUpcaster upcaster) {
-        this.objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
+        this.objectMapper = new ObjectMapper();
         this.validator = validator;
         this.upcaster = upcaster;
     }
@@ -62,6 +61,9 @@ public class RuleConfigMapper {
     public RuleConfig fromJson(CampaignType campaignType, String json) {
         try {
             JsonNode parsed = objectMapper.readTree(json);
+            if (parsed == null || parsed.isMissingNode() || parsed.isNull() || !parsed.isObject()) {
+                throw new RuleConfigValidationException(List.of("rule_config JSON is not a valid object"));
+            }
             JsonNode upcasted = upcaster.upcast(campaignType, parsed);
             // Ensure the polymorphic discriminator matches the owning campaign type so reads do not
             // depend on a (historically optional) ruleType field being present in old payloads.

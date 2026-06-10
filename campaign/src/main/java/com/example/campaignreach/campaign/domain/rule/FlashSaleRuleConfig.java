@@ -4,6 +4,7 @@ import com.example.campaignreach.campaign.domain.CampaignType;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import java.math.BigDecimal;
 
 /**
@@ -23,7 +24,7 @@ public record FlashSaleRuleConfig(
         @NotNull(message = "salePrice must be provided")
                 @DecimalMin(value = "0", message = "salePrice must not be negative")
                 BigDecimal salePrice,
-        @jakarta.validation.constraints.Positive(message = "purchaseLimit must be positive") int purchaseLimit)
+        @Positive(message = "purchaseLimit must be positive") int purchaseLimit)
         implements RuleConfig {
 
     /** Current schema version produced by this code. */

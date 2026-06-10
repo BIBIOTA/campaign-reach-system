@@ -140,6 +140,17 @@ class RuleConfigMapperTest {
         assertThat(read.minSpend()).isEqualByComparingTo("1000");
     }
 
+    @Test
+    void blankOrNonObjectJsonRejectedWithReason() {
+        assertThatThrownBy(() -> mapper.fromJson(CampaignType.DISCOUNT, ""))
+                .isInstanceOf(RuleConfigValidationException.class)
+                .hasMessageContaining("rule_config JSON is not a valid object");
+
+        assertThatThrownBy(() -> mapper.fromJson(CampaignType.DISCOUNT, "42"))
+                .isInstanceOf(RuleConfigValidationException.class)
+                .hasMessageContaining("rule_config JSON is not a valid object");
+    }
+
     // --- 舊版 JSONB 向後相容讀取 ---
 
     @Test
