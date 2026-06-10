@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SpotBugs exclusion filter (design.md §11.3).
+
+  Kept deliberately narrow: only excludes well-understood Spring/JPA framework
+  false positives, never broad rule categories. `spotbugsMain` runs against
+  production bytecode at effort=max, reportLevel=medium so High AND Normal
+  (Medium-and-above) priority bugs fail the build.
+-->
+<FindBugsFilter>
+    <!-- Spring injects configuration beans by reference; SpotBugs flags stored
+         mutable references (EI_EXPOSE_REP*) on framework-managed config classes.
+         These are not real defects in DI-managed singletons. -->
+    <Match>
+        <Class name="~.*\.config\..*"/>
+        <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2"/>
+    </Match>
+</FindBugsFilter>

@@ -1,0 +1,56 @@
+name: CI
+
+# Quality gate (design.md §11.5): every PR / push must pass the full gate before
+# it can be merged. `./gradlew check` aggregates spotlessCheck, checkstyleMain,
+# spotbugsMain, test (unit + ArchUnit + Testcontainers integration) and the
+# JaCoCo coverage verification. GitHub-hosted runners provide Docker, so the
+# Testcontainers integration tests run for real here (they skip locally without
+# Docker).
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    name: Build & quality gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle (with build cache)
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Run quality gate
+        # `check` runs spotlessCheck + checkstyleMain + spotbugsMain + test
+        # (unit + ArchUnit + Testcontainers) + jacocoTestCoverageVerification.
+        run: ./gradlew check --no-daemon --stacktrace
+
+      - name: Upload reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-reports
+          path: |
+            **/build/reports/checkstyle/
+            **/build/reports/spotbugs/
+            **/build/reports/tests/
+            **/build/reports/jacoco/
+          if-no-files-found: ignore
+          retention-days: 7

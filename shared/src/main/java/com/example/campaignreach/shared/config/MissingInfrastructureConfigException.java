@@ -11,6 +11,12 @@ public class MissingInfrastructureConfigException extends RuntimeException {
 
     private final List<String> missingProperties;
 
+    /**
+     * Creates the exception for the given missing properties, embedding their
+     * names into an actionable startup-failure message.
+     *
+     * @param missingProperties the required properties that were absent or blank
+     */
     public MissingInfrastructureConfigException(List<String> missingProperties) {
         super("Missing required infrastructure configuration: "
                 + String.join(", ", missingProperties)
