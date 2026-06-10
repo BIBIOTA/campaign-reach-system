@@ -208,6 +208,12 @@
   - Code-quality-reviewer: ✅ Approved（首輪提出 1 Important：UpdateCampaignRequest.version 文件化為樂觀鎖守衛卻未實作；已於 23fa3aa 修正為 @NotNull 必填 + service 版本比對丟 ObjectOptimisticLockingFailureException(→409)，stale 測試改驗真實邏輯；再審 ✅）
 - Next action: 接續實作 task 4.2（活動狀態切換 API 與守衛 DRAFT→SCHEDULED→RUNNING→PAUSED/ENDED），依賴 4.1。
 
+## Session 26 — 2026-06-10 19:50
+- Stage: SDD
+- Task: 4.2 實作活動狀態切換 API 與守衛（啟用/暫停/結束）
+- Transition: not_started → in_progress
+- Next action: 派發 implementer subagent，於 Campaign 聚合加入 transitionTo(state) 守衛（依 02-state 圖合法邊：DRAFT→SCHEDULED→RUNNING→PAUSED↔RUNNING、RUNNING/PAUSED→ENDED），新增 /internal/campaigns/{id}/status 端點（帶 version 樂觀鎖），不合法轉換回明確錯誤；完成後接 spec-reviewer 與 code-quality-reviewer。
+
 ## Session 23 — 2026-06-10 17:00
 - Stage: SDD（post-verification CI fix）
 - Task: 3.1 / 3.3 — Docker 整合測試於 GitHub Actions 實跑後修正兩處缺陷

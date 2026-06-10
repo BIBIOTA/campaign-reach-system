@@ -100,7 +100,7 @@
   - Acceptance: WHEN 請求狀態切換 THEN 僅允許合理轉換（DRAFT→SCHEDULED→RUNNING→PAUSED/ENDED），不合理切換被擋並提示（FR-011，US-002）
   - Depends on: 4.1
   - Independence: serial
-  - status: not_started
+  - status: in_progress
 
 ## 5. Campaign evaluation — 兩類 Evaluator（Strategy）
 
