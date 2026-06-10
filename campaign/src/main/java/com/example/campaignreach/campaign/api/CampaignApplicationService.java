@@ -81,11 +81,14 @@ public class CampaignApplicationService {
     @Transactional
     public CampaignView update(UUID id, UpdateCampaignRequest request) {
         Campaign campaign = require(id);
-        if (request.version() != campaign.getVersion()) {
+        if (request.version() == null || request.version() != campaign.getVersion()) {
             throw new ObjectOptimisticLockingFailureException(Campaign.class, id);
         }
 
         if (request.name() != null) {
+            if (request.name().isBlank()) {
+                throw new RuleConfigValidationException(List.of("name must not be blank"));
+            }
             campaign.setName(request.name());
         }
         if (request.startAt() != null) {
@@ -97,6 +100,11 @@ public class CampaignApplicationService {
         if (request.ruleConfig() != null) {
             String ruleJson = ruleConfigMapper.toJson(
                     request.ruleConfig(), campaign.getType(), campaign.getStartAt(), campaign.getEndAt());
+            campaign.setRuleConfig(ruleJson);
+        } else if (request.startAt() != null || request.endAt() != null) {
+            RuleConfig existingRule = ruleConfigMapper.fromJson(campaign.getType(), campaign.getRuleConfig());
+            String ruleJson = ruleConfigMapper.toJson(
+                    existingRule, campaign.getType(), campaign.getStartAt(), campaign.getEndAt());
             campaign.setRuleConfig(ruleJson);
         }
         if (request.targetSpec() != null) {
@@ -120,7 +128,7 @@ public class CampaignApplicationService {
     @Transactional
     public CampaignView transition(UUID id, ChangeCampaignStatusRequest request) {
         Campaign campaign = require(id);
-        if (request.version() != campaign.getVersion()) {
+        if (request.version() == null || request.version() != campaign.getVersion()) {
             throw new ObjectOptimisticLockingFailureException(Campaign.class, id);
         }
         campaign.transitionTo(request.targetStatus());
@@ -168,8 +176,7 @@ public class CampaignApplicationService {
         try {
             return objectMapper.readValue(json, type);
         } catch (JsonProcessingException e) {
-            throw new RuleConfigValidationException(
-                    List.of("failed to parse stored settings: " + e.getOriginalMessage()));
+            throw new IllegalStateException("failed to parse stored settings from database", e);
         }
     }
 }

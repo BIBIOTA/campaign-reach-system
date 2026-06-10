@@ -26,17 +26,13 @@ public class OperatorAuditFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        boolean attributed = false;
         if (authentication != null && authentication.getPrincipal() instanceof OperatorUserDetails operator) {
             CurrentOperator.set(operator.id());
-            attributed = true;
         }
         try {
             filterChain.doFilter(request, response);
         } finally {
-            if (attributed) {
-                CurrentOperator.clear();
-            }
+            CurrentOperator.clear();
         }
     }
 }
