@@ -214,6 +214,17 @@
 - Transition: not_started → in_progress
 - Next action: 派發 implementer subagent，於 Campaign 聚合加入 transitionTo(state) 守衛（依 02-state 圖合法邊：DRAFT→SCHEDULED→RUNNING→PAUSED↔RUNNING、RUNNING/PAUSED→ENDED），新增 /internal/campaigns/{id}/status 端點（帶 version 樂觀鎖），不合法轉換回明確錯誤；完成後接 spec-reviewer 與 code-quality-reviewer。
 
+## Session 27 — 2026-06-10 20:15
+- Stage: SDD
+- Task: 4.2 實作活動狀態切換 API 與守衛（啟用/暫停/結束）
+- Transition: in_progress → passing
+- Evidence:
+  - Commits: 0f95379 feat(campaign): add campaign status-transition API with legal-transition guard (task 4.2)
+  - Tests: Domain CampaignStatusTransitionTest（合法整鏈 DRAFT→SCHEDULED→RUNNING→PAUSED→RUNNING→ENDED；ENDED→RUNNING 終態被擋；skip-ahead/self-transition 被擋）；CampaignControllerTest 新增 合法狀態切換(200)/不合理狀態切換被擋下(422 illegal_transition + from→to reason)/stale version(409 走真實版本檢查)/缺 targetStatus(400)。完整 `./gradlew check` BUILD SUCCESSFUL。
+  - Spec-reviewer: ✅ Spec compliant（5/5：合法/非法 scenario 覆蓋、ALLOWED_TRANSITIONS 恰為 02-state 圖 6 條合法邊、ENDED 終態、拒絕附 from→to 原因、無越界建排程；狀態僅經 guarded transitionTo 變更，CRUD update 不動 status）
+  - Code-quality-reviewer: ✅ Approved（無 Critical/Important；守衛置於 aggregate 合 DDD、靜態 map 真不可變滿足 SpotBugs、422/409 語意分離、stale 測試走真實邏輯未重蹈 4.1 覆轍；僅 3 點 Minor 觀察不需修改）
+- Next action: Section 4（4.1、4.2）全數 passing；執行 final pass（openspec validate --strict）後 invoke spec-driven-dev:verification-before-completion。
+
 ## Session 23 — 2026-06-10 17:00
 - Stage: SDD（post-verification CI fix）
 - Task: 3.1 / 3.3 — Docker 整合測試於 GitHub Actions 實跑後修正兩處缺陷
