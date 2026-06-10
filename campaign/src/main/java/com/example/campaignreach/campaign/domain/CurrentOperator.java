@@ -11,6 +11,11 @@ import java.util.UUID;
  * per request (later wired from the security context). The value is held in a
  * thread-local so JPA auditing can read it during a {@code save} without threading
  * it through every method signature.
+ *
+ * <p><strong>Leak safety:</strong> on pooled request threads a missed {@link #clear()}
+ * lets a prior operator id be silently attributed to the next write's audit columns.
+ * Every caller that {@link #set(UUID) sets} an operator MUST {@link #clear()} it in a
+ * {@code finally} block (the future security filter will own this teardown).
  */
 public final class CurrentOperator {
 
