@@ -191,8 +191,15 @@
   - Code-quality-reviewer: ✅ Approved（無 Critical/Important；entity 對齊 3.1 NAMED_ENUM 風格、tryIncrementUsedCount 單一條件式 UPDATE 無 lost-update、clearAutomatically=true 讀新狀態；僅 cosmetic Minor）
 - Next action: Section 3（3.1–3.3）全數 passing；執行 final pass（`./gradlew check` + `openspec validate add-ecommerce-campaign-system --strict`）後 invoke spec-driven-dev:verification-before-completion。
 
-
-
-
+## Session 23 — 2026-06-10 17:00
+- Stage: SDD（post-verification CI fix）
+- Task: 3.1 / 3.3 — Docker 整合測試於 GitHub Actions 實跑後修正兩處缺陷
+- Transition: passing → passing（CI 驗證後修正，狀態不變）
+- Evidence:
+  - Commits: 9121bde fix(campaign): make used_count increment transactional and fix audit timestamp assertion (tasks 3.1, 3.3)
+  - CI: PR #6 首跑（run 27264181692）於 Docker runner 實跑被本地 skip 的 @RequiresDocker 測試，揭露 2 個失敗：(1) CouponPersistenceIntegrationTest.atomicUsedCountIncrementNeverExceedsTotalUsageLimit → TransactionRequiredException（@Modifying UPDATE 無交易邊界）；(2) CampaignPersistenceIntegrationTest.successfulWriteRecordsUpdatedByAndUpdatedAt → 記憶體 nanosecond Instant vs DB microsecond timestamptz 精度不一致
+  - 修正: tryIncrementUsedCount 加 @Transactional（REQUIRED，自成工作單元/可參與呼叫端交易）；測試以 DB re-read 的 created_at 為比較基準
+  - 重跑 run 27264878795 ✅ BUILD SUCCESSFUL（:app:test 實跑真實 PostgreSQL 容器 ~2m53s，過 JaCoCo verification）
+- Next action: PR #6 CI 綠燈；待 review 合併後接 Section 4（Campaign API CRUD 與生命週期）。
 
 
