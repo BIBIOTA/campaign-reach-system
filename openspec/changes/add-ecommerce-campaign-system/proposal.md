@@ -15,6 +15,13 @@
 - Affected code: 新建 `campaign/`、`reach/`、`shared/` 三個 bounded module 與其資料表、Kafka topic（`domain.events`、`reach.requested`、`reach.dlq`）。
 - Breaking changes: No（全新系統，無既有相容性負擔）。
 
+## Open Questions
+
+集中收納目前散落於各 spec 內、需外部確認後才能定案的待決項；定案前以「可設定參數存在」作為可驗收基準，定案後回填具體數值並更新對應 spec。
+
+- **PII 資料保留期限（NFR-005）**：reach_task / send_result 的稽核軌跡保留月數待法遵（legal/compliance）確認。spec 已要求「保留期限參數必須存在且可設定、不得預設永久保留」，確切月數待定。
+- **Circuit breaker 門檻（NFR-004）**：滑動窗口大小、失敗率門檻、冷卻時間、half-open 探測筆數目前以預設值（20 次窗口 / ≥50% / 30s / 5 筆）入 spec，正式門檻待壓測（task 12.1）與線上 Email provider SLA 數據校準後定案。
+
 ## Related Artifacts
 
 ### Design

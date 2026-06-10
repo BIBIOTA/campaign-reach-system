@@ -48,6 +48,7 @@
 - [ ] 3.2 實作各 CampaignType 的 RuleConfig DTO 與 schema 驗證 + upcaster
   - Acceptance: WHEN 建立/更新活動 THEN 先依 type 對應 DiscountRuleConfig/GiftAddonRuleConfig/FlashSaleRuleConfig 做 schema validation，通過後才序列化存入 JSONB（含 `schema_version`）（§4，FR-005）
   - Acceptance: WHEN 規則不合理（折扣為負、百分比>100%、結束早於開始）THEN 驗證失敗、拒絕儲存並回報原因（FR-005，US-001）
+  - Acceptance: WHEN 設定優惠規則指定「無門檻」或「滿指定金額可用」THEN 依設定保存門檻條件並通過 schema validation，供後續優惠計算套用（FR-003）
   - Acceptance: WHEN 讀取到舊版 `schema_version` 的 JSONB THEN 應用層 upcaster 轉換至當前 DTO 結構，無需資料庫 migration（§4）
   - Depends on: 3.1
   - Independence: serial
@@ -143,7 +144,7 @@
   - Independence: parallel-safe
   - status: not_started
 - [ ] 8.2 實作抑制名單（suppression）查表與發送前過濾
-  - Acceptance: WHEN 發送前 THEN 檢查 suppression(user_id/channel/reason)，命中（退訂/硬退信/投訴）者該 task 標 FAILED（不可重試），不送出（§10，FR-015）
+  - Acceptance: WHEN 發送前 THEN 檢查 suppression(user_id/channel/reason)，命中（退訂/硬退信/投訴）者該 task 標 FAILED（不可重試），不送出（§10，NFR-005/FR-015）
   - Depends on: 3.1
   - Independence: parallel-safe
   - status: not_started
@@ -195,7 +196,8 @@
 - [ ] 11.1 落實收件人 PII 最小化與資料保留策略
   - Acceptance: WHEN 落庫 reach_task THEN 只存 user_id，不落收件 email；實際 email 於 dispatcher 發送當下以 user_id 即時解析、發送後不持久化（§10）
   - Acceptance: WHEN 落庫 send_result THEN 僅存 provider_message_id 與 outcome，不存信件內容與收件地址（§10）
-  - Acceptance: WHEN reach_task/send_result 屆保留期 THEN 依保留策略歸檔或刪除（具體月數待法遵確認，於 writing-spec 補實）（§10）
+  - Acceptance: WHEN 初始化保留設定 THEN 保留期限參數必須存在且可設定、不得預設永久保留（NFR-005）
+  - Acceptance: WHEN reach_task/send_result 屆保留期 THEN 依保留策略歸檔或刪除（具體月數為 open question 待法遵確認，見 proposal.md ## Open Questions）（§10，NFR-005）
   - Depends on: 7.3, 9.1
   - Independence: serial
   - status: not_started

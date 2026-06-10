@@ -110,7 +110,17 @@ The system SHALL cancel not-yet-sent tasks (status IN PENDING, RETRY_SCHEDULED) 
 - **THEN** the system 允許其完成，不強制中止（有界且極小的洩漏窗口，明確接受）
 
 ### Requirement: 外部通道中斷的穩定降級
-The system SHALL wrap the EmailAdapter with a circuit breaker so that when the external Email provider is unavailable the system degrades stably and resumes after recovery without cascading failure. (NFR-004)
+The system SHALL wrap the EmailAdapter with a circuit breaker so that when the external Email provider is unavailable the system degrades stably and resumes after recovery without cascading failure. The breaker SHALL open on a measurable, configurable failure threshold, stay open for a configurable cool-down, and recover via half-open probing, so that recovery behaviour is verifiable rather than descriptive. (NFR-004)
+
+#### Scenario: 失敗率達門檻時 breaker 開啟
+- **WHEN** 於滑動窗口（預設最近 20 次呼叫）內失敗率達到可設定門檻（預設 ≥ 50%）
+- **THEN** the system 在 1 秒內將 breaker 轉為 OPEN
+- **AND** 上述窗口大小、失敗率門檻、最小取樣數皆可由設定調整
+
+#### Scenario: 冷卻後以 half-open 探測恢復
+- **WHEN** breaker 進入 OPEN 並經過可設定冷卻時間（預設 30 秒）
+- **THEN** the system 轉為 HALF_OPEN 並放行可設定筆數（預設 5 筆）作為探測
+- **AND** 探測全數成功才轉回 CLOSED、恢復正常發送；任一探測失敗則重新回到 OPEN 並重啟冷卻
 
 #### Scenario: breaker 開啟時不卡任務
 - **WHEN** circuit breaker 於 dispatcher 標記 PROCESSING 前已開啟
@@ -156,7 +166,7 @@ The system SHALL reliably complete a single campaign's 100k-scale fan-out and di
 - **THEN** the system 透過非同步處理與分區策略，使活動設定與其他活動觸達不受影響、不被拖垮
 
 ### Requirement: 收件人 PII 最小化與抑制名單
-The system SHALL store only `user_id` on `reach_task` (resolving the actual email at send time and not persisting it), SHALL store only provider_message_id and outcome on `send_result`, SHALL check a suppression list before sending and mark hits as FAILED, and SHALL apply a data-retention policy to reach audit trails. (NFR-005)
+The system SHALL store only `user_id` on `reach_task` (resolving the actual email at send time and not persisting it), SHALL store only provider_message_id and outcome on `send_result`, SHALL check a suppression list before sending and mark hits as FAILED, and SHALL apply a configurable data-retention policy to reach audit trails. The retention period SHALL exist and be configurable; the exact duration is an open question pending legal/compliance confirmation (see proposal.md ## Open Questions). (NFR-005, FR-015)
 
 #### Scenario: 不落收件 PII
 - **WHEN** 建立 reach_task 與寫入 send_result
@@ -165,10 +175,15 @@ The system SHALL store only `user_id` on `reach_task` (resolving the actual emai
 
 > See: ../../diagrams/05-er-database-schema.puml
 
-#### Scenario: 發送前抑制名單過濾
+#### Scenario: 發送前抑制名單過濾 (FR-015)
 - **WHEN** 發送前命中 suppression（退訂 / 硬退信 / 投訴）
 - **THEN** the system 將該 task 標為 FAILED（不可重試原因）且不送出
 
-#### Scenario: 觸達稽核軌跡保留策略
-- **WHEN** reach_task / send_result 屆滿保留期限
-- **THEN** the system 依資料保留策略歸檔或刪除（具體月數待法遵確認）
+#### Scenario: 保留策略存在且可設定
+- **WHEN** 系統初始化資料保留設定
+- **THEN** the system 必須提供一個可設定的保留期限參數（驗收以「參數存在且可調整」為準）
+- **AND** 未設定時不得預設為「永久保留」
+
+#### Scenario: 觸達稽核軌跡屆期歸檔或刪除
+- **WHEN** reach_task / send_result 屆滿設定的保留期限
+- **THEN** the system 依資料保留策略歸檔或刪除（具體月數為 open question，待法遵確認，見 proposal.md ## Open Questions）
