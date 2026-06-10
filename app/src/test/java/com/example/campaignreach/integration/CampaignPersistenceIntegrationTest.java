@@ -56,7 +56,7 @@ class CampaignPersistenceIntegrationTest extends AbstractIntegrationTest {
      * turn; the optimistic-lock version makes the later writer fail (reload prompt).
      */
     @Test
-    void twoOperatorsEditingSameCampaign_laterWriterFailsOnStaleVersion() {
+    void twoOperatorsEditingSameCampaignLaterWriterFailsOnStaleVersion() {
         CurrentOperator.set(OPERATOR_A);
         Campaign persisted = repository.saveAndFlush(newCampaign());
         UUID id = persisted.getId();
