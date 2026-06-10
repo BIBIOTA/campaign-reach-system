@@ -53,13 +53,14 @@
   - Acceptance: WHEN 序列化/反序列化事件 THEN payload 用駝峰 `sendCycle`，與落庫 `send_cycle_key` 為同一值僅命名風格差異（§5）
   - Depends on: 1.1
   - Independence: independent
-  - status: complete
-- [ ] 2.2 定義 topic / 分區鍵 / 消費者群組規格
+  - status: passing
+- [x] 2.2 定義 topic / 分區鍵 / 消費者群組規格
   - Acceptance: WHEN 設定 topic THEN `domain.events` 以 `user_id` 分區、`reach.requested` 以 `reach_request_id`（或 `campaign_id+send_cycle_key` 雜湊）分區、`reach.dlq` 沿用來源鍵（§9，呼應 NFR-002）
   - Acceptance: WHEN 任一 consumer 處理訊息 THEN 採 at-least-once，offset 於「處理已落庫」後才 commit（§9）
   - Depends on: 2.1, 1.2
   - Independence: serial
-  - status: not_started
+  - status: passing
+  - follow-up: PartitionKeys 對 String 入參（sendCycle / sourceTaskKey）目前僅 requireNonNull 未擋空字串；空字串會默默破壞 ordering/冪等，待 producer 接線（6.x/7.x/9.x）前補 requireNonBlank 與對應測試（code-quality Minor）
 
 ## 3. Campaign domain — 領域模型與持久化
 
