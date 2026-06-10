@@ -106,6 +106,40 @@
   - Code-quality-reviewer: ✅ Approved（無 Critical/Important，3 項 Minor polish）
 - Next action: Section 1（1.1–1.6）全數 passing；執行 final pass（`./gradlew check` + `openspec validate --strict`）後 invoke spec-driven-dev:verification-before-completion。
 
+## Session 13 — 2026-06-10 14:40
+- Stage: SDD
+- Task: 2.1 定義 Kafka 事件 schema 與 topic 契約（shared/event）
+- Transition: not_started → in_progress
+- Next action: dispatch implementer subagent 於 shared/event 定義 ReachRequested / ReachTaskCreated / SendResultRecorded 強型別 schema（駝峰 sendCycle，對齊落庫 send_cycle_key）。
+
+## Session 14 — 2026-06-10 14:55
+- Stage: SDD
+- Task: 2.1 定義 Kafka 事件 schema 與 topic 契約（shared/event）
+- Transition: in_progress → passing
+- Evidence:
+  - Commits: df2222a feat(shared): add Kafka event schema contracts (task 2.1)
+  - Tests: EventSchemaContractTest 6 tests green；`./gradlew :shared:test spotlessCheck checkstyleMain spotbugsMain`、`:shared:check`、`:app:test`（ArchUnit ModuleBoundaryTest）全數 BUILD SUCCESSFUL；wire 欄位斷言 camelCase `sendCycle`、ReachRequested 無收件人清單、triggerType=SCHEDULED_BATCH/EVENT
+  - Spec-reviewer: ✅ Spec compliant（5/5；event 名稱/欄位對齊 01-sequence 與 05-er，無 2.2 wiring 外洩）
+  - Code-quality-reviewer: ✅ Approved（無 Critical/Important；1 項 Minor：outcome 仍為 String vs Channel enum 之非對稱，列為 future follow-up）
+- Next action: dispatch implementer subagent for task 2.2（topic / 分區鍵 / 消費者群組規格 + at-least-once offset 語意）。
+
+## Session 15 — 2026-06-10 15:00
+- Stage: SDD
+- Task: 2.2 定義 topic / 分區鍵 / 消費者群組規格
+- Transition: not_started → in_progress
+- Next action: dispatch implementer subagent 定義三 topic（domain.events/reach.requested/reach.dlq）名稱、分區鍵推導（user_id / reach_request_id 或 campaign_id+send_cycle_key 雜湊 / 沿用來源鍵）、消費者群組與 at-least-once（enable-auto-commit=false + 手動 ack）容器設定。
+
+## Session 16 — 2026-06-10 15:20
+- Stage: SDD
+- Task: 2.2 定義 topic / 分區鍵 / 消費者群組規格
+- Transition: in_progress → passing
+- Evidence:
+  - Commits: 314efff feat(shared): define Kafka topic/partition/consumer-group contract and at-least-once policy (task 2.2)
+  - Tests: KafkaTopicContractTest 8 + KafkaConsumerConfigTest 2 green；`./gradlew :shared:test spotlessCheck checkstyleMain spotbugsMain`、`:app:test`（ArchUnit）BUILD SUCCESSFUL；斷言三 topic 名稱/兩 group id、分區鍵確定性、reach.requested key 非裸 campaignId（NFR-002）、enable.auto.commit=false + AckMode.MANUAL_IMMEDIATE
+  - Spec-reviewer: ✅ Spec compliant（5/5；無 listener/producer/admin 外洩）
+  - Code-quality-reviewer: ✅ Approved（無 Critical/Important；1 項 Minor：PartitionKeys 未擋空字串，列 follow-up）
+- Next action: Section 2（2.1–2.2）全數 passing；執行 final pass（`./gradlew check` + `openspec validate add-ecommerce-campaign-system --strict`）後 invoke spec-driven-dev:verification-before-completion。
+
 
 
 

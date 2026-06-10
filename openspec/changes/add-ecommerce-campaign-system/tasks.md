@@ -48,18 +48,19 @@
 
 ## 2. Shared kernel — 事件契約
 
-- [ ] 2.1 定義 Kafka 事件 schema 與 topic 契約（shared/event）
+- [x] 2.1 定義 Kafka 事件 schema 與 topic 契約（shared/event）
   - Acceptance: WHEN 定義事件 THEN 提供 `ReachRequested`（活動層級，含 campaignId/targetSpec/reachPlan/triggerType/sendCycle，不含完整收件人清單）、`ReachTaskCreated`、`SendResultRecorded` 之強型別 schema（§5）
   - Acceptance: WHEN 序列化/反序列化事件 THEN payload 用駝峰 `sendCycle`，與落庫 `send_cycle_key` 為同一值僅命名風格差異（§5）
   - Depends on: 1.1
   - Independence: independent
-  - status: not_started
-- [ ] 2.2 定義 topic / 分區鍵 / 消費者群組規格
+  - status: passing
+- [x] 2.2 定義 topic / 分區鍵 / 消費者群組規格
   - Acceptance: WHEN 設定 topic THEN `domain.events` 以 `user_id` 分區、`reach.requested` 以 `reach_request_id`（或 `campaign_id+send_cycle_key` 雜湊）分區、`reach.dlq` 沿用來源鍵（§9，呼應 NFR-002）
   - Acceptance: WHEN 任一 consumer 處理訊息 THEN 採 at-least-once，offset 於「處理已落庫」後才 commit（§9）
   - Depends on: 2.1, 1.2
   - Independence: serial
-  - status: not_started
+  - status: passing
+  - resolved: PartitionKeys 對 String 入參（sendCycle / sourceTaskKey）的 requireNonBlank 守衛已於 a6d11eb 補上並有對應測試（原 code-quality Minor follow-up 已關閉）
 
 ## 3. Campaign domain — 領域模型與持久化
 

@@ -24,4 +24,9 @@ dependencies {
     runtimeOnly(libs.postgresql)
 
     testImplementation(libs.junit.jupiter)
+
+    // Verifies the JSON wire contract of the shared event schemas (camelCase
+    // field names, enum literals). Production serializer wiring is task 2.2.
+    testImplementation(libs.jackson.databind)
+    testImplementation(libs.jackson.datatype.jsr310)
 }
