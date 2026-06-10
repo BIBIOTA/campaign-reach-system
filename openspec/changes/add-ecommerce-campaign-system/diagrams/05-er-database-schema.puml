@@ -1,0 +1,197 @@
+@startuml
+title 資料庫綱要（PostgreSQL）：活動 × 名單 × 觸達批次/任務 × 優惠券
+
+skinparam linetype ortho
+hide circle
+
+' ============================================================
+' 自訂列舉型別定義（PostgreSQL enum）
+' ============================================================
+legend top left
+  **自訂列舉型別（enum）**
+  campaign_type        = DISCOUNT | GIFT_ADDON | FLASH_SALE
+  campaign_status      = DRAFT | SCHEDULED | RUNNING | PAUSED | ENDED
+  trigger_type         = SCHEDULED_BATCH | EVENT
+  reach_request_status = PENDING | EXPANDING | DISPATCHING | DONE | FAILED | CANCELLED
+  channel              = EMAIL | SMS | PUSH
+  reach_task_status    = PENDING | PROCESSING | SENT | RETRY_SCHEDULED | FAILED | DLQ | CANCELLED
+  code_type            = SHARED_CODE | UNIQUE_CODE
+  coupon_code_status   = AVAILABLE | ASSIGNED | REDEEMED | EXPIRED
+endlegend
+
+' ============================================================
+' 區塊 A：活動定義（campaign 模組）
+' ============================================================
+entity "campaign" as campaign {
+  * id : UUID <<PK>> — 活動唯一識別
+  --
+  * name : text — 活動名稱
+  * type : campaign_type — 活動類型
+  * status : campaign_status — 生命週期狀態
+  * start_at : timestamptz — 開始時間
+  * end_at : timestamptz — 結束時間
+  rule_config : jsonb — 優惠規則參數（依 type 驗證）
+  target_spec : jsonb — 觸達對象條件
+  reach_plan : jsonb — 通道/模板/時機
+  version : int — 樂觀鎖版本
+  created_by : UUID — 建立者
+  updated_by : UUID — 最後修改者
+  * created_at : timestamptz — 建立時間
+  * updated_at : timestamptz — 更新時間
+}
+
+entity "audience_list" as list {
+  * id : UUID <<PK>> — 名單唯一識別
+  --
+  * name : text — 名單名稱
+  * created_at : timestamptz — 建立時間
+}
+
+entity "audience_list_member" as member {
+  * list_id : UUID <<PK>><<FK>> — 所屬名單
+  * user_id : UUID <<PK>> — 成員使用者
+  --
+  added_at : timestamptz — 加入時間
+}
+
+' ============================================================
+' 區塊 B：觸達批次與任務（reach 模組）
+' ============================================================
+entity "reach_request" as request {
+  * id : UUID <<PK>> — 觸達批次識別（活動層級）
+  --
+  * campaign_id : UUID <<FK>> — 所屬活動
+  * trigger_type : trigger_type — 觸發來源
+  trigger_event_id : text — 事件觸發時的來源事件ID
+  * send_cycle_key : text — 發送週期鍵（冪等/補償用）
+  target_spec_snapshot : jsonb — 當下對象條件快照
+  reach_plan_snapshot : jsonb — 當下發送計畫快照
+  * status : reach_request_status — 批次狀態
+  total_count : int — 展開總數
+  pending_count : int — 待發送數
+  sent_count : int — 已送達數
+  failed_count : int — 失敗數
+  * created_at : timestamptz — 建立時間
+  started_at : timestamptz — 開始展開時間
+  finished_at : timestamptz — 完成時間
+  --
+  <<UNIQUE (campaign_id, send_cycle_key, trigger_type)>>
+}
+
+entity "reach_task" as task {
+  * id : UUID <<PK>> — 任務唯一識別（使用者層級）
+  --
+  * reach_request_id : UUID <<FK>> — 所屬批次
+  * campaign_id : UUID <<FK>> — 所屬活動（便於查詢）
+  * user_id : UUID — 收件使用者
+  * send_cycle_key : text — 發送週期鍵
+  * channel : channel — 發送通道
+  * status : reach_task_status — 任務狀態
+  retry_count : int — 已重試次數
+  next_retry_at : timestamptz — 下次可重試時間
+  processing_started_at : timestamptz — 開始處理時間
+  last_attempt_at : timestamptz — 最後嘗試時間
+  locked_by : text — 處理中的 worker
+  locked_until : timestamptz — 鎖定到期時間
+  last_error : text — 最後失敗原因
+  sent_at : timestamptz — 成功送出時間
+  * created_at : timestamptz — 建立時間
+  --
+  <<UNIQUE (campaign_id, user_id, send_cycle_key, channel)>>
+}
+
+entity "send_result" as result {
+  * id : UUID <<PK>> — 結果唯一識別
+  --
+  * reach_task_id : UUID <<FK>> — 對應觸達任務
+  provider_message_id : text — 服務商訊息ID（去重）
+  * outcome : text — 外送結果
+  occurred_at : timestamptz — 結果發生時間
+}
+
+' ============================================================
+' 區塊 C：優惠券三層（折扣/優惠券活動）
+' ============================================================
+entity "coupon_campaign" as ccamp {
+  * id : UUID <<PK>> — 優惠券設定識別
+  --
+  * campaign_id : UUID <<FK>> — 所屬活動
+  * code_type : code_type — 共用碼/一人一碼
+  shared_code : text — 共用碼（SHARED_CODE 用）
+  * total_usage_limit : int — 活動總使用上限
+  * per_user_limit : int — 每人使用上限
+  used_count : int — 已使用數（atomic 控總量）
+}
+
+entity "coupon_code" as ccode {
+  * id : UUID <<PK>> — 碼唯一識別
+  --
+  * coupon_campaign_id : UUID <<FK>> — 所屬優惠券設定
+  * code : text — 優惠碼
+  assigned_user_id : UUID — 已指派使用者（一人一碼）
+  * status : coupon_code_status — 碼狀態
+  * created_at : timestamptz — 建立時間
+}
+
+entity "coupon_redemption" as redeem {
+  * id : UUID <<PK>> — 核銷紀錄識別
+  --
+  * coupon_code_id : UUID <<FK>> — 對應優惠碼
+  * user_id : UUID — 核銷使用者
+  * order_id : UUID — 對應訂單
+  redeemed_at : timestamptz — 核銷時間
+  --
+  <<UNIQUE (coupon_code_id, user_id, order_id)>>
+}
+
+' ===== 關係（1 : N 端點標記）=====
+campaign "1" ||--o{ "N" request : 觸達批次
+request  "1" ||--o{ "N" task    : 展開任務
+campaign "1" ||--o{ "N" task    : 任務歸屬
+task     "1" ||--o{ "N" result  : 發送結果
+list     "1" ||--o{ "N" member  : 名單成員
+campaign "1" ||--o{ "N" ccamp   : 優惠券設定
+ccamp    "1" ||--o{ "N" ccode   : 優惠碼
+ccode    "1" ||--o{ "N" redeem  : 核銷紀錄
+
+note bottom of request
+  **區塊 B-1：觸達批次（活動層級）**
+  對應一筆 ReachRequested 事件。
+  snapshot 凍結當下 target_spec / reach_plan，
+  確保活動事後被改也能追溯當時發送依據。
+  計數欄位由背景定期聚合 reach_task 回填（近即時），
+  不逐筆即時 update，避免成為 row-lock 熱點。
+  unique(campaign_id, send_cycle_key, trigger_type)
+  確保同事件重投只建一筆批次（fan-out 冪等）。
+  send_cycle_key 同時作排程「已處理 cycle」補償依據。
+end note
+
+note bottom of task
+  **區塊 B-2：觸達任務（使用者層級）**
+  每位收件人/通道一筆。唯一鍵含 channel，
+  支援未來同週期多通道；worker 以
+  status + next_retry_at + FOR UPDATE SKIP LOCKED
+  並行取任務，避免互搶。
+end note
+
+note bottom of ccode
+  **區塊 C：優惠券三層**
+  coupon_campaign 定義規則與總量(used_count atomic)，
+  coupon_code 區分共用碼/一人一碼(assigned_user_id)，
+  coupon_redemption 記錄核銷，唯一鍵防重複核銷同一訂單。
+end note
+
+' ============================================================
+' 建議索引（非實體欄位，列為設計備註）
+' ============================================================
+note as IDX #EEEEEE
+  **建議索引**
+  campaign(status, start_at) / campaign(status, end_at) — scheduler 掃描即將開始/結束
+  reach_task(status, next_retry_at, created_at) — worker 撈待發送
+  reach_task(campaign_id, status) — 活動發送狀態分布
+  reach_task(user_id, campaign_id) — 某人某活動觸達狀態
+  send_result(reach_task_id, occurred_at)
+  UNIQUE send_result(provider_message_id) WHERE provider_message_id IS NOT NULL
+  UNIQUE coupon_code(lower(code)) — 大小寫一致
+end note
+@enduml

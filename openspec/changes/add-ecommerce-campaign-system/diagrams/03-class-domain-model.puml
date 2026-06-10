@@ -1,0 +1,193 @@
+@startuml
+title 領域模型：活動模組 × 觸達（Strategy + Adapter 擴充點）
+
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+
+' ============================================================
+' 區塊 A：Campaign 模組 — 「決定什麼活動、給誰什麼優惠」
+' ============================================================
+package "campaign 模組（活動定義與觸發判定）" as P_CAMPAIGN #E8F0FE {
+
+  class Campaign {
+    +id: UUID
+    +name: String
+    +type: CampaignType
+    +status: CampaignStatus
+    +startAt: Instant
+    +endAt: Instant
+    +ruleConfig: JSONB
+    +targetSpec: TargetSpec
+    +reachPlan: ReachPlan
+  }
+
+  enum CampaignType {
+    DISCOUNT
+    GIFT_ADDON
+    FLASH_SALE
+  }
+  enum CampaignStatus {
+    DRAFT
+    SCHEDULED
+    RUNNING
+    PAUSED
+    ENDED
+  }
+
+  package "規則設定（每型一個 DTO，寫入前驗證）" as P_RULE #D7E3FB {
+    interface RuleConfig <<DTO>>
+    class DiscountRuleConfig
+    class GiftAddonRuleConfig
+    class FlashSaleRuleConfig
+    RuleConfig <|.. DiscountRuleConfig
+    RuleConfig <|.. GiftAddonRuleConfig
+    RuleConfig <|.. FlashSaleRuleConfig
+  }
+
+  package "兩條獨立策略（Strategy）" as P_EVAL #D7E3FB {
+    interface PromotionEvaluator <<Strategy>> {
+      +supports(): CampaignType
+      +evaluate(ctx: CartContext): PromotionResult
+    }
+    interface ReachTriggerEvaluator <<Strategy>> {
+      +supports(): CampaignType
+      +shouldTrigger(ctx: TriggerContext): boolean
+    }
+    class DiscountPromotionEvaluator
+    class FlashSalePromotionEvaluator
+    class ScheduledTriggerEvaluator
+    class BehaviorTriggerEvaluator
+    PromotionEvaluator <|.. DiscountPromotionEvaluator
+    PromotionEvaluator <|.. FlashSalePromotionEvaluator
+    ReachTriggerEvaluator <|.. ScheduledTriggerEvaluator
+    ReachTriggerEvaluator <|.. BehaviorTriggerEvaluator
+
+    note as N_EVAL
+      —— 策略一：算優惠 ——
+      PromotionEvaluator：優惠計算的共同介面
+      DiscountPromotionEvaluator：折扣/優惠券的計算
+      FlashSalePromotionEvaluator：限時閃購價的計算
+      —— 策略二：判斷是否觸達 ——
+      ReachTriggerEvaluator：觸發判定的共同介面
+      ScheduledTriggerEvaluator：依排程時機判定
+      BehaviorTriggerEvaluator：依使用者行為判定（如棄購）
+      —— 為何拆兩條 ——
+      「能拿到什麼優惠」與「要不要發訊息」是兩件事，
+      分開後彼此可獨立新增、互不影響。
+    end note
+  }
+
+  class TargetSpec {
+    +kind: STATIC_LIST | CONDITION
+    +listId: UUID
+    +conditions: Map
+  }
+  class ReachPlan {
+    +channel: Channel
+    +templateRef: String
+    +timing: SCHEDULED | EVENT
+  }
+
+  Campaign "1" *-- "1" TargetSpec
+  Campaign "1" *-- "1" ReachPlan
+  Campaign ..> RuleConfig : ruleConfig 對應驗證
+  Campaign ..> CampaignType
+  Campaign ..> CampaignStatus
+}
+
+note top of P_CAMPAIGN
+  **區塊 A 用意：吸收「活動」面的變化**
+  活動只負責「定義優惠 + 判斷是否觸發」，不碰發送。
+  兩個擴充點讓新增活動類型不動既有程式：
+  • 規則設定 → 每型一個 RuleConfig DTO，建立時驗證
+  • 行為 → 拆成 PromotionEvaluator（算優惠）與
+    ReachTriggerEvaluator（判斷是否觸達），互不耦合
+end note
+
+' ============================================================
+' 區塊 B：Reach 模組 — 「發給誰、怎麼發、如何追蹤」
+' ============================================================
+package "reach 模組（受眾展開與發送）" as P_REACH #E6F4EA {
+
+  interface AudienceResolver {
+    +resolve(spec: TargetSpec): List<Recipient>
+  }
+  class ReachOrchestrator {
+    +onReachRequested(e: ReachRequested)
+  }
+  class ReachTask {
+    +id: UUID
+    +campaignId: UUID
+    +userId: UUID
+    +sendCycle: String
+    +channel: Channel
+    +status: ReachTaskStatus
+    +retryCount: int
+    --
+    idempotency: (campaignId,userId,sendCycle,channel)
+  }
+  enum ReachTaskStatus {
+    PENDING
+    PROCESSING
+    SENT
+    RETRY_SCHEDULED
+    FAILED
+    DLQ
+    CANCELLED
+  }
+  class Dispatcher {
+    +dispatch(task: ReachTask)
+  }
+
+  package "通道（Adapter）" as P_CH #CDEAD5 {
+    interface ChannelAdapter <<Adapter>> {
+      +channel(): Channel
+      +send(msg: ReachMessage): SendResult
+    }
+    class EmailAdapter
+    enum Channel {
+      EMAIL
+      SMS
+      PUSH
+    }
+    ChannelAdapter <|.. EmailAdapter
+  }
+
+  ReachOrchestrator ..> AudienceResolver : 使用
+  ReachOrchestrator "1" --> "N" ReachTask : 展開建立
+  Dispatcher ..> ReachTask : 處理
+  Dispatcher ..> ChannelAdapter : 依 reachPlan 選用
+  ReachTask ..> ReachTaskStatus
+}
+
+note top of P_REACH
+  **區塊 B 用意：吸收「觸達」面的變化**
+  收到活動層級請求後才決定「發給誰、怎麼發」。
+  • 一筆請求 → 展開成 N 筆 ReachTask（使用者層級）
+  • ReachTask 以 (campaignId,userId,sendCycle,channel) 冪等去重，
+    是發送的 single source of truth
+  • 新增通道 → 新增 ChannelAdapter，EmailAdapter 先行
+end note
+
+' ============================================================
+' 區塊邊界：兩模組唯一的銜接點
+' ============================================================
+class ReachRequested <<event>> {
+  +campaignId: UUID
+  +targetSpec: TargetSpec
+  +reachPlan: ReachPlan
+  +triggerType: String
+  +sendCycle: String
+}
+
+P_CAMPAIGN ..> ReachRequested : 發佈（活動層級）
+ReachRequested ..> ReachOrchestrator : 消費
+
+note bottom of ReachRequested
+  **區塊 A → B 的唯一接縫**
+  campaign 與 reach 不互相依賴 domain，
+  只透過此 Kafka 事件溝通。
+  事件帶 targetSpec（不帶收件人清單），
+  受眾解析一律在 reach 端進行。
+end note
+@enduml

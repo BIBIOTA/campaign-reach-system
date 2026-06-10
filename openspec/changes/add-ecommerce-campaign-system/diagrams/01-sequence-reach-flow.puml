@@ -1,0 +1,54 @@
+@startuml
+title 觸達流程：兩路徑收斂 → 受眾展開 → 發送/重試
+
+actor "行銷人員" as MK
+participant "Scheduler\n(campaign)" as SCH
+participant "Campaign Consumer\n(campaign)" as CC
+queue "Kafka: domain.events" as DE
+queue "Kafka: reach.requested" as RR
+participant "Orchestrator\n(reach)" as ORC
+participant "AudienceResolver\n(reach)" as AR
+database "PostgreSQL\n(ReachTask)" as DB
+participant "Dispatcher\n(reach)" as DSP
+participant "EmailAdapter\n(reach)" as EA
+participant "Email Provider" as EP
+queue "Kafka: DLQ" as DLQ
+
+== 路徑 1：排程批次 ==
+SCH -> SCH : 掃描 RUNNING 活動\n(ShedLock 鎖定 cycle)
+SCH -> RR : ReachRequested\n(campaignId, targetSpec, reachPlan, sendCycle)
+
+== 路徑 2：事件觸發 ==
+MK -> DE : (電商主站) CartAbandoned
+DE -> CC : 消費行為事件
+CC -> CC : ReachTriggerEvaluator\n.shouldTrigger(ctx)
+CC -> RR : ReachRequested (同一 topic)
+
+== 共同下游：受眾展開與發送 ==
+RR -> ORC : 消費 ReachRequested (活動層級)
+ORC -> AR : 解析 targetSpec
+AR --> ORC : 收件人清單 [N]
+ORC -> ORC : 去重 / 頻控
+loop 每位收件人
+  ORC -> DB : 建立 ReachTask(PENDING)\nunique(campaignId,userId,sendCycle,channel)\nON CONFLICT DO NOTHING
+end
+ORC -> DSP : 觸發發送
+
+loop 每筆 ReachTask
+  DSP -> DB : 取任務 → PROCESSING
+  DSP -> EA : send(ReachMessage)
+  EA -> EP : 寄送 Email
+  alt 成功
+    EP --> EA : OK
+    EA --> DSP : SendResult(SENT)
+    DSP -> DB : ReachTask = SENT
+  else 可重試失敗 (429/5xx/timeout)
+    EP --> EA : error
+    EA --> DSP : retryable
+    DSP -> DB : RETRY_SCHEDULED\n(指數退避, 最多 3 次)
+  else 重試耗盡 / 不可重試
+    DSP -> DB : FAILED
+    DSP -> DLQ : 進 dead-letter
+  end
+end
+@enduml
