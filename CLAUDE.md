@@ -1,69 +1,68 @@
-# CLAUDE.md — AI 協作與工程慣例指引
+# CLAUDE.md — AI Collaboration & Engineering Conventions
 
-> 本檔是給 AI 助手與開發者的**單一事實來源**（single source of truth）。
-> 模組邊界、建置／檢查指令、CI gate 規則皆以此為準；`AGENTS.md` 是指向本檔的 symlink，請只維護這一份。
+> This file is the **single source of truth** for AI assistants and developers.
+> Module boundaries, build/check commands, and CI gate rules are all authoritative here.
+> `AGENTS.md` is a symlink to this file — maintain only this one.
 
-## 專案定位
+## Project Overview
 
-電商行銷活動系統（campaign-reach-system）：一個**模組化單體**（modular monolith）後端服務，
-以 Kafka 串接觸發路徑，將「活動評估」與「觸達執行」解耦。**僅後端**，無前端。
+campaign-reach-system is a **modular monolith** backend service for an e-commerce marketing campaign platform.
+It uses Kafka to decouple campaign evaluation from reach execution. **Backend only** — no frontend.
 
-技術主軸：Spring Boot 3 / Java 21、Gradle Kotlin DSL 多模組、Kafka、PostgreSQL（Testcontainers 整合測試）。
+Tech stack: Spring Boot 3 / Java 21, Gradle Kotlin DSL multi-module, Kafka, PostgreSQL (Testcontainers integration tests).
 
-## 模組邊界（bounded modules）
+## Module Boundaries
 
-部署單元只有一個（`:app` 持有 `bootJar` 與 `@SpringBootApplication CampaignReachApplication`），
-其下含三個 bounded module，套件根一律為 `com.example.campaignreach`：
+There is a single deployable unit (`:app` owns the `bootJar` and `@SpringBootApplication CampaignReachApplication`),
+containing three bounded modules. All packages are rooted at `com.example.campaignreach`:
 
-| Module | Gradle | 職責 | 套件 |
+| Module | Gradle | Responsibility | Package |
 | --- | --- | --- | --- |
-| **campaign** | `:campaign` | 活動 API、活動 Consumer、Scheduler、Evaluators —— 決定「誰、何時、符合什麼條件」 | `…campaignreach.campaign`（`api` / `domain` / `evaluation` / `scheduler`） |
-| **reach** | `:reach` | Orchestrator、AudienceResolver、Dispatcher、Channel/Email Adapter —— 執行實際觸達 | `…campaignreach.reach`（`orchestrator` / `audience` / `channel` / `dispatcher`） |
-| **shared** | `:shared` | 跨模組**穩定契約**：事件 schema 與設定 | `…campaignreach.shared`（`event` / `config`） |
+| **campaign** | `:campaign` | Campaign API, Campaign Consumer, Scheduler, Evaluators — decides who, when, and under what conditions | `…campaignreach.campaign` (`api` / `domain` / `evaluation` / `scheduler`) |
+| **reach** | `:reach` | Orchestrator, AudienceResolver, Dispatcher, Channel/Email Adapter — executes actual reach delivery | `…campaignreach.reach` (`orchestrator` / `audience` / `channel` / `dispatcher`) |
+| **shared** | `:shared` | Cross-module **stable contracts**: event schemas and configuration | `…campaignreach.shared` (`event` / `config`) |
 
-### 邊界規則（硬性約束）
+### Boundary Rules (Hard Constraints)
 
-- **campaign 與 reach 僅透過 `shared/event`（Kafka 事件）溝通，禁止彼此直接 import domain。**
-  兩條觸發路徑（API 觸發、Scheduler 觸發）最終都收斂到同一個 `reach.requested` topic。
-- campaign 與 reach 皆**可**依賴 `shared`；**不可**互相依賴對方的 domain。
-- `shared` 只放跨模組穩定契約（`event` / `config`），**禁止**放入 campaign / reach 的
-  entity / repository / service。
-- 此約束由 **ArchUnit** 強制：`:app` 的
-  `com.example.campaignreach.architecture.ModuleBoundaryTest`
-  驗證 `campaign ↛ reach`、`reach ↛ campaign`。違反即測試失敗、擋關。
+- **campaign and reach communicate only via `shared/event` (Kafka events) — direct domain imports between them are forbidden.**
+  Both trigger paths (API-triggered and Scheduler-triggered) converge on the same `reach.requested` topic.
+- Both campaign and reach **may** depend on `shared`; they **must not** depend on each other's domain.
+- `shared` contains only cross-module stable contracts (`event` / `config`) — campaign/reach entities, repositories, and services **must not** be placed here.
+- These constraints are enforced by **ArchUnit**: `com.example.campaignreach.architecture.ModuleBoundaryTest` in `:app`
+  verifies `campaign ↛ reach` and `reach ↛ campaign`. Any violation fails the test and blocks the gate.
 
-> 修改模組邊界時，務必同步更新本節與 `ModuleBoundaryTest`，避免文件與守護測試落差。
+> When modifying module boundaries, always update this section and `ModuleBoundaryTest` together to keep documentation and guard tests in sync.
 
-## 建置與檢查指令
+## Build & Check Commands
 
-所有檢查由 buildSrc convention plugin `campaignreach.java-conventions` 集中設定並套用到各 module。
+All checks are centrally configured and applied to each module via the buildSrc convention plugin `campaignreach.java-conventions`.
 
-| 指令 | 用途 |
+| Command | Purpose |
 | --- | --- |
-| `./gradlew spotlessApply` | **本地自動格式化**（提交前先跑這個）。 |
-| `./gradlew spotlessCheck` | 排版檢查。**Spotless（Palantir Java Format）是排版的單一來源**。 |
-| `./gradlew checkstyleMain` | 風格檢查（google_checks 衍生、**已移除排版類模組**，不與 Spotless 重複管排版）。`maxErrors=0`。 |
-| `./gradlew spotbugsMain` | 靜態分析（`effort=MAX` / `reportLevel=MEDIUM`）。**High 與 Normal 等級的 bug 即擋關**。 |
-| `./gradlew test` | 單元測試 + **ArchUnit** 邊界守護 + **Testcontainers** 整合測試。 |
-| `./gradlew check` | **聚合 gate**：以上全部 + JaCoCo 覆蓋率驗證（`jacocoTestCoverageVerification`）。 |
+| `./gradlew spotlessApply` | **Auto-format locally** (run this before committing). |
+| `./gradlew spotlessCheck` | Formatting check. **Spotless (Palantir Java Format) is the single source of truth for formatting.** |
+| `./gradlew checkstyleMain` | Style check (derived from google_checks, **formatting rules removed** to avoid overlap with Spotless). `maxErrors=0`. |
+| `./gradlew spotbugsMain` | Static analysis (`effort=MAX` / `reportLevel=MEDIUM`). **High and Normal severity bugs are blocking.** |
+| `./gradlew test` | Unit tests + **ArchUnit** boundary guards + **Testcontainers** integration tests. |
+| `./gradlew check` | **Aggregate gate**: all of the above + JaCoCo coverage verification (`jacocoTestCoverageVerification`). |
 
-設定檔位置：
-- Checkstyle：`config/checkstyle/checkstyle.xml`
-- SpotBugs 排除：`config/spotbugs/exclude.xml`
-- 版本集中：`gradle/libs.versions.toml`（version catalog）
+Config file locations:
+- Checkstyle: `config/checkstyle/checkstyle.xml`
+- SpotBugs exclusions: `config/spotbugs/exclude.xml`
+- Version catalog: `gradle/libs.versions.toml`
 
-> 註：`checkstyleTest` / `spotbugsTest` 為非擋關（`ignoreFailures`），Acceptance 只指向 `*Main`。
+> Note: `checkstyleTest` / `spotbugsTest` are non-blocking (`ignoreFailures`); the gate only applies to `*Main`.
 
-## CI gate 規則
+## CI Gate Rules
 
-- 觸發：**PR** 與對 `main` 的 push（`.github/workflows/ci.yml`）。
-- gate 內容：runner 跑 `./gradlew check`，等同
-  `spotlessCheck + checkstyleMain + spotbugsMain + test（單元 + ArchUnit + Testcontainers）+ JaCoCo 驗證`。
-- **全數通過才可合併；任一失敗即擋關**（design.md §11.5）。
-- **Testcontainers 整合測試需要 Docker**：GitHub-hosted runner 有 Docker，會真正執行；
-  **本機無 Docker 時會自動 skip**（`@RequiresDocker` gate），不影響本地其餘檢查。
+- Triggers: **PR** and push to `main` (`.github/workflows/ci.yml`).
+- Gate: runner executes `./gradlew check`, equivalent to
+  `spotlessCheck + checkstyleMain + spotbugsMain + test (unit + ArchUnit + Testcontainers) + JaCoCo verification`.
+- **All checks must pass to merge; any failure blocks the gate** (design.md §11.5).
+- **Testcontainers integration tests require Docker**: GitHub-hosted runners have Docker and execute them fully;
+  **locally without Docker they are auto-skipped** (`@RequiresDocker` gate) without affecting other local checks.
 
-## 維護約定
+## Maintenance Conventions
 
-當**模組邊界**或 **lint / CI 指令**有所變更時，**務必同步更新本檔**（以及對應的 build script、
-`ModuleBoundaryTest`、`ci.yml`），維持單一事實來源，避免文件與 build script 落差。
+When **module boundaries** or **lint / CI commands** change, **always update this file** (along with the corresponding build scripts,
+`ModuleBoundaryTest`, and `ci.yml`) to maintain a single source of truth and avoid drift between documentation and build scripts.
