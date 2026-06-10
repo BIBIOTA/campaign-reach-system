@@ -1,6 +1,7 @@
 package com.example.campaignreach.campaign.evaluation;
 
 import java.math.BigDecimal;
+import java.util.Objects;
 
 /**
  * Immutable outcome of a {@link PromotionEvaluator} for a checkout (class-model {@code
@@ -13,11 +14,17 @@ import java.math.BigDecimal;
  *
  * @param applicable whether the promotion applies to this cart (a not-applicable result is the
  *     normal, non-error outcome when a threshold is unmet or for the flash-sale stub)
- * @param discountAmount the computed discount amount; {@link BigDecimal#ZERO} when not applicable
+ * @param discountAmount the computed discount amount; {@link BigDecimal#ZERO} when not applicable;
+ *     must not be {@code null}
  */
 public record PromotionResult(boolean applicable, BigDecimal discountAmount) {
 
     private static final PromotionResult NOT_APPLICABLE = new PromotionResult(false, BigDecimal.ZERO);
+
+    /** Validates the promotion result. */
+    public PromotionResult {
+        Objects.requireNonNull(discountAmount, "discountAmount must not be null");
+    }
 
     /**
      * A not-applicable / no-benefit outcome (e.g. unmet threshold, or 已售罄／不適用 for the flash-sale
