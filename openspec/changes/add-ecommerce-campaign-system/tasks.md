@@ -4,12 +4,12 @@
 
 ## 1. 專案基礎建設
 
-- [ ] 1.1 建立 Spring Boot 3 模組化單體骨架（campaign / reach / shared 三個 bounded module）
+- [x] 1.1 建立 Spring Boot 3 模組化單體骨架（campaign / reach / shared 三個 bounded module）
   - Acceptance: WHEN 專案建置 THEN 產生可部署的單一 Spring Boot 3（Java 17/21）應用，且 `campaign`、`reach`、`shared` 為獨立 module，建置工具 Gradle（Kotlin DSL）以模組邊界切分原始碼，依賴以 version catalog（`gradle/libs.versions.toml`）集中宣告（§11.1）
   - Acceptance: WHEN 任一程式碼讓 `campaign` 直接 import `reach` 的 domain（或反向）THEN 架構守護測試（如 ArchUnit）失敗，僅允許透過 `shared/event` 溝通
   - Depends on: -
   - Independence: independent
-  - status: not_started
+  - status: done
 - [ ] 1.2 設定 Kafka、PostgreSQL、排程與 secret 基礎設定（shared/config）
   - Acceptance: WHEN 應用啟動 THEN 成功連線 PostgreSQL 與 Kafka，並載入排程設定；Email provider 金鑰來自環境變數/vault，不入庫、不入版控（呼應 §10）
   - Acceptance: WHEN 設定缺漏（如缺 Kafka broker）THEN 啟動失敗並回報明確錯誤，而非靜默降級
