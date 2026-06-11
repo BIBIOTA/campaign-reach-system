@@ -16,6 +16,8 @@ import java.util.UUID;
  *       that would funnel one large campaign's requests onto a single partition and starve other
  *       campaigns (violating NFR-002 "campaigns do not interfere with each other").
  *   <li>{@code reach.dlq} → reuses the source task's key so replay preserves the original ordering.
+ *   <li>{@code send.result.recorded} → keyed by {@code reach_task_id}: all outcome events for a task
+ *       stay ordered and spread naturally across tasks.
  * </ul>
  *
  * <p>This is a constants/utility holder: a {@code final} class with a private constructor, not a
@@ -84,6 +86,17 @@ public final class PartitionKeys {
      */
     public static String forReachDlq(String sourceTaskKey) {
         return requireNonBlank(sourceTaskKey, "sourceTaskKey");
+    }
+
+    /**
+     * Partition key for a {@code send.result.recorded} message: the reach task id. This preserves
+     * per-task result ordering while spreading naturally across tasks.
+     *
+     * @param reachTaskId the task that produced the send result (non-null)
+     * @return the deterministic partition key
+     */
+    public static String forSendResultRecorded(UUID reachTaskId) {
+        return requireNonNull(reachTaskId, "reachTaskId").toString();
     }
 
     private static <T> T requireNonNull(T value, String name) {

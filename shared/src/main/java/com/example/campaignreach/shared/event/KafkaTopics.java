@@ -15,6 +15,7 @@ package com.example.campaignreach.shared.event;
  *   <li>{@link #REACH_REQUESTED} — activity-level reach requests; both trigger paths (scheduler +
  *       consumer) converge here, consumed solely by the {@code reach-orchestrator} group.
  *   <li>{@link #REACH_DLQ} — reach <em>tasks</em> whose retries are exhausted, for manual / replay tooling.
+ *   <li>{@link #SEND_RESULT_RECORDED} — user-level send outcomes emitted by the reach dispatcher.
  * </ul>
  *
  * <p>This is a constants holder: a {@code final} class with a private constructor, not a Spring bean.
@@ -35,6 +36,9 @@ public final class KafkaTopics {
 
     /** Dead-letter topic for reach tasks whose retries are exhausted. */
     public static final String REACH_DLQ = "reach.dlq";
+
+    /** User-level send results emitted after a successful dispatcher provider call. */
+    public static final String SEND_RESULT_RECORDED = "send.result.recorded";
 
     private KafkaTopics() {
         throw new AssertionError("No instances of constants holder KafkaTopics");

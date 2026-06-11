@@ -6,8 +6,8 @@ import java.util.List;
 /**
  * The bounded exponential-backoff schedule for retrying a failed {@code ReachTask} (task 9.1; spec
  * 「可靠發送與重試」). The schedule is {@code 1m → 5m → 30m} over at most {@value #MAX_ATTEMPTS} attempts:
- * after the third failure the task is exhausted and must terminate as {@code FAILED} rather than be
- * rescheduled.
+ * after the third retry has been attempted, the next retryable failure is exhausted and must terminate
+ * through the dispatcher's DLQ path rather than be rescheduled.
  *
  * <p>This is a pure value type with no DB or clock dependency so the schedule and the
  * max-attempts boundary are unit-testable in isolation. {@code retryCount} here means "number of
@@ -21,7 +21,7 @@ import java.util.List;
  */
 public final class RetryBackoffSchedule {
 
-    /** Maximum number of retry attempts before a task is exhausted and marked FAILED. */
+    /** Maximum number of retry attempts before a task is exhausted and routed to DLQ. */
     public static final int MAX_ATTEMPTS = 3;
 
     /**
@@ -40,7 +40,7 @@ public final class RetryBackoffSchedule {
      * @param retryCount the number of retries already scheduled before this failure (the value stored
      *     on the row; {@code 0} for a task that has not yet failed)
      * @return {@code true} while another retry remains within {@link #MAX_ATTEMPTS}; {@code false} once
-     *     the attempts are exhausted (the task must terminate as FAILED)
+     *     the attempts are exhausted (the task must terminate through the DLQ path)
      */
     public static boolean canRetry(int retryCount) {
         return retryCount < MAX_ATTEMPTS;

@@ -24,6 +24,7 @@ import com.example.campaignreach.reach.channel.SuppressionReason;
 import com.example.campaignreach.reach.channel.SuppressionVerdict;
 import com.example.campaignreach.shared.event.Channel;
 import com.example.campaignreach.shared.event.ReachTaskDeadLettered;
+import com.example.campaignreach.shared.event.SendResultRecorded;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -62,6 +63,12 @@ class ReachTaskDispatcherTest {
     private ReachDlqPublisher dlqPublisher;
 
     @Mock
+    private SendResultPublisher sendResultPublisher;
+
+    @Mock
+    private ObjectProvider<SendResultPublisher> sendResultPublisherProvider;
+
+    @Mock
     private ObjectProvider<ReachDlqPublisher> dlqPublisherProvider;
 
     private ReachTaskDispatcher dispatcher;
@@ -73,12 +80,15 @@ class ReachTaskDispatcherTest {
         lenient().when(suppressionGuard.evaluate(any(), any())).thenReturn(SuppressionVerdict.notSuppressed());
         // Default: a DLQ publisher is available (the exhaustion-path tests rely on it).
         lenient().when(dlqPublisherProvider.getIfAvailable()).thenReturn(dlqPublisher);
+        // Default: a send-result publisher is available (the success-path tests rely on it).
+        lenient().when(sendResultPublisherProvider.getIfAvailable()).thenReturn(sendResultPublisher);
         ChannelAdapterRegistry registry = new ChannelAdapterRegistry(List.of(emailAdapter));
         dispatcher = new ReachTaskDispatcher(
                 dispatchDao,
                 registry,
                 suppressionGuard,
                 dlqPublisherProvider,
+                sendResultPublisherProvider,
                 new DispatcherProperties(50, Duration.ofMinutes(5)));
     }
 
@@ -118,6 +128,11 @@ class ReachTaskDispatcherTest {
             assertThat(msg.getValue().channel()).isEqualTo(Channel.EMAIL);
             assertThat(msg.getValue().templateRef()).isEqualTo("welcome");
             verify(dispatchDao).markSent(eq(t.taskId()), eq(dispatcher.workerId()), eq("prov-123"), any());
+            ArgumentCaptor<SendResultRecorded> event = ArgumentCaptor.forClass(SendResultRecorded.class);
+            verify(sendResultPublisher).publish(event.capture());
+            assertThat(event.getValue().reachTaskId()).isEqualTo(t.taskId());
+            assertThat(event.getValue().providerMessageId()).isEqualTo("prov-123");
+            assertThat(event.getValue().outcome()).isEqualTo("SENT");
             verify(dispatchDao, never()).scheduleRetry(any(), any(), any(), any(), any());
             verify(dispatchDao, never()).markFailed(any(), any(), any(), any());
         }

@@ -9,6 +9,7 @@ import com.example.campaignreach.reach.channel.SuppressionGuard;
 import com.example.campaignreach.reach.channel.SuppressionVerdict;
 import com.example.campaignreach.shared.event.Channel;
 import com.example.campaignreach.shared.event.ReachTaskDeadLettered;
+import com.example.campaignreach.shared.event.SendResultRecorded;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -72,6 +73,7 @@ public class ReachTaskDispatcher {
     private final ChannelAdapterRegistry adapterRegistry;
     private final SuppressionGuard suppressionGuard;
     private final ObjectProvider<ReachDlqPublisher> dlqPublisher;
+    private final ObjectProvider<SendResultPublisher> sendResultPublisher;
     private final DispatcherProperties properties;
     private final String workerId;
 
@@ -82,6 +84,8 @@ public class ReachTaskDispatcher {
      * @param dlqPublisher the {@code reach.dlq} producer, looked up lazily: it is gated behind the
      *     Kafka at-least-once flag, so in a no-Kafka context it is absent and an exhausted task is left
      *     PROCESSING (rather than silently FAILED) for the Reaper to revisit — never lost
+     * @param sendResultPublisher publishes user-level send-result events after a successful DB write-back,
+     *     looked up lazily because the producer is gated behind the Kafka at-least-once flag
      * @param properties batch size + lease duration tunables
      */
     public ReachTaskDispatcher(
@@ -89,11 +93,13 @@ public class ReachTaskDispatcher {
             ChannelAdapterRegistry adapterRegistry,
             SuppressionGuard suppressionGuard,
             ObjectProvider<ReachDlqPublisher> dlqPublisher,
+            ObjectProvider<SendResultPublisher> sendResultPublisher,
             DispatcherProperties properties) {
         this.dispatchDao = dispatchDao;
         this.adapterRegistry = adapterRegistry;
         this.suppressionGuard = suppressionGuard;
         this.dlqPublisher = dlqPublisher;
+        this.sendResultPublisher = sendResultPublisher;
         this.properties = properties;
         this.workerId = resolveWorkerId();
     }
@@ -169,6 +175,10 @@ public class ReachTaskDispatcher {
             ReachMessage message = new ReachMessage(task.userId(), task.channel(), task.templateRef());
             SendResult result = adapter.send(message);
             dispatchDao.markSent(task.taskId(), workerId, result.providerMessageId(), now);
+            SendResultPublisher publisher = sendResultPublisher.getIfAvailable();
+            if (publisher != null) {
+                publisher.publish(new SendResultRecorded(task.taskId(), result.providerMessageId(), "SENT", now));
+            }
         } catch (NonRetryableSendException nonRetryable) {
             // Permanent provider failure (e.g. invalid address): fast-fail to FAILED immediately, no
             // retry burned (state edge PROCESSING --> FAILED : 不可重試). Distinct from the broad

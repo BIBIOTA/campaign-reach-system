@@ -381,6 +381,7 @@ worker 友善欄位：`next_retry_at`、`processing_started_at`、`last_attempt_
 | `domain.events.DLT` | campaign（error handler） | 人工 / 重放工具 | campaign-trigger 消費端無法處理（反序列化失敗 / publish 重試耗盡）的行為事件，避免毒丸卡 partition | 使用者層級 |
 | `reach.requested` | campaign（scheduler + consumer） | `reach-orchestrator` | 觸發觸達請求 | 活動層級 |
 | `reach.dlq` | reach.dispatcher | 人工 / 重放工具 | 重試耗盡的 task | 使用者層級 |
+| `send.result.recorded` | reach.dispatcher | 成效聚合 / 稽核工具 | 發送結果事件 | 使用者層級 |
 
 **分區鍵（partition key）**
 
@@ -388,6 +389,7 @@ worker 友善欄位：`next_retry_at`、`processing_started_at`、`last_attempt_
 - `domain.events.DLT`：沿用來源訊息的 partition，重放時保有 per-user 原序。
 - `reach.requested`：**以 `reach_request_id`（或 `campaign_id + send_cycle_key` 的雜湊）分區，而非單純 `campaign_id`**。理由：單純以 `campaign_id` 分區會使單一大型活動的所有請求集中到一個 partition，形成熱分區並拖累其他活動（違反 NFR-002「活動間互不影響」）。本系統 `reach.requested` 為活動層級、量少（每 cycle 一筆），分散後即可避免集中。
 - `reach.dlq`：沿用來源 task 的鍵即可，重放時保有原序。
+- `send.result.recorded`：以 `reach_task_id` 分區，確保同一 task 的結果事件有序，且自然分散。
 
 **Ordering 假設**
 
