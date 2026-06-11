@@ -38,9 +38,25 @@ spring:
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+    # Consumer side (task 6.3, path 2): the campaign-trigger group consumes behavior events
+    # from domain.events. String key + JSON value deserialized to the inbound DomainBehaviorEvent.
+    # The trusted-packages allowlist restricts JSON deserialization to the campaign consumer package.
+    consumer:
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.value.default.type: com.example.campaignreach.campaign.consumer.DomainBehaviorEvent
+        spring.json.trusted.packages: com.example.campaignreach.campaign.consumer
 
 # Email provider secret — supplied from environment / vault, never committed.
 campaignreach:
+  # At-least-once consumer policy (design.md §9): opt the campaign-trigger consumer (task 6.3) into
+  # the shared kernel's gated manual-ack container factory so offsets commit only after a behavior
+  # event has been processed (its ReachRequested handed off to the publisher).
+  kafka:
+    at-least-once:
+      enabled: true
+
   email-provider:
     api-key: ${EMAIL_PROVIDER_API_KEY:}
 

@@ -277,3 +277,37 @@
 - Task: 6.1 實作活動生命週期排程（自動進入 RUNNING / ENDED）
 - Transition: not_started → in_progress
 - Next action: 於新分支 feat/section-6-campaign-triggers 派發 implementer subagent 實作活動生命週期排程（@Scheduled 掃描：SCHEDULED 且 startAt<=now → RUNNING；RUNNING/PAUSED 且 endAt<=now → ENDED，全程經 Campaign.transitionTo 合法邊守衛），完成後接 spec-reviewer 與 code-quality-reviewer。
+
+## Session 33 — 2026-06-11 10:45
+- Stage: SDD
+- Task: 6.1 實作活動生命週期排程（自動進入 RUNNING / ENDED）
+- Transition: in_progress → passing
+- Evidence:
+  - Commits: f1c3a26 feat(campaign): add campaign lifecycle scheduler for time-driven RUNNING/ENDED (task 6.1); cc087b0 fix(campaign): isolate lifecycle sweep per campaign in its own transaction (task 6.1 review)
+  - Tests: CampaignLifecycleSchedulerTest 7 fast unit tests green（起訖時間自動推進：SCHEDULED+startAt→RUNNING、RUNNING/PAUSED+endAt→ENDED、SCHEDULED 雙過期一 tick 收斂 ENDED、未到期/DRAFT/ENDED 不動、per-campaign 例外隔離走真實 TransactionTemplate 邊界）；`:campaign:spotlessCheck checkstyleMain spotbugsMain test`、`:app:test`（ArchUnit）BUILD SUCCESSFUL
+  - Spec-reviewer: ✅ Spec compliant（5/5；全程經 Campaign.transitionTo 守衛、只驅動合法邊、無 6.2/6.3 Kafka/ShedLock 外洩、app 模組未動）
+  - Code-quality-reviewer: ✅ Approved（首輪 1 Important：@Transactional+broad-catch 因 deferred flush 無法隔離 save-time 樂觀鎖失敗；已於 cc087b0 改為 per-campaign TransactionTemplate + saveAndFlush 真正隔離，再審無 Critical/Important）
+- Next action: dispatch implementer subagent for task 6.2（排程批次掃描並發出 ReachRequested + ShedLock 防重）。
+
+## Session 34 — 2026-06-11 11:00
+- Stage: SDD
+- Task: 6.2 實作排程批次掃描並發出 ReachRequested（ShedLock 防重）
+- Transition: not_started → in_progress
+- Next action: 派發 implementer subagent 實作排程批次掃描 status=RUNNING 活動、經 ReachTriggerEvaluatorRegistry 判定發送時機、以 KafkaTemplate 發出 ReachRequested(triggerType=SCHEDULED_BATCH, sendCycle=sched:{campaignId}:{cycleStart}) 至 reach.requested，並以 ShedLock + 確定性 truncate cycleStart 確保多實例/補掃同一週期只跑一次，完成後接 spec-reviewer 與 code-quality-reviewer。
+
+## Session 35 — 2026-06-11 11:50
+- Stage: SDD
+- Task: 6.2 實作排程批次掃描並發出 ReachRequested（ShedLock 防重）
+- Transition: in_progress → passing
+- Evidence:
+  - Commits: 64f183a feat(campaign): add scheduled reach-scan emitting ReachRequested with ShedLock dedup (task 6.2)
+  - Tests: CampaignReachScanSchedulerTest 10 fast unit tests green（RUNNING+due+TRIGGER 發 SCHEDULED_BATCH 活動層級事件含 targetSpec/reachPlan 無收件人清單、NO_TRIGGER/not-due/non-RUNNING/SKIPPED 不發、同 cycle 同 key/不同 cycle 不同 key 確定性、per-campaign 例外隔離、@SchedulerLock annotation 把關）；`:campaign:spotlessCheck checkstyleMain spotbugsMain test`、`:app:test`（ArchUnit）BUILD SUCCESSFUL；新增 shedlock 5.16.0 deps + V3__shedlock.sql + producer serializer 設定
+  - Spec-reviewer: ✅ Spec compliant（5/5；兩 scenario 全覆蓋、PartitionKeys 複合鍵非裸 campaignId、triggerEventId=null、無 6.3/reach 外洩、campaign↛reach 邊界守住）
+  - Code-quality-reviewer: ✅ Approved（無 Critical/Important；floorToCycle 確定性無 now() 洩漏、隔離走 CLAUDE.md scoped 慣例、publisher seam 為 6.3 預留、ShedLock module-owned 且 canonical schema；Minor：cycle-duration 缺正值守衛、FQN 風格不一、真實 ShedLock 整合測試待 Docker，列 follow-up 不阻擋）
+- Next action: dispatch implementer subagent for task 6.3（行為事件消費者並發出 ReachRequested 路徑2）。
+
+## Session 36 — 2026-06-11 12:00
+- Stage: SDD
+- Task: 6.3 實作行為事件消費者並發出 ReachRequested（路徑2）
+- Transition: not_started → in_progress
+- Next action: 派發 implementer subagent 實作 campaign consumer：以 at-least-once 容器消費 domain.events、比對 RUNNING 活動經 ReachTriggerEvaluatorRegistry shouldTrigger 命中、以 ReachRequestPublisher 發出 ReachRequested(triggerType=EVENT, sendCycle=event:{triggerEventId}) 至同一 reach.requested，處理落定後才 ack，完成後接 spec-reviewer 與 code-quality-reviewer。

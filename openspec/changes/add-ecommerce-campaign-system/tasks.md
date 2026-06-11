@@ -120,23 +120,24 @@
 
 ## 6. Campaign 觸發來源 — 排程與事件
 
-- [ ] 6.1 實作活動生命週期排程（自動進入 RUNNING / ENDED）
+- [x] 6.1 實作活動生命週期排程（自動進入 RUNNING / ENDED）
   - Acceptance: WHEN 到達 startAt THEN 活動自動進入 RUNNING；WHEN 到達 endAt THEN 自動 ENDED（FR-012，US-002）
   - Depends on: 4.2
   - Independence: serial
-  - status: in_progress
-- [ ] 6.2 實作排程批次掃描並發出 ReachRequested（ShedLock 防重）
+  - status: passing
+- [x] 6.2 實作排程批次掃描並發出 ReachRequested（ShedLock 防重）
   - Acceptance: WHEN scheduler 每 N 分鐘掃描 status=RUNNING 活動 AND ReachTriggerEvaluator 判定到達發送時機 THEN 發出 `ReachRequested(...,triggerType=SCHEDULED_BATCH, sendCycle)` 至 `reach.requested`（路徑1，FR-008/US-004）
   - Acceptance: WHEN 多實例部署或 scheduler 重啟補掃 THEN 以 ShedLock + 確定性 `sched:{campaignId}:{cycleStart}`（truncate 後 ISO-8601）使同一活動同一週期只推導出相同 key、只跑一次，不遺漏不重複（§5，US-004）
   - Depends on: 6.1, 5.2, 2.2
   - Independence: serial
-  - status: not_started
+  - status: passing
+  - follow-up: cycle-duration 設定缺正值守衛（PT0S 會除零）留待後續 fail-fast 強化；ShedLock 真實雙實例去重待有 Docker 的 CI 以 Testcontainers 整合測試覆蓋（目前以 @SchedulerLock annotation present + 確定性 key 之 fast test 把關）
 - [ ] 6.3 實作行為事件消費者並發出 ReachRequested（路徑2）
   - Acceptance: WHEN `domain.events`（CartAbandoned/OrderPlaced…）進入 AND campaign consumer 比對到 RUNNING 活動且 `shouldTrigger` 命中 THEN 發出 `ReachRequested(...,triggerType=EVENT, sendCycle=event:{triggerEventId})` 至同一 `reach.requested`（FR-008，US-005）
   - Acceptance: WHEN 排程與行為兩種觸發 THEN 下游發送結果與追蹤方式一致（US-005，FR-008）
   - Depends on: 6.1, 5.2, 2.2
   - Independence: serial
-  - status: not_started
+  - status: in_progress
 
 ## 7. Reach orchestrator — 批次落庫、受眾展開、頻控
 
