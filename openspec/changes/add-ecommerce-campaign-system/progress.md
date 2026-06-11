@@ -544,3 +544,16 @@
   - Code-quality-reviewer: ✅ Approved（無 Critical/Important；結構清楚四段分隔、斷言查 DB 落地非 stub 回傳、pumpUntilDrained 有 maxPolls 防呆且 stub 永成功保證收斂、teardown 四表先子後父、seeding 沿用鄰近 IT pattern；4 Minor——收斂不變式文件債/魔術數常數/2 處 static import——已於 amend 全數修正）
 - Next action: 12.1 為本 change 最後一個 task，全部 task 皆 passing；對 add-ecommerce-campaign-system 跑 final pass（`openspec validate {change-id} --strict`）後 invoke spec-driven-dev:verification-before-completion。
 - Blockers: 無（唯一 verification-pending 為環境性 Docker auto-skip，已於 tasks.md 12.1 記錄，留待 verification-before-completion Stage 5）。
+
+## Session 64 — 2026-06-11 (PR #15 review-driven 修正)
+- Stage: SDD（requesting-code-review → receiving-code-review）
+- Task: 12.1 以 10 萬筆級壓測驗證全鏈路並產出報告（passing；本次為 review 後品質修正，task 狀態不變）
+- Transition: passing → passing（無 scope 變更，純測試修正 + 文件歸因更正）
+- Trigger: 對 PR #15 派發 code-reviewer subagent。Critical 0；Important 1（`heavySendDoesNotStarveOtherCampaigns` 隔離歸因錯誤且中段斷言脆弱）；Minor 3。
+- Evidence:
+  - Important 修正（採方案 b）：`heavySendDoesNotStarveOtherCampaigns` 改寫為**兩 worker 並發 drain 共享 EMAIL 佇列**——以 `CyclicBarrier` 於各 worker 首次 send rendezvous，證兩者同時持有 disjoint claimed batch（`FOR UPDATE SKIP LOCKED` 非阻塞；阻塞則 gate timeout→記錄→fail）；斷言改為 spec 真正要的 liveness：兩 worker 各 sent>0、送出總數=N（disjoint 恰一次）、第二活動全數 SENT（未被餓死）且 config 指紋未變。移除原本靠 `created_at` FIFO 運氣的「drain 完後仍 PENDING」脆弱斷言。
+  - 歸因更正（review 確認 `ReachTaskDispatchDao.claimBatch` 為 channel-wide FIFO、**不**依 campaign 分區）：測試 class/method javadoc、load-test 報告（新增 Isolation 段）、`verification-report.md` scenario coverage 表三處皆更正為「互不影響源自 SKIP LOCKED 非阻塞並發；per-campaign 熱分區規避在 request 層以 `reach.requested` 依 `reach_request_id` 分區達成（Kafka，design.md §9，非本 DB 壓測範圍）」。
+  - Minor 處理：#2（`maxPolls` 除數與 batchSize 註解不一致）已修兩處註解；#1（100k CI 實際 wall-time）列為 CI 綠跑後回填、非程式問題；#3（page-size 2000/batch 500 ≠ 生產預設）為刻意量測純持久化吞吐、javadoc+報告已標明，維持現狀。
+  - Build: `./gradlew check` BUILD SUCCESSFUL；`:app:compileTestJava` 通過；IT 本沙箱仍 @RequiresDocker auto-skip（tests=2 skipped=2 failures=0）。
+- Next action: 待 CI（有 Docker）實跑新並發測試後回填 verification-report.md / tasks.md 的實際數值，收尾 verification-pending；隨後可 `openspec archive`。
+- Blockers: 無（新並發測試之實跑驗證與既有 Docker auto-skip caveat 同屬環境性 verification-pending，非阻擋合併）。

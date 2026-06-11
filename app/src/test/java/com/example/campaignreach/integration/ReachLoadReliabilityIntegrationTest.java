@@ -35,7 +35,13 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.BrokenBarrierException;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.AfterEach;
@@ -58,10 +64,16 @@ import org.springframework.transaction.PlatformTransactionManager;
  *       dispatched to terminal convergence: no leaked PENDING / PROCESSING / RETRY_SCHEDULED rows, and
  *       SENT + FAILED + DLQ = N. A load-test report (throughput / status distribution / resource usage)
  *       is produced as the baseline for evolving toward million-scale.
- *   <li><strong>大量發送不拖垮其他活動</strong> — a second campaign's reach_request + a handful of its own
- *       reach_task rows are seeded; the heavy dispatch loop (scoped to the big campaign's channel) leaves
- *       the second campaign's config row and tasks untouched and still independently claimable, proving
- *       isolation via the per-campaign/per-cycle keys and {@code FOR UPDATE SKIP LOCKED} disjoint claims.
+ *   <li><strong>大量發送不拖垮其他活動</strong> — a second campaign's tasks share the same EMAIL dispatch
+ *       queue as a big campaign's heavy fan-out, and <em>two workers drain that shared queue
+ *       concurrently</em>. The second campaign is served (every task converges to SENT, not starved) and
+ *       its config row is never mutated. This proves the isolation guarantee the DB dispatch layer
+ *       actually provides: {@code FOR UPDATE SKIP LOCKED} lets concurrent workers claim <em>disjoint</em>
+ *       rows without blocking each other, so a heavy campaign does not stall another's progress. (The
+ *       claim is channel-wide and FIFO-by-{@code created_at} — it does <strong>not</strong> partition by
+ *       campaign; per-campaign hot-partition avoidance lives at the request layer, where {@code
+ *       reach.requested} is partitioned on {@code reach_request_id} rather than {@code campaign_id}, see
+ *       design.md §9 — a Kafka-config concern not exercised by this DB-level load test.)
  * </ul>
  *
  * <p>Auto-skipped without Docker via the inherited {@link RequiresDocker} condition, so {@code ./gradlew
@@ -90,8 +102,11 @@ class ReachLoadReliabilityIntegrationTest extends AbstractIntegrationTest {
     /** The 10萬筆級 fan-out target; overridable for a heavier capacity run via {@code -Dreach.loadtest.recipients}. */
     private static final int RECIPIENT_COUNT = Integer.getInteger("reach.loadtest.recipients", FULL_SCALE_THRESHOLD);
 
-    /** A handful of tasks for the second (isolation-control) campaign. */
-    private static final int OTHER_CAMPAIGN_TASKS = 5;
+    /**
+     * Tasks for the second campaign that shares the EMAIL queue during the concurrent-drain isolation
+     * test — enough that starvation would be observable, few enough to stay fast.
+     */
+    private static final int OTHER_CAMPAIGN_TASKS = 500;
 
     private static final String REPORT_DIR = "build/reports/load-test";
     private static final String REPORT_FILE = "task-12-reach-load-test.md";
@@ -182,13 +197,21 @@ class ReachLoadReliabilityIntegrationTest extends AbstractIntegrationTest {
     }
 
     /**
-     * Scenario: 大量發送不拖垮其他活動 — while the big campaign is heavily dispatched, a second campaign's
-     * config row and its own reach_task rows stay untouched and independently claimable, demonstrating
-     * isolation through the per-campaign keys + SKIP LOCKED disjoint claiming.
+     * Scenario: 大量發送不拖垮其他活動 — a big campaign's heavy fan-out and a second campaign's tasks share
+     * the same EMAIL dispatch queue, and <em>two workers drain it concurrently</em>. A rendezvous on each
+     * worker's first send proves both concurrently hold a disjoint claimed batch ({@code FOR UPDATE SKIP
+     * LOCKED} is non-blocking — the second claimer never waits on the first's locked rows); the second
+     * campaign is fully served (every task SENT, not starved) and its config row is never mutated.
+     *
+     * <p>This deliberately replaces an earlier "drain the big campaign, then check the other stayed
+     * PENDING" shape: that only held by {@code created_at} FIFO luck and mis-attributed the isolation to a
+     * non-existent per-campaign claim partition. The claim ({@link ReachTaskDispatchDao#claimBatch}) is in
+     * fact channel-wide and FIFO — the isolation it provides is non-blocking concurrent claiming, which is
+     * exactly what this test now exercises.
      */
     @Test
-    void heavySendDoesNotStarveOtherCampaigns() {
-        // Big campaign: a real (smaller-but-representative) fan-out so the dispatch loop has work to chew on.
+    void heavySendDoesNotStarveOtherCampaigns() throws InterruptedException {
+        // Big campaign: a real (representative) fan-out so the shared EMAIL queue has heavy work to chew on.
         UUID bigCampaignId = seedCampaign("RUNNING");
         ReachRequest bigRequest = landedRequest(bigCampaignId, "cycle-BIG");
         int bigCount = Math.min(RECIPIENT_COUNT, 5_000); // representative heavy load; keeps the isolation test fast
@@ -199,31 +222,67 @@ class ReachLoadReliabilityIntegrationTest extends AbstractIntegrationTest {
         when(resolver.resolve(any(TargetSpec.class))).thenReturn(bigRecipients);
         expander(resolver).expand(bigRequest);
 
-        // Second campaign: its own request + a handful of its own PENDING tasks (the isolation control set).
+        // Second campaign: its own request + its own PENDING tasks, sharing the same EMAIL queue.
         UUID otherCampaignId = seedCampaign("RUNNING");
         UUID otherRequestId = seedRequestRow(otherCampaignId, "cycle-OTHER");
         List<UUID> otherTaskIds = IntStream.range(0, OTHER_CAMPAIGN_TASKS)
                 .mapToObj(i -> seedTask(otherRequestId, otherCampaignId, "cycle-OTHER"))
                 .toList();
         String otherConfigBefore = campaignFingerprint(otherCampaignId);
+        int totalTasks = bigCount + OTHER_CAMPAIGN_TASKS;
 
-        // Heavy dispatch loop, scoped to the big campaign's drain.
-        ReachTaskDispatcher dispatcher = dispatcher(new StubChannelAdapter(new AtomicLong()));
-        pumpUntilDrained(dispatcher, bigCampaignId);
+        // Two workers drain the shared queue concurrently. The rendezvous on each worker's FIRST send forces
+        // both to have claimed a disjoint batch at the same time before either proceeds: if a regression made
+        // claiming block (e.g. losing SKIP LOCKED), the second worker would never reach its first send and the
+        // gate would time out (recorded in gateFailure, asserted after join). batchSize is small so neither
+        // worker drains the queue in a single poll, guaranteeing the two claims interleave.
+        CyclicBarrier firstSendGate = new CyclicBarrier(2);
+        AtomicReference<Throwable> gateFailure = new AtomicReference<>();
+        AtomicLong sentByA = new AtomicLong();
+        AtomicLong sentByB = new AtomicLong();
+        int concurrentBatch = 100;
+        ReachTaskDispatcher workerA =
+                dispatcher(new RendezvousStubChannelAdapter(sentByA, firstSendGate, gateFailure), concurrentBatch);
+        ReachTaskDispatcher workerB =
+                dispatcher(new RendezvousStubChannelAdapter(sentByB, firstSendGate, gateFailure), concurrentBatch);
 
-        // The second campaign's config row is byte-for-byte untouched (heavy sending never mutated it).
-        assertThat(campaignFingerprint(otherCampaignId)).isEqualTo(otherConfigBefore);
-        // Its tasks were never claimed/sent by the big-campaign drain — they stay PENDING and claimable.
+        AtomicReference<Throwable> workerFailure = new AtomicReference<>();
+        Thread a = new Thread(() -> drainSharedQueue(workerA, totalTasks, workerFailure), "load-worker-A");
+        Thread b = new Thread(() -> drainSharedQueue(workerB, totalTasks, workerFailure), "load-worker-B");
+        a.start();
+        b.start();
+        a.join(Duration.ofMinutes(2).toMillis());
+        b.join(Duration.ofMinutes(2).toMillis());
+
+        // ---- Liveness: both workers ran concurrently and the drain terminated ----
+        assertThat(a.isAlive()).as("worker A drained and terminated").isFalse();
+        assertThat(b.isAlive()).as("worker B drained and terminated").isFalse();
+        assertThat(workerFailure.get()).as("no worker thread threw").isNull();
+        assertThat(gateFailure.get())
+                .as("both workers concurrently held disjoint claimed batches (FOR UPDATE SKIP LOCKED is non-blocking)")
+                .isNull();
+        assertThat(sentByA.get()).as("worker A made progress").isPositive();
+        assertThat(sentByB.get()).as("worker B made progress").isPositive();
+
+        // ---- Disjoint, exactly-once claiming: every task sent exactly once across the two workers ----
+        assertThat(sentByA.get() + sentByB.get())
+                .as("each task claimed + sent exactly once across both workers (disjoint SKIP LOCKED claims)")
+                .isEqualTo(totalTasks);
+
+        // ---- No starvation: the second campaign was served, not dragged down by the heavy one ----
+        assertThat(claimableCount(otherCampaignId))
+                .as("second campaign fully drained, not starved")
+                .isZero();
+        assertThat(statusCount(otherCampaignId, "SENT"))
+                .as("every second-campaign task was sent while the big campaign drained concurrently")
+                .isEqualTo(OTHER_CAMPAIGN_TASKS);
         for (UUID taskId : otherTaskIds) {
-            assertThat(taskStatus(taskId)).isEqualTo("PENDING");
+            assertThat(taskStatus(taskId)).isEqualTo("SENT");
         }
-        assertThat(statusCount(otherCampaignId, "SENT")).isZero();
+        assertThat(statusCount(bigCampaignId, "SENT")).isEqualTo(bigCount);
 
-        // And they remain INDEPENDENTLY claimable now that the big campaign is fully drained.
-        ReachTaskDispatchDao dao = new ReachTaskDispatchDao(jdbcTemplate, transactionManager);
-        var claimed =
-                dao.claimBatch("isolation-worker", List.of(Channel.EMAIL), 100, Duration.ofMinutes(5), Instant.now());
-        assertThat(claimed).extracting(c -> c.taskId()).containsExactlyInAnyOrderElementsOf(otherTaskIds);
+        // ---- Config untouched: heavy sending never mutated the second campaign's config row ----
+        assertThat(campaignFingerprint(otherCampaignId)).isEqualTo(otherConfigBefore);
     }
 
     // ---- chain wiring ----
@@ -241,13 +300,17 @@ class ReachLoadReliabilityIntegrationTest extends AbstractIntegrationTest {
     }
 
     private ReachTaskDispatcher dispatcher(ChannelAdapter adapter) {
+        return dispatcher(adapter, 500);
+    }
+
+    private ReachTaskDispatcher dispatcher(ChannelAdapter adapter, int batchSize) {
         return new ReachTaskDispatcher(
                 new ReachTaskDispatchDao(jdbcTemplate, transactionManager),
                 new ChannelAdapterRegistry(List.of(adapter)),
                 suppressionGuard,
                 dlqPublisher,
                 sendResultPublisher,
-                new DispatcherProperties(500, Duration.ofMinutes(5)));
+                new DispatcherProperties(batchSize, Duration.ofMinutes(5)));
     }
 
     /**
@@ -261,8 +324,8 @@ class ReachLoadReliabilityIntegrationTest extends AbstractIntegrationTest {
      * exit condition must be revisited to honour {@code next_retry_at}.
      */
     private void pumpUntilDrained(ReachTaskDispatcher dispatcher, UUID campaignId) {
-        // Generous bound proportional to scale (batchSize 500): guards against an accidental infinite loop
-        // while leaving ample headroom for the real drain.
+        // Safety bound against an accidental infinite loop: a full drain at batchSize 500 needs ~N/500
+        // polls, so N/100 (+1000 floor) is a generous ~5x headroom — not the batch size itself.
         long maxPolls = (long) RECIPIENT_COUNT / 100 + 1_000;
         long polls = 0;
         while (claimableCount(campaignId) > 0) {
@@ -271,6 +334,32 @@ class ReachLoadReliabilityIntegrationTest extends AbstractIntegrationTest {
                 throw new IllegalStateException("dispatch did not converge within " + maxPolls
                         + " polls; claimable left=" + claimableCount(campaignId));
             }
+        }
+    }
+
+    /**
+     * Worker body for the concurrent isolation drain: keep polling until the whole shared EMAIL queue is
+     * drained (both campaigns). Any throwable is captured into {@code failure} rather than swallowed, so
+     * the spawning test can assert it after the threads join. The same StubChannelAdapter-never-fails
+     * convergence invariant as {@link #pumpUntilDrained} applies (every claimed row goes PENDING →
+     * PROCESSING → SENT, so {@link #totalClaimable} tracks real claim eligibility).
+     */
+    @SuppressWarnings("checkstyle:IllegalCatch") // capture any worker-thread failure for post-join assertion
+    private void drainSharedQueue(ReachTaskDispatcher dispatcher, int totalTasks, AtomicReference<Throwable> failure) {
+        try {
+            // Safety bound: a full drain at batchSize 100 (split across two workers) needs ~totalTasks/100
+            // polls; totalTasks/10 (+1000 floor) is a generous headroom, not the batch size itself.
+            long maxPolls = (long) totalTasks / 10 + 1_000;
+            long polls = 0;
+            while (totalClaimable() > 0) {
+                dispatcher.dispatchPoll();
+                if (++polls > maxPolls) {
+                    throw new IllegalStateException("shared-queue drain did not converge within " + maxPolls
+                            + " polls; claimable left=" + totalClaimable());
+                }
+            }
+        } catch (RuntimeException t) {
+            failure.compareAndSet(null, t);
         }
     }
 
@@ -358,6 +447,15 @@ class ReachLoadReliabilityIntegrationTest extends AbstractIntegrationTest {
         return count == null ? 0 : count;
     }
 
+    /** Channel-wide claimable count (all campaigns) — the termination signal for the concurrent drain. */
+    private int totalClaimable() {
+        Integer count = jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM reach_task WHERE status IN"
+                        + " ('PENDING'::reach_task_status, 'RETRY_SCHEDULED'::reach_task_status)",
+                Integer.class);
+        return count == null ? 0 : count;
+    }
+
     private int statusCount(UUID campaignId, String status) {
         Integer count = jdbcTemplate.queryForObject(
                 "SELECT count(*) FROM reach_task WHERE campaign_id = ? AND status = ?::reach_task_status",
@@ -424,6 +522,14 @@ class ReachLoadReliabilityIntegrationTest extends AbstractIntegrationTest {
                 .append(fanOut.plus(dispatch).toMillis())
                 .append("ms\n");
         sb.append("- Used heap (coarse Runtime snapshot): ").append(usedHeapMb).append("MB\n");
+        sb.append("\n## Isolation (互不影響 / NFR-002)\n");
+        sb.append("- DB dispatch layer: concurrent workers claim disjoint rows via FOR UPDATE SKIP LOCKED")
+                .append(" — non-blocking, so a heavy campaign does not stall another's claims. The claim is")
+                .append(" channel-wide and FIFO-by-created_at; it does NOT partition by campaign. Proven by")
+                .append(" heavySendDoesNotStarveOtherCampaigns (concurrent two-worker drain).\n");
+        sb.append("- Request layer: per-campaign hot-partitioning is avoided by partitioning reach.requested")
+                .append(" on reach_request_id (not campaign_id) — Kafka config, design.md §9; not exercised by")
+                .append(" this DB-level load test.\n");
         return sb.toString();
     }
 
@@ -464,6 +570,57 @@ class ReachLoadReliabilityIntegrationTest extends AbstractIntegrationTest {
             // Monotonic counter (not UUID.randomUUID) keeps providerMessageId unique without a SecureRandom
             // call on the dispatch hot path, so the measured dispatch throughput reflects the persistence
             // chain rather than entropy gathering.
+            return new SendResult("stub-" + count);
+        }
+    }
+
+    /**
+     * A {@link StubChannelAdapter} variant whose <em>first</em> send rendezvous at a shared {@link
+     * CyclicBarrier}, used by the concurrent isolation drain to prove both workers simultaneously hold a
+     * disjoint claimed batch (i.e. {@code FOR UPDATE SKIP LOCKED} did not block the second claimer). On
+     * timeout / broken barrier the failure is <em>recorded</em> (not thrown): throwing here would be caught
+     * by the dispatcher and reroute the task to the retryable path, masking the signal — so the test
+     * asserts {@code gateFailure} after the worker threads join instead.
+     */
+    private static final class RendezvousStubChannelAdapter implements ChannelAdapter {
+
+        private static final long GATE_TIMEOUT_SECONDS = 60;
+
+        private final AtomicLong sendCount;
+        private final CyclicBarrier firstSendGate;
+        private final AtomicReference<Throwable> gateFailure;
+        private final AtomicBoolean gatePassed = new AtomicBoolean();
+
+        RendezvousStubChannelAdapter(
+                AtomicLong sendCount, CyclicBarrier firstSendGate, AtomicReference<Throwable> gateFailure) {
+            this.sendCount = sendCount;
+            this.firstSendGate = firstSendGate;
+            this.gateFailure = gateFailure;
+        }
+
+        @Override
+        public Channel channel() {
+            return Channel.EMAIL;
+        }
+
+        @Override
+        public boolean isAvailable() {
+            return true;
+        }
+
+        @Override
+        public SendResult send(ReachMessage message) {
+            if (gatePassed.compareAndSet(false, true)) {
+                try {
+                    firstSendGate.await(GATE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    gateFailure.compareAndSet(null, e);
+                } catch (BrokenBarrierException | TimeoutException e) {
+                    gateFailure.compareAndSet(null, e);
+                }
+            }
+            long count = sendCount.incrementAndGet();
             return new SendResult("stub-" + count);
         }
     }

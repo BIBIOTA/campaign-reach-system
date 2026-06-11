@@ -34,7 +34,7 @@ Change 'add-ecommerce-campaign-system' is valid
 | Scenario | Matching test | 結果 |
 |---|---|---|
 | 10 萬筆級全鏈路可靠跑完 | `ReachLoadReliabilityIntegrationTest.fullChainReliablyCompletesAt100kScaleAndConvergesAllStatuses` | PASS（spec-reviewer ✅；真實 landing→fan-out(ON CONFLICT)→dispatcher(SKIP LOCKED claim+write-back) 驅動，斷言以 DB GROUP BY 查回：非終態=0、終態=N、SENT=N；報告含處理速率/各狀態分布/資源使用）|
-| 大量發送不拖垮其他活動 | `ReachLoadReliabilityIntegrationTest.heavySendDoesNotStarveOtherCampaigns` | PASS（第二活動 config 列指紋未變、自有 task 仍 PENDING 且仍可獨立 claimBatch，證 per-campaign key + SKIP LOCKED 隔離）|
+| 大量發送不拖垮其他活動 | `ReachLoadReliabilityIntegrationTest.heavySendDoesNotStarveOtherCampaigns` | PASS（兩 worker 並發 drain 共享 EMAIL 佇列：以首次 send rendezvous 證兩者同時持有 disjoint claimed batch（`FOR UPDATE SKIP LOCKED` 非阻塞）、第二活動全數 SENT（未被餓死）且 config 列指紋未變、兩 worker 送出總數 = N（disjoint 恰一次 claim）。隔離歸因更正：DB claim 為 channel-wide FIFO、**不**依 campaign 分區，互不影響來自 SKIP LOCKED 非阻塞並發；per-campaign 熱分區規避在 request 層以 `reach.requested` 依 `reach_request_id` 分區達成（Kafka 設定，design.md §9，非本 DB 壓測範圍））|
 
 > **全 change scenario coverage（54 scenarios）**：各 scenario 之 name-mapping 於對應 SDD session 由 spec-reviewer 逐一確認（測試方法以英文命名、scenario 標題為中文，故純 token-grep 無法機械比對；以每任務 spec-reviewer gate 為準）。Sections 1–11 之覆蓋已於各次 session 之 progress.md Evidence 記錄，本次 12.1 兩 scenario 如上表。
 
