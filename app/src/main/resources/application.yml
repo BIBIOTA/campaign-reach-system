@@ -96,10 +96,11 @@ campaignreach:
     # unset, RetentionProperties fails application startup (fail loud, never silently degrade) rather
     # than defaulting to permanent retention. The value below is a NON-PERMANENT placeholder — the
     # exact retention duration is an Open Question pending legal/compliance confirmation (see
-    # proposal.md ## Open Questions); P13M (13 months) is a conservative placeholder, NOT the final
-    # legally-confirmed figure.
+    # proposal.md ## Open Questions); P395D (≈13 months as days) is a conservative placeholder, NOT
+    # the final legally-confirmed figure. Uses days (not months) because Duration cannot represent
+    # calendar months; P13M would fail Spring Boot's Duration binder at startup.
     retention:
-      period: P13M
+      period: P395D
       # Purge sweep cadence (ms). Retention is slow housekeeping, so an hourly default is ample.
       fixed-delay-ms: 3600000
 
