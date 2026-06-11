@@ -155,14 +155,14 @@
   - Depends on: 1.2
   - Independence: parallel-safe
   - status: passing
-- [ ] 7.3 實作分頁 fan-out 展開 ReachTask（斷點續跑 + 頻控 + 任務冪等）
+- [x] 7.3 實作分頁 fan-out 展開 ReachTask（斷點續跑 + 頻控 + 任務冪等）
   - Acceptance: WHEN 展開受眾 THEN 分頁（每批 M 筆）批次 INSERT ReachTask(PENDING)，以 `ON CONFLICT DO NOTHING` 落在四欄 unique `(campaign_id, user_id, send_cycle_key, channel)`，同一週期同一人不重複建立（§5，FR-014/US-006）
   - Acceptance: WHEN 展開到一半 crash 後 Kafka 重投 THEN 已寫入 task 不重複、未寫入續寫，最終收斂到完整 N 筆，計數不被重複污染（§5，NFR-003）
   - Acceptance: WHEN 建立 ReachTask 前 THEN 查詢該用戶於時間窗口內歷史 reach_task，命中則跳過（頻控，與冪等語意分離）（§5，US-006）
   - Acceptance: WHEN 展開完成 THEN reach_request.status 推進 PENDING→EXPANDING→DISPATCHING，`total_count` 一次回填（§5）
   - Depends on: 7.1, 7.2
   - Independence: serial
-  - status: not_started
+  - status: passing
 
 ## 8. Reach channel — Adapter 與抑制名單
 
