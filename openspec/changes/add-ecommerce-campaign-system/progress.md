@@ -311,3 +311,14 @@
 - Task: 6.3 實作行為事件消費者並發出 ReachRequested（路徑2）
 - Transition: not_started → in_progress
 - Next action: 派發 implementer subagent 實作 campaign consumer：以 at-least-once 容器消費 domain.events、比對 RUNNING 活動經 ReachTriggerEvaluatorRegistry shouldTrigger 命中、以 ReachRequestPublisher 發出 ReachRequested(triggerType=EVENT, sendCycle=event:{triggerEventId}) 至同一 reach.requested，處理落定後才 ack，完成後接 spec-reviewer 與 code-quality-reviewer。
+
+## Session 37 — 2026-06-11 12:45
+- Stage: SDD
+- Task: 6.3 實作行為事件消費者並發出 ReachRequested（路徑2）
+- Transition: in_progress → passing
+- Evidence:
+  - Commits: 4258016 feat(campaign): add domain-event consumer emitting ReachRequested on behavior trigger (task 6.3)
+  - Tests: BehaviorEventReachTriggerTest + DomainEventConsumerTest 7 fast unit tests green（CART_ABANDONED+RUNNING GIFT_ADDON 發 EVENT 活動層級事件 sendCycle=event:{id} 含 targetSpec/reachPlan 無收件人；DISCOUNT 無 EVENT evaluator→SKIPPED 不發；非命中事件→NO_TRIGGER 不發；無 RUNNING 不發；per-campaign publish 失敗隔離仍發其他；handler→ack InOrder）；用真實 registry+evaluators 跑端到端 dispatch；`:campaign:spotlessCheck checkstyleMain spotbugsMain test`、`:app:test`（ArchUnit）BUILD SUCCESSFUL
+  - Spec-reviewer: ✅ Spec compliant（5/5；DE→CC→shouldTrigger→RR 同一 topic 路徑2、重用 path-1 ReachRequestPublisher 下游一致、registry 例外隔離、at-least-once 處理後才 ack、campaign↛reach 守住）
+  - Code-quality-reviewer: ✅ Approved（無 Critical/Important；handler/adapter 分離乾淨、例外隔離分層不重複包裹、deserializer trusted-packages 限定不放 *、gated factory 僅影響本 consumer；Minor：與 path-1 結構近似可接受、userId 為合約欄位保留、swallow-then-ack 缺 metric 觀測列 follow-up）
+- Next action: Section 6（6.1–6.3）全數 passing；執行 final pass（`./gradlew check` + `openspec validate add-ecommerce-campaign-system --strict`）後 invoke spec-driven-dev:verification-before-completion。

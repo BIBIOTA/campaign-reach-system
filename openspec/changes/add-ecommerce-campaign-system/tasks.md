@@ -132,12 +132,13 @@
   - Independence: serial
   - status: passing
   - follow-up: cycle-duration 設定缺正值守衛（PT0S 會除零）留待後續 fail-fast 強化；ShedLock 真實雙實例去重待有 Docker 的 CI 以 Testcontainers 整合測試覆蓋（目前以 @SchedulerLock annotation present + 確定性 key 之 fast test 把關）
-- [ ] 6.3 實作行為事件消費者並發出 ReachRequested（路徑2）
+- [x] 6.3 實作行為事件消費者並發出 ReachRequested（路徑2）
   - Acceptance: WHEN `domain.events`（CartAbandoned/OrderPlaced…）進入 AND campaign consumer 比對到 RUNNING 活動且 `shouldTrigger` 命中 THEN 發出 `ReachRequested(...,triggerType=EVENT, sendCycle=event:{triggerEventId})` 至同一 `reach.requested`（FR-008，US-005）
   - Acceptance: WHEN 排程與行為兩種觸發 THEN 下游發送結果與追蹤方式一致（US-005，FR-008）
   - Depends on: 6.1, 5.2, 2.2
   - Independence: serial
-  - status: in_progress
+  - status: passing
+  - follow-up: 單一活動 publish 失敗目前 swallow-then-ack（per-campaign 丟棄而非整事件重投），僅以 WARN log 呈現；待加 metric/counter 觀測靜默丟棄。真實 domain.events→reach.requested 端到端測試待有 Docker 的 CI 以 Testcontainers 覆蓋
 
 ## 7. Reach orchestrator — 批次落庫、受眾展開、頻控
 
