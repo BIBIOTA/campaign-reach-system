@@ -246,4 +246,6 @@
 
 ## Optional artifacts
 - [ ] PlantUML diagrams (spec-driven-dev:writing-uml) — 已存在於 diagrams/（sequence/state/class/component/ER），本次不重跑
+  - deferred: 五張 .puml 已於先前 section 產出並逐次驗證，本 change 無新增/變更圖；非待辦工作項。
 - [ ] Figma designs (spec-driven-dev:writing-figma) — 本系統僅後端、無 UI，不需要
+  - deferred: 系統為 backend-only、無 UI，不適用 Figma 設計；非待辦工作項。
