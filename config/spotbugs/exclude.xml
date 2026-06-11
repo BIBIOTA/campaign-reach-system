@@ -30,4 +30,14 @@
         <Class name="com.example.campaignreach.reach.orchestrator.ReachRequest"/>
         <Bug pattern="CT_CONSTRUCTOR_THROW"/>
     </Match>
+
+    <!-- The paged audience expander (task 7.3) is a Spring @Component that stores injected framework
+         collaborators (JdbcTemplate, PlatformTransactionManager) by reference, which is exactly how
+         Spring DI hands them over. SpotBugs flags the stored mutable references (EI_EXPOSE_REP2), but
+         these are DI-managed singletons, not defensively-copyable value objects — the same rationale
+         as the config-class exclusion above. Scoped to this one FQN. -->
+    <Match>
+        <Class name="com.example.campaignreach.reach.orchestrator.PagedAudienceExpander"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
 </FindBugsFilter>
