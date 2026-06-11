@@ -7,14 +7,17 @@ import java.util.Map;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
 import org.springframework.context.ApplicationContext;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
-import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.core.DefaultKafkaProducerFactory;
+import org.springframework.kafka.core.ProducerFactory;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
 
 /**
@@ -30,9 +33,6 @@ class InfrastructureSmokeIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     private ApplicationContext applicationContext;
-
-    @Autowired
-    private KafkaTemplate<String, String> kafkaTemplate;
 
     @Autowired
     private KafkaProperties kafkaProperties;
@@ -59,13 +59,22 @@ class InfrastructureSmokeIntegrationTest extends AbstractIntegrationTest {
     /**
      * Round-trips a record through the real broker to prove it is a live Kafka
      * server (the broker is NOT mocked, design.md §7).
+     *
+     * <p>Uses a dedicated String producer rather than the application's autowired
+     * {@code KafkaTemplate}: that template is configured with a {@code JsonSerializer}
+     * value serializer (task 6.2) for business events, which would JSON-encode the
+     * payload (wrapping it in quotes) and not match the {@code StringDeserializer}
+     * the consumer here uses. This smoke test only verifies raw broker connectivity,
+     * so it stays independent of the business serialization config.
      */
     @Test
     void roundTripsAMessageThroughTheRealBroker() {
         String topic = "infra-smoke-topic";
 
-        kafkaTemplate.send(topic, "smoke-key", "smoke-value");
-        kafkaTemplate.flush();
+        try (var producer = newStringProducerFactory().createProducer()) {
+            producer.send(new ProducerRecord<>(topic, "smoke-key", "smoke-value"));
+            producer.flush();
+        }
 
         try (Consumer<String, String> consumer = newConsumer()) {
             consumer.subscribe(java.util.List.of(topic));
@@ -87,6 +96,11 @@ class InfrastructureSmokeIntegrationTest extends AbstractIntegrationTest {
         ConsumerFactory<String, String> factory =
                 new DefaultKafkaConsumerFactory<>(props, new StringDeserializer(), new StringDeserializer());
         return factory.createConsumer();
+    }
+
+    private ProducerFactory<String, String> newStringProducerFactory() {
+        Map<String, Object> props = kafkaProperties.buildProducerProperties(null);
+        return new DefaultKafkaProducerFactory<>(props, new StringSerializer(), new StringSerializer());
     }
 
     private ConsumerRecord<String, String> pollSingle(Consumer<String, String> consumer) {
