@@ -231,7 +231,7 @@
   - Acceptance: WHEN reach_task/send_result 屆保留期 THEN 依保留策略歸檔或刪除（具體月數為 open question 待法遵確認，見 proposal.md ## Open Questions）（§10，NFR-005）
   - Depends on: 7.3, 9.1
   - Independence: serial
-  - status: not_started
+  - status: in_progress
 
 ## 12. 大量觸達可靠性驗證（壓測）
 
