@@ -7,11 +7,14 @@
 -- composite (status, created_at) lets the purge probe each terminal status and range-scan created_at
 -- for the aged rows, instead of a full table scan on each (coarse, hourly) sweep.
 --
--- CONCURRENTLY: reach_task is a hot, high-volume table. A plain CREATE INDEX takes a SHARE lock that
--- blocks all writes to reach_task until the build finishes — unacceptable downtime on an environment
--- that already holds data. CONCURRENTLY builds without blocking writers. It cannot run inside a
--- transaction, so the companion V10__reach_task_retention_index.sql.conf sets executeInTransaction=false.
--- Trade-off: a CONCURRENTLY build that fails leaves an INVALID index and marks this migration failed;
--- recovery is `DROP INDEX idx_reach_task_retention;` then `flyway repair` + re-migrate.
+-- Plain (non-CONCURRENT) CREATE INDEX: this is initial schema setup — reach_task is created in the
+-- V-series migrations and is empty when V10 runs, so the brief SHARE lock a plain build takes is a
+-- non-event (no rows to scan, no writers to block). CONCURRENTLY was tried but it cannot run inside a
+-- transaction and, in the Testcontainers integration suite (one shared Postgres, several cached Spring
+-- contexts each holding a HikariCP pool on that DB), the concurrent build waits indefinitely for every
+-- snapshot-holding session to finish and hangs the whole `:app:test` task. If a future migration ever
+-- needs to add an index to an already-large, write-hot reach_task, build that one CONCURRENTLY in its own
+-- migration with executeInTransaction=false — that is the right place for the trade-off, not this
+-- empty-table bootstrap.
 
-CREATE INDEX CONCURRENTLY idx_reach_task_retention ON reach_task (status, created_at);
+CREATE INDEX idx_reach_task_retention ON reach_task (status, created_at);
