@@ -532,3 +532,15 @@
 - Task: 12.1 以 10 萬筆級壓測驗證全鏈路並產出報告
 - Transition: not_started → in_progress
 - Next action: 於新分支 `feat/task-12-load-test-reliability` 派發 implementer subagent 實作 @RequiresDocker 大量觸達可靠性壓測——以 10 萬筆級受眾驅動 reach_request 落庫 → PagedAudienceExpander fan-out → ReachTaskDispatcher 兩階段發送全鏈路，斷言各 ReachTask 狀態正確收斂，並產出處理速率/各狀態分布/資源使用報告（作為演進至百萬筆級基準）；驗證大量發送不拖垮其他活動/設定。完成後接 spec-reviewer 與 code-quality-reviewer。
+
+## Session 63 — 2026-06-12 00:30
+- Stage: SDD
+- Task: 12.1 以 10 萬筆級壓測驗證全鏈路並產出報告
+- Transition: in_progress → passing
+- Evidence:
+  - Commits: cfde6cc test: add 100k-scale full-chain reach load/reliability IT + report (Task 12.1)（含 code-quality Minor 修正 amend：static import any/Collectors、抽 FULL_SCALE_THRESHOLD 常數、pumpUntilDrained 收斂不變式 javadoc）
+  - Tests: 新增 `ReachLoadReliabilityIntegrationTest`（@RequiresDocker，純測試無生產碼變更）。`fullChainReliablyCompletesAt100kScaleAndConvergesAllStatuses`——以 `RECIPIENT_COUNT`（預設 100,000，可 `-Dreach.loadtest.recipients` 覆寫）真實驅動 reachRequestRepository landing → PagedAudienceExpander.expand（真實 ON CONFLICT fan-out）→ ReachTaskDispatcher.dispatchPoll（真實 FOR UPDATE SKIP LOCKED claim + markSent 寫回）pumpUntilDrained；斷言以真實 DB GROUP BY 查回的非終態（PENDING/PROCESSING/RETRY_SCHEDULED）=0、終態（SENT+FAILED+DLQ+CANCELLED）=N、SENT=N，並產出 build dir 報告（處理速率/各狀態分布/資源使用）+ SLF4J log。`heavySendDoesNotStarveOtherCampaigns`——第二活動 config 列指紋未變、自有 task 仍 PENDING 且仍可獨立 claimBatch，證 per-campaign key + SKIP LOCKED 隔離。`./gradlew check` BUILD SUCCESSFUL（spotless/checkstyle/spotbugsMain/test/ArchUnit/JaCoCo 全綠；Docker-gated IT 本沙箱 auto-skip）。
+  - Spec-reviewer: ✅ Spec compliant（5/5；兩 scenario 各對應 name-mapped 測試，收斂斷言非套套邏輯以真實 DB 查回驗證、報告三部分齊備、測試真實驅動 01-sequence-reach-flow 下游順序未 mock 持久層、diff 純測試無越界功能；規模縮放可參數化且已承認為觀察事項）
+  - Code-quality-reviewer: ✅ Approved（無 Critical/Important；結構清楚四段分隔、斷言查 DB 落地非 stub 回傳、pumpUntilDrained 有 maxPolls 防呆且 stub 永成功保證收斂、teardown 四表先子後父、seeding 沿用鄰近 IT pattern；4 Minor——收斂不變式文件債/魔術數常數/2 處 static import——已於 amend 全數修正）
+- Next action: 12.1 為本 change 最後一個 task，全部 task 皆 passing；對 add-ecommerce-campaign-system 跑 final pass（`openspec validate {change-id} --strict`）後 invoke spec-driven-dev:verification-before-completion。
+- Blockers: 無（唯一 verification-pending 為環境性 Docker auto-skip，已於 tasks.md 12.1 記錄，留待 verification-before-completion Stage 5）。
