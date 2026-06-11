@@ -261,7 +261,7 @@ Reach.dispatcher    → SendResultRecorded  (使用者層級：發送結果)
 - `ReachTask` 落 DB 是發送的 source of truth，支撐重試、報表、冪等。
 - **冪等與頻控分層處理**（語意不同，實作機制不同）：
   - **冪等（Idempotency）**：DB unique constraint `(campaign_id, user_id, send_cycle_key, channel)` 防止同一事件/週期重複建立 ReachTask。注意：事件觸發的 `send_cycle_key = event:{id}`，不同事件 id 不相同，unique constraint 無法跨事件去重。
-  - **頻控（Frequency Capping）**：orchestrator 建立 ReachTask 前，查詢該用戶在指定時間窗口內的歷史 reach_task（`WHERE campaign_id = :cid AND user_id = :uid AND created_at > :threshold`），命中則跳過，確保短時間不重複觸達。
+  - **頻控（Frequency Capping）**：orchestrator 建立 ReachTask 前，查詢該用戶在**同一活動**指定時間窗口內的歷史 reach_task（`WHERE campaign_id = :cid AND user_id = :uid AND send_cycle_key <> :currentCycle AND created_at >= :threshold`），命中則跳過，確保短時間不重複觸達。**範圍為同活動（same-campaign），非跨活動全域疲勞控制**（對齊 prd FR-014「避免同一活動對同一人重複發送」）。`send_cycle_key <> :currentCycle` 排除當前週期：同週期的重複由上述四欄 unique constraint（冪等層）負責，crash-resume 重寫當前 cycle 時不會被自己先前已寫入的 task 反向 cap 掉，使頻控與冪等正交。
 
 #### 受眾展開（fan-out）可靠性
 

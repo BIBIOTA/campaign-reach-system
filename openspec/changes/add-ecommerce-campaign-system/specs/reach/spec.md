@@ -46,7 +46,7 @@ The system SHALL resolve `targetSpec` into a recipient list within the reach mod
 - **AND** 續寫未完成部分，最終收斂到完整 N 筆
 
 ### Requirement: 同週期不重複發送（冪等與頻控）
-The system SHALL prevent sending more than once to the same user in the same send cycle for the same campaign via the four-column unique constraint (idempotency), and SHALL additionally skip creating a task when the user has been reached within a configured time window (frequency capping). (FR-014, NFR-003)
+The system SHALL prevent sending more than once to the same user in the same send cycle for the same campaign via the four-column unique constraint (idempotency), and SHALL additionally skip creating a task when the user has already been reached **by the same campaign in a different send cycle** within a configured time window (frequency capping is same-campaign scoped, not a cross-campaign global cap). (FR-014, NFR-003)
 
 #### Scenario: 同一人同週期只建立一筆任務
 - **WHEN** 同一活動同一 send_cycle_key 對同一 user 同一 channel 重複展開
@@ -55,8 +55,8 @@ The system SHALL prevent sending more than once to the same user in the same sen
 > See: ../../diagrams/05-er-database-schema.puml
 
 #### Scenario: 短時間頻控跳過
-- **WHEN** 建立 ReachTask 前查詢到該 user 在指定時間窗口內已有歷史 reach_task
-- **THEN** the system 跳過建立該筆，避免不同事件在短時間對同人重複觸達
+- **WHEN** 建立 ReachTask 前查詢到該 user 在**同一活動**、不同 send_cycle_key、指定時間窗口內已有歷史 reach_task
+- **THEN** the system 跳過建立該筆，避免同一活動不同事件在短時間對同人重複觸達（範圍為同活動，當前週期由四欄 unique constraint 負責，不納入頻控比對）
 
 ### Requirement: 可靠發送與重試
 The system SHALL dispatch each `ReachTask` via the matching `ChannelAdapter` using a two-phase short-transaction model (claim with `FOR UPDATE SKIP LOCKED` + lease, external call outside the transaction, then write back), SHALL retry transient failures with exponential backoff up to a bounded number of attempts, and SHALL mark non-retryable failures as FAILED. (FR-015, NFR-002, NFR-003)

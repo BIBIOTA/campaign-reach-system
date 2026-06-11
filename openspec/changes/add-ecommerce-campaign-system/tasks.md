@@ -143,26 +143,27 @@
 
 ## 7. Reach orchestrator — 批次落庫、受眾展開、頻控
 
-- [ ] 7.1 實作 reach_request 批次落庫與批次冪等
+- [x] 7.1 實作 reach_request 批次落庫與批次冪等
   - Acceptance: WHEN orchestrator 消費 `reach.requested` THEN 先 upsert 一筆 reach_request，以 `unique(campaign_id, send_cycle_key, trigger_type)` 去重，同事件重投不建立第二筆批次（§5，NFR-003）
   - Acceptance: WHEN reach_request 已存在且 status IN (DISPATCHING, DONE) THEN 直接 ack 跳過（Kafka 重投保護，fan-out 已完成不重做受眾解析與 insert）；否則（PENDING/EXPANDING）進入/續跑展開（§5）
   - Acceptance: WHEN 建立批次 THEN 凍結 `target_spec_snapshot`/`reach_plan_snapshot`，活動事後被改仍可追溯當時依據（§5）
   - Depends on: 2.2, 3.1
   - Independence: serial
-  - status: not_started
-- [ ] 7.2 實作 AudienceResolver（位於 reach）將 targetSpec 解析為收件人
+  - status: passing
+- [x] 7.2 實作 AudienceResolver（位於 reach）將 targetSpec 解析為收件人
   - Acceptance: WHEN 給定 targetSpec THEN 由 reach 模組統一解析為收件人清單，支援靜態名單與簡單條件分眾（會員等級、地區），campaign 不展開收件人（§4，FR-007/FR-013）
   - Depends on: 1.2
   - Independence: parallel-safe
-  - status: not_started
-- [ ] 7.3 實作分頁 fan-out 展開 ReachTask（斷點續跑 + 頻控 + 任務冪等）
+  - status: passing
+- [x] 7.3 實作分頁 fan-out 展開 ReachTask（斷點續跑 + 頻控 + 任務冪等）
   - Acceptance: WHEN 展開受眾 THEN 分頁（每批 M 筆）批次 INSERT ReachTask(PENDING)，以 `ON CONFLICT DO NOTHING` 落在四欄 unique `(campaign_id, user_id, send_cycle_key, channel)`，同一週期同一人不重複建立（§5，FR-014/US-006）
   - Acceptance: WHEN 展開到一半 crash 後 Kafka 重投 THEN 已寫入 task 不重複、未寫入續寫，最終收斂到完整 N 筆，計數不被重複污染（§5，NFR-003）
-  - Acceptance: WHEN 建立 ReachTask 前 THEN 查詢該用戶於時間窗口內歷史 reach_task，命中則跳過（頻控，與冪等語意分離）（§5，US-006）
+  - Acceptance: WHEN 建立 ReachTask 前 THEN 查詢該用戶於**同一活動**時間窗口內歷史 reach_task（`campaign_id = :cid AND send_cycle_key <> :currentCycle`），命中則跳過（頻控為同活動範圍、非跨活動全域疲勞控制，與冪等語意分離）（§5，US-006，design.md §264 / prd FR-014）
   - Acceptance: WHEN 展開完成 THEN reach_request.status 推進 PENDING→EXPANDING→DISPATCHING，`total_count` 一次回填（§5）
+  - follow-up: 目前僅 INSERT 分頁，受眾**解析**仍一次將整份 recipient list（STATIC_LIST 連同整張 audience_list）載入記憶體——MVP 量級可接受，但於 100k fan-out NFR 壓測（任務 12.x）前需改為 streaming/Pageable AudienceResolver；程式碼 `PagedAudienceExpander.expand()` 已標註此限制
   - Depends on: 7.1, 7.2
   - Independence: serial
-  - status: not_started
+  - status: passing
 
 ## 8. Reach channel — Adapter 與抑制名單
 

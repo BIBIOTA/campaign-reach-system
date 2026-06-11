@@ -1,0 +1,249 @@
+package com.example.campaignreach.reach.orchestrator;
+
+import com.example.campaignreach.reach.audience.AudienceResolver;
+import com.example.campaignreach.reach.audience.Recipient;
+import com.example.campaignreach.reach.audience.TargetSpec;
+import com.example.campaignreach.reach.audience.TargetSpecParser;
+import com.example.campaignreach.shared.event.Channel;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.PreparedStatementSetter;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
+
+/**
+ * Real {@link AudienceExpander}: resolves the frozen targetSpec into recipients and fans one
+ * {@code reach_request} out into N {@code reach_task(PENDING)} rows in committed pages (task 7.3,
+ * spec §5, FR-014, NFR-003, US-006). Replaces the task-7.1 {@code NoOpAudienceExpander} as the sole
+ * {@link AudienceExpander} bean.
+ *
+ * <p><strong>Idempotency — same cycle (unique constraint).</strong> Each page is inserted with
+ * {@code INSERT ... ON CONFLICT (campaign_id, user_id, send_cycle_key, channel) DO NOTHING}. The
+ * four-column unique key is the single source of truth for "同一活動同一週期同一人同一通道只一筆": a Kafka
+ * redelivery of a half-expanded batch re-inserts the same rows, the already-written ones are silently
+ * skipped, and the missing remainder is written — so fan-out converges to exactly N rows no matter how
+ * many times it is replayed. (Spring Data JPA has no native upsert, hence the raw {@link JdbcTemplate}
+ * batch INSERT with {@code ?::channel} / {@code ?::reach_task_status} enum casts.)
+ *
+ * <p><strong>Frequency capping — different cycle (separate from idempotency).</strong> Before
+ * inserting a recipient, the expander skips the user if they already have a reach_task in a
+ * <em>different</em> {@code send_cycle_key} within {@link ExpansionProperties#frequencyCapWindow()}
+ * (predicate: {@code EXISTS reach_task WHERE campaign_id=:cid AND user_id=? AND send_cycle_key <> :currentCycle AND
+ * created_at >= now() - :window}). The {@code send_cycle_key <> :currentCycle} clause is the crux of
+ * the 頻控/冪等 separation: the current cycle is deliberately excluded so a resume freely re-inserts the
+ * current cycle's rows (that dedup is the unique constraint's job), while the cap only suppresses
+ * over-reach from <em>other</em> events firing at the same user in a short window. The cap is
+ * same-campaign scoped (filtered by {@code campaign_id}, per design.md §264 / prd FR-014): a recent
+ * reach from a different campaign does NOT suppress this campaign's task.
+ *
+ * <p><strong>Crash-resume boundary.</strong> The 100k fan-out is never wrapped in one transaction.
+ * Each page runs in its own {@link TransactionTemplate} transaction (mirroring the per-item isolation
+ * in {@code CampaignLifecycleScheduler}), so a crash mid-fan-out leaves the already-committed pages
+ * durable and the redelivery only writes the remainder. The PENDING→EXPANDING advance and the final
+ * EXPANDING→DISPATCHING + {@code total_count} backfill each run in their own short transaction too.
+ */
+@Component
+public class PagedAudienceExpander implements AudienceExpander {
+
+    private static final Logger LOG = LoggerFactory.getLogger(PagedAudienceExpander.class);
+
+    private static final String INSERT_TASK_SQL =
+            """
+            INSERT INTO reach_task (
+                id, reach_request_id, campaign_id, user_id, send_cycle_key, channel, status, created_at)
+            VALUES (?, ?, ?, ?, ?, ?::channel, ?::reach_task_status, ?)
+            ON CONFLICT (campaign_id, user_id, send_cycle_key, channel) DO NOTHING
+            """;
+
+    /**
+     * Batch frequency-cap query: returns the subset of the supplied user IDs that have a reach_task in
+     * the SAME campaign but a DIFFERENT send cycle within the window. The {@code campaign_id = ?} clause
+     * scopes the cap to this campaign (design.md §264 / prd FR-014 — capping is same-campaign, not a
+     * cross-campaign global fatigue cap); the {@code send_cycle_key <> ?} clause keeps the cap orthogonal
+     * to the same-cycle unique idempotency so a crash-resume rewriting the current cycle never caps its
+     * own already-inserted rows. Placeholders ({@code IN (?,?,...)}}) are built dynamically from the page
+     * size; the leading param is {@code campaignId}, the trailing params are {@code currentCycle} and
+     * {@code floor}.
+     */
+    private static final String FREQ_CAP_BATCH_SQL_TEMPLATE = "SELECT DISTINCT user_id FROM reach_task "
+            + "WHERE campaign_id = ? AND user_id IN (%s) AND send_cycle_key <> ? AND created_at >= ?";
+
+    private final TargetSpecParser targetSpecParser;
+    private final ReachPlanChannelExtractor reachPlanChannelExtractor;
+    private final AudienceResolver audienceResolver;
+    private final JdbcTemplate jdbcTemplate;
+    private final TransactionTemplate transactionTemplate;
+    private final ExpansionProperties properties;
+
+    /**
+     * @param targetSpecParser parses the frozen targetSpec JSON into a typed spec
+     * @param reachPlanChannelExtractor reads the dedup-key channel from the frozen reachPlan JSON
+     * @param audienceResolver resolves the spec into a recipient list (reach-side, FR-007/FR-013)
+     * @param jdbcTemplate auto-configured template used for the ON CONFLICT batch insert, the
+     *     batch frequency-cap query, and the reach_request status/count updates
+     * @param transactionManager backs the per-page (and per-status-update) short transactions
+     * @param properties page size + frequency-cap window tunables
+     */
+    @SuppressFBWarnings(
+            value = "EI_EXPOSE_REP2",
+            justification = "Spring injects the singleton JdbcTemplate / transaction manager by reference; "
+                    + "storing these framework-managed beans is the intended DI wiring, not a mutable-state leak.")
+    public PagedAudienceExpander(
+            TargetSpecParser targetSpecParser,
+            ReachPlanChannelExtractor reachPlanChannelExtractor,
+            AudienceResolver audienceResolver,
+            JdbcTemplate jdbcTemplate,
+            PlatformTransactionManager transactionManager,
+            ExpansionProperties properties) {
+        this.targetSpecParser = targetSpecParser;
+        this.reachPlanChannelExtractor = reachPlanChannelExtractor;
+        this.audienceResolver = audienceResolver;
+        this.jdbcTemplate = jdbcTemplate;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
+        this.properties = properties;
+    }
+
+    @Override
+    public void expand(ReachRequest reachRequest) {
+        UUID reachRequestId = reachRequest.getId();
+        UUID campaignId = reachRequest.getCampaignId();
+        String sendCycleKey = reachRequest.getSendCycleKey();
+
+        // (a) PENDING -> EXPANDING (idempotent: re-running on an already-EXPANDING resume is a no-op move).
+        advanceToExpanding(reachRequestId);
+
+        // (b) Parse the FROZEN snapshots: who (targetSpec) and which channel (reachPlan, dedup-key column).
+        TargetSpec spec = targetSpecParser.parse(reachRequest.getTargetSpecSnapshot());
+        Channel channel = reachPlanChannelExtractor.extract(reachRequest.getReachPlanSnapshot());
+        // NOTE: only the INSERT is paged today — resolution still materialises the whole recipient list
+        // (and, for STATIC_LIST, the whole audience_list) in memory. Adequate for MVP volumes; a
+        // streaming/Pageable AudienceResolver is a follow-up before the 100k fan-out NFR (see tasks.md 7.3).
+        List<Recipient> recipients = audienceResolver.resolve(spec);
+
+        // (c)/(d) Page recipients; per page apply frequency capping then ON CONFLICT batch-insert.
+        int pageSize = properties.pageSize();
+        // Cap floor is snapshotted ONCE at expand start (not per page) so a slow multi-page fan-out uses a
+        // single stable window boundary; a slightly earlier floor only makes the cap marginally more lenient.
+        Instant freqCapFloor = Instant.now().minus(properties.frequencyCapWindow());
+        for (int start = 0; start < recipients.size(); start += pageSize) {
+            int end = Math.min(start + pageSize, recipients.size());
+            List<Recipient> page = recipients.subList(start, end);
+            insertPage(page, reachRequestId, campaignId, sendCycleKey, channel, freqCapFloor);
+        }
+
+        // (e) EXPANDING -> DISPATCHING and backfill total_count ONCE (actual rows for this request).
+        advanceToDispatching(reachRequestId);
+
+        LOG.info(
+                "Expanded reach_request {} (campaign {}) into reach_task(PENDING) rows on channel {}",
+                reachRequestId,
+                campaignId,
+                channel);
+    }
+
+    /** Moves the batch PENDING -> EXPANDING and stamps started_at, in its own short transaction. */
+    private void advanceToExpanding(UUID reachRequestId) {
+        transactionTemplate.executeWithoutResult(status -> jdbcTemplate.update(
+                """
+                UPDATE reach_request
+                SET status = 'EXPANDING'::reach_request_status,
+                    started_at = COALESCE(started_at, ?)
+                WHERE id = ? AND status = 'PENDING'::reach_request_status
+                """,
+                Timestamp.from(Instant.now()),
+                reachRequestId));
+    }
+
+    /**
+     * Inserts one page in its own transaction: frequency-cap survivors are batch-inserted with ON
+     * CONFLICT DO NOTHING. Committing per page is the crash-resume boundary — a crash leaves earlier
+     * pages durable and redelivery writes only the missing remainder.
+     */
+    private void insertPage(
+            List<Recipient> page,
+            UUID reachRequestId,
+            UUID campaignId,
+            String sendCycleKey,
+            Channel channel,
+            Instant freqCapFloor) {
+        transactionTemplate.executeWithoutResult(status -> {
+            List<UUID> userIds = page.stream().map(Recipient::userId).toList();
+            Timestamp freqFloor = Timestamp.from(freqCapFloor);
+            Set<UUID> cappedIds = getCappedUserIds(campaignId, userIds, sendCycleKey, freqFloor);
+
+            List<Object[]> batch = new ArrayList<>(page.size());
+            Timestamp now = Timestamp.from(Instant.now());
+            for (Recipient recipient : page) {
+                if (cappedIds.contains(recipient.userId())) {
+                    continue;
+                }
+                batch.add(new Object[] {
+                    UUID.randomUUID(),
+                    reachRequestId,
+                    campaignId,
+                    recipient.userId(),
+                    sendCycleKey,
+                    channel.name(),
+                    ReachTaskStatus.PENDING.name(),
+                    now
+                });
+            }
+            if (!batch.isEmpty()) {
+                jdbcTemplate.batchUpdate(INSERT_TASK_SQL, batch);
+            }
+        });
+    }
+
+    /**
+     * Batch frequency-cap check: returns the subset of {@code userIds} that already have a reach_task in
+     * the SAME campaign but a DIFFERENT send cycle within the window — one DB round-trip per page instead
+     * of one per user.
+     */
+    private Set<UUID> getCappedUserIds(
+            UUID campaignId, List<UUID> userIds, String currentCycle, Timestamp freqCapFloor) {
+        if (userIds.isEmpty()) {
+            return Collections.emptySet();
+        }
+        String placeholders = String.join(",", Collections.nCopies(userIds.size(), "?"));
+        String sql = String.format(FREQ_CAP_BATCH_SQL_TEMPLATE, placeholders);
+        List<Object> params = new ArrayList<>(userIds.size() + 3);
+        params.add(campaignId);
+        params.addAll(userIds);
+        params.add(currentCycle);
+        params.add(freqCapFloor);
+        PreparedStatementSetter pss = ps -> {
+            for (int i = 0; i < params.size(); i++) {
+                ps.setObject(i + 1, params.get(i));
+            }
+        };
+        return new HashSet<>(jdbcTemplate.query(sql, pss, (rs, rowNum) -> rs.getObject("user_id", UUID.class)));
+    }
+
+    /**
+     * Completes fan-out: EXPANDING -> DISPATCHING and backfills total_count ONCE with the actual
+     * reach_task row count for this request (idempotent — re-running on an already-DISPATCHING batch
+     * matches no row).
+     */
+    private void advanceToDispatching(UUID reachRequestId) {
+        transactionTemplate.executeWithoutResult(status -> jdbcTemplate.update(
+                """
+                UPDATE reach_request
+                SET status = 'DISPATCHING'::reach_request_status,
+                    total_count = (SELECT count(*) FROM reach_task WHERE reach_request_id = ?)
+                WHERE id = ? AND status = 'EXPANDING'::reach_request_status
+                """,
+                reachRequestId,
+                reachRequestId));
+    }
+}

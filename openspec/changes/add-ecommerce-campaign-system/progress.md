@@ -322,3 +322,54 @@
   - Spec-reviewer: ✅ Spec compliant（5/5；DE→CC→shouldTrigger→RR 同一 topic 路徑2、重用 path-1 ReachRequestPublisher 下游一致、registry 例外隔離、at-least-once 處理後才 ack、campaign↛reach 守住）
   - Code-quality-reviewer: ✅ Approved（無 Critical/Important；handler/adapter 分離乾淨、例外隔離分層不重複包裹、deserializer trusted-packages 限定不放 *、gated factory 僅影響本 consumer；Minor：與 path-1 結構近似可接受、userId 為合約欄位保留、swallow-then-ack 缺 metric 觀測列 follow-up）
 - Next action: Section 6（6.1–6.3）全數 passing；執行 final pass（`./gradlew check` + `openspec validate add-ecommerce-campaign-system --strict`）後 invoke spec-driven-dev:verification-before-completion。
+
+## Session 38 — 2026-06-11 14:00
+- Stage: SDD
+- Task: 7.1 實作 reach_request 批次落庫與批次冪等
+- Transition: not_started → in_progress
+- Next action: 於新分支 feat/section-7-reach-orchestrator 派發 implementer subagent，於 reach/orchestrator 實作 ReachOrchestrator 消費 reach.requested（at-least-once）、以 unique(campaign_id, send_cycle_key, trigger_type) upsert 一筆 reach_request 去重、凍結 target_spec_snapshot/reach_plan_snapshot、已 DISPATCHING/DONE 直接 ack 跳過，並以 Flyway migration 建立 reach_request 表（對齊 05-er），完成後接 spec-reviewer 與 code-quality-reviewer。
+
+## Session 39 — 2026-06-11 14:45
+- Stage: SDD
+- Task: 7.1 實作 reach_request 批次落庫與批次冪等
+- Transition: in_progress → passing
+- Evidence:
+  - Commits: 9ce628d feat(reach): add reach_request batch landing with fan-out idempotency (task 7.1); 0b573bb docs(reach): document deliberate omission of listener configurer in reach Kafka factory (task 7.1 review)
+  - Tests: ReachRequestLanderTest 5 fast unit tests green（@Nested 對應三 scenario：首次消費插入 PENDING+凍結 target/reach 快照後進入展開；已 PENDING 續跑展開不再 insert；並發 insert 競態以 unique 約束擋下 re-read winner 不建第二筆；已 DISPATCHING/已 DONE 直接跳過 verifyNoInteractions(expander)）。完整 `./gradlew check` BUILD SUCCESSFUL（reach spotless/checkstyle/spotbugs/test + app ArchUnit + JaCoCo 全綠；Docker-gated 整合測試本沙箱無 Docker → skip）。
+  - Spec-reviewer: ✅ Spec compliant（5/5；V4__reach_request.sql 16 欄+unique(campaign_id,send_cycle_key,trigger_type)+trigger_type/reach_request_status enum 對齊 05-er、消費步驟對齊 01-sequence、entity 刻意不映 7.3 的 count/timestamp 欄為合理 scope 決策、reach↛campaign 守住）
+  - Code-quality-reviewer: ✅ Approved（無 Critical/Important；thin-listener→Kafka-free-handler 對齊 DomainEventConsumer 範式、專屬 typed at-least-once factory 與 campaign DLT 隔離有據、lost-insert-race + @Transactional saveAndFlush 正確、NoOpAudienceExpander plain @Component 為乾淨 7.3 handoff、spotbugs exclude 窄且有據；Minor #2 reach factory 未走 listener configurer → 已於 0b573bb 文件化刻意省略，因其 raw <Object,Object> 簽章與 typed deserializer 不相容且本專案未設 listener.* 調校）
+- Next action: dispatch implementer subagent for task 7.2（AudienceResolver：reach 模組將 targetSpec 解析為收件人清單，支援靜態名單與會員等級/地區條件分眾）。
+
+## Session 40 — 2026-06-11 15:00
+- Stage: SDD
+- Task: 7.2 實作 AudienceResolver（位於 reach）將 targetSpec 解析為收件人
+- Transition: not_started → in_progress
+- Next action: 派發 implementer subagent，於 reach/audience 實作 AudienceResolver（resolve(TargetSpec)→List<Recipient>）+ reach 自有 TargetSpec/Recipient 模型（解析事件帶的 targetSpec JSON：kind STATIC_LIST/CONDITION、listId、conditions）；STATIC_LIST 由新增 audience_list/audience_list_member 表（V5 migration，對齊 05-er 區塊 A）查詢解析，CONDITION（會員等級/地區）委派 MemberDirectory port（MVP 最小實作，會員主檔屬上游電商主站），campaign 不展開收件人，完成後接 spec-reviewer 與 code-quality-reviewer。
+
+## Session 41 — 2026-06-11 15:30
+- Stage: SDD
+- Task: 7.2 實作 AudienceResolver（位於 reach）將 targetSpec 解析為收件人
+- Transition: in_progress → passing
+- Evidence:
+  - Commits: c6ba61b feat(reach): add AudienceResolver resolving targetSpec to recipients (task 7.2); ad886b4 docs(reach): clarify switch-dispatch rationale and import JsonProcessingException (task 7.2 review)
+  - Tests: TargetSpecParserTest 8 + StrategyAudienceResolverTest 2 = 10 fast unit tests green（@Nested「受眾一律由 reach 解析」：STATIC_LIST→audienceListMemberRepository.findByListId 映射 Recipient、CONDITION→MemberDirectory port，各以 verifyNoInteractions 驗證另一 collaborator 未被呼叫；parser trust-boundary：合法 STATIC_LIST/CONDITION 解析、blank/malformed/unknown-kind/缺 listId/缺 conditions 各帶 actionable reason 拒絕）。完整 `./gradlew check` BUILD SUCCESSFUL（reach spotless/checkstyle/spotbugs/test + app ArchUnit + JaCoCo 全綠；Docker-gated 整合測試 skip）。
+  - Spec-reviewer: ✅ Spec compliant（5/5；AudienceResolver 介面簽章對齊 03-class、V5__audience_list.sql 複合 PK(list_id,user_id)+FK 對齊 05-er 區塊 A、CONDITION MVP stub 比照 5.1 FlashSale 為 acceptable「支援」、無 7.3 reach_task fan-out 外洩、reach 自有 TargetSpec/Recipient 不 import campaign DTO、reach↛campaign 守住）
+  - Code-quality-reviewer: ✅ Approved（無 Critical/Important；module-boundary 紀律佳、trust-boundary parser 單一驗證點、PII 最小化 Recipient 僅 userId、@IdClass 複合鍵 equals/hashCode 正確、record 防禦性複製 conditions、MvpMemberDirectory 誠實標注 MVP seam、ObjectMapper.copy() 避 EI_EXPOSE_REP2、無 silent spotbugs exclude；3 Minor：switch 非 registry 之 Javadoc 誇大→已於 ad886b4 修正、inline FQN→已 import、test 子類 override 觀察不需改）
+- Next action: dispatch implementer subagent for task 7.3（分頁 fan-out 展開 ReachTask：每批 M 筆 INSERT ON CONFLICT DO NOTHING 落四欄 unique、斷點續跑、頻控、status PENDING→EXPANDING→DISPATCHING + total_count 回填），依賴 7.1、7.2。
+
+## Session 42 — 2026-06-11 15:45
+- Stage: SDD
+- Task: 7.3 實作分頁 fan-out 展開 ReachTask（斷點續跑 + 頻控 + 任務冪等）
+- Transition: not_started → in_progress
+- Next action: 派發 implementer subagent，於 reach/orchestrator 實作真正的 AudienceExpander（取代 7.1 NoOpAudienceExpander）：reach_request PENDING→EXPANDING，呼叫 TargetSpecParser+AudienceResolver 解析收件人，分頁（每批 M 筆）以 JdbcTemplate `INSERT ... ON CONFLICT (campaign_id,user_id,send_cycle_key,channel) DO NOTHING` 批次落 ReachTask(PENDING)（斷點續跑冪等），插入前以頻控時間窗查歷史 reach_task 命中則跳過（與冪等分離），完成後 EXPANDING→DISPATCHING 並一次回填 total_count；新增 V6 migration 建 reach_task 表 + channel/reach_task_status enum + 四欄 unique + ER 建議索引，完成後接 spec-reviewer 與 code-quality-reviewer。
+
+## Session 43 — 2026-06-11 16:30
+- Stage: SDD
+- Task: 7.3 實作分頁 fan-out 展開 ReachTask（斷點續跑 + 頻控 + 任務冪等）
+- Transition: in_progress → passing
+- Evidence:
+  - Commits: 9bff682 feat(reach): add paged ReachTask fan-out with idempotency and frequency capping (task 7.3); 7b94e97 refactor(reach): use inline @SuppressFBWarnings for expander DI fields (task 7.3 review)
+  - Tests: PagedAudienceExpanderTest 6 fast unit tests green（N 收件人→分頁批次 insert + status PENDING→EXPANDING→DISPATCHING + total_count 一次回填、ON CONFLICT 四欄鍵、already-EXPANDING resume、不同 cycle 窗內頻控跳過而同 cycle 不被頻控、空頁不發 batchUpdate）+ ReachTaskFanOutIntegrationTest 3 個 @RequiresDocker Testcontainers 測試（真實 ON CONFLICT 重跑收斂 N 不重複、頻控跳過 seeded 前一 cycle user、結束 DISPATCHING+total_count=N），本沙箱無 Docker → skip 待 CI；reach 單元測試共 20 green。完整 `./gradlew check` BUILD SUCCESSFUL（spotless/checkstyle/spotbugs/ArchUnit/JaCoCo 全綠）。
+  - Spec-reviewer: ✅ Spec compliant（5/5；V6__reach_task.sql 16 欄+四欄 unique+FK+channel/reach_task_status enum+3 ER 建議索引對齊 05-er、展開呼叫順序對齊 01-sequence、NoOpAudienceExpander 已刪僅 PagedAudienceExpander 一個 bean、頻控 send_cycle_key<>currentCycle 與冪等分離正確、無 section 8/9 dispatcher/retry/DLQ/suppression 外洩、reach↛campaign 守住）
+  - Code-quality-reviewer: ✅ Approved（再審；首審 1 Important：EI_EXPOSE_REP2 用 whole-class exclude.xml 應比照 ReachRequestPublisher 改 inline @SuppressFBWarnings → 已於 7b94e97 改為建構子 inline 註解並移除 exclude block、spotbugs 移除 entry 後仍綠證明真有抑制；crash-resume 每頁獨立交易 + 狀態轉換各自短交易、SQL 全參數綁定無注入、ON CONFLICT 收斂、測試行為導向皆獲肯定；Minor：freq-cap 跨活動範圍已補 Javadoc、PagedAudienceExpander 216 行未來可抽 ReachTaskDao 為非阻擋 note）
+- Next action: Section 7（7.1–7.3）全數 passing；執行 final pass（`./gradlew check` + `openspec validate add-ecommerce-campaign-system --strict`）後 invoke spec-driven-dev:verification-before-completion。

@@ -65,6 +65,19 @@ campaignreach:
     # event path declines the ack and Kafka re-delivers (at-least-once).
     publish-timeout: 10s
 
+  # Reach audience fan-out (task 7.3, spec §5). Two independent knobs:
+  reach:
+    expansion:
+      # Recipients resolved-and-inserted per committed page during fan-out. Smaller pages commit
+      # progress more often (finer crash-resume granularity); larger pages batch harder. Throughput
+      # / resume-granularity lever only — correctness comes from the four-column unique constraint.
+      page-size: 1000
+    frequency-cap:
+      # Frequency-cap lookback window (Duration). Before inserting a recipient's ReachTask, the
+      # expander skips the user if they already have a reach_task in a DIFFERENT send_cycle within
+      # this window — over-reach guard, separate from the same-cycle unique-constraint idempotency.
+      window: PT24H
+
   email-provider:
     api-key: ${EMAIL_PROVIDER_API_KEY:}
 
