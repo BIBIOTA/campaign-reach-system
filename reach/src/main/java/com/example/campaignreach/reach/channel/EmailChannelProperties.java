@@ -37,8 +37,9 @@ public record EmailChannelProperties(CircuitBreaker circuitBreaker) {
                 .failureRateThreshold(circuitBreaker.failureRateThreshold())
                 .waitDurationInOpenState(circuitBreaker.waitDurationInOpenState())
                 .permittedNumberOfCallsInHalfOpenState(circuitBreaker.permittedNumberOfCallsInHalfOpenState())
-                // Move OPEN -> HALF_OPEN automatically once the cool-down elapses; verifiable without
-                // a background thread by reading state after the wait window (see tests).
+                // Move OPEN -> HALF_OPEN automatically once the cool-down elapses, via Resilience4j's
+                // background scheduler, so recovery does not depend on an inbound call arriving to
+                // trigger the transition.
                 .automaticTransitionFromOpenToHalfOpenEnabled(true)
                 .build();
     }

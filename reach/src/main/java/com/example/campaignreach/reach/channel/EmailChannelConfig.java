@@ -2,7 +2,6 @@ package com.example.campaignreach.reach.channel;
 
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -21,9 +20,10 @@ import org.springframework.context.annotation.Configuration;
  * registry is defined here — a {@code @ConditionalOnMissingBean} in a regular {@code @Configuration}
  * would be evaluated before auto-configuration and would silently disable the starter's full wiring.
  *
- * <p>{@link EmailAdapter} bean registration is also controlled here via
- * {@code @Bean @ConditionalOnBean(EmailProviderClient.class)} to avoid the non-deterministic
- * component-scan ordering that results from placing {@code @ConditionalOnBean} on a {@code @Component}.
+ * <p>The provider-gated {@link EmailAdapter} bean itself lives in {@link EmailAdapterAutoConfiguration}
+ * (not here) so its {@code @ConditionalOnBean(EmailProviderClient.class)} is evaluated in the
+ * auto-configuration phase — after every user / component-scan bean definition is registered — making
+ * activation independent of registration order.
  */
 @Configuration
 @EnableConfigurationProperties(EmailChannelProperties.class)
@@ -41,16 +41,5 @@ public class EmailChannelConfig {
     @Bean
     public CircuitBreaker emailChannelBreaker(CircuitBreakerRegistry registry, EmailChannelProperties properties) {
         return registry.circuitBreaker(EMAIL_BREAKER_NAME, properties.toCircuitBreakerConfig());
-    }
-
-    /**
-     * Registers {@link EmailAdapter} only when an {@link EmailProviderClient} bean is present.
-     * Declared here (not via {@code @Component @ConditionalOnBean}) so the condition is evaluated
-     * after all bean definitions are loaded, avoiding non-deterministic component-scan ordering.
-     */
-    @Bean
-    @ConditionalOnBean(EmailProviderClient.class)
-    public EmailAdapter emailAdapter(EmailProviderClient providerClient, CircuitBreaker emailChannelBreaker) {
-        return new EmailAdapter(providerClient, emailChannelBreaker);
     }
 }

@@ -15,6 +15,8 @@ CREATE TABLE suppression (
     user_id       UUID                NOT NULL,                 -- upstream member identity (PII-minimized)
     channel       channel             NOT NULL,                 -- shared Channel value space (reuses V6 enum)
     reason        suppression_reason  NOT NULL,                 -- 退訂 / 硬退信 / 投訴
+    -- Set by the upstream suppression sync that owns these rows (no DB DEFAULT): this system only
+    -- READS the column, so the write side intentionally lives outside the reach service.
     suppressed_at TIMESTAMPTZ         NOT NULL,
     -- One suppression entry per (user_id, channel): a given user is suppressed on a channel at most once;
     -- the lookup is keyed on exactly this pair (channel-scoped — suppressing SMS leaves EMAIL sendable).
