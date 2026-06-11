@@ -143,13 +143,13 @@
 
 ## 7. Reach orchestrator — 批次落庫、受眾展開、頻控
 
-- [ ] 7.1 實作 reach_request 批次落庫與批次冪等
+- [x] 7.1 實作 reach_request 批次落庫與批次冪等
   - Acceptance: WHEN orchestrator 消費 `reach.requested` THEN 先 upsert 一筆 reach_request，以 `unique(campaign_id, send_cycle_key, trigger_type)` 去重，同事件重投不建立第二筆批次（§5，NFR-003）
   - Acceptance: WHEN reach_request 已存在且 status IN (DISPATCHING, DONE) THEN 直接 ack 跳過（Kafka 重投保護，fan-out 已完成不重做受眾解析與 insert）；否則（PENDING/EXPANDING）進入/續跑展開（§5）
   - Acceptance: WHEN 建立批次 THEN 凍結 `target_spec_snapshot`/`reach_plan_snapshot`，活動事後被改仍可追溯當時依據（§5）
   - Depends on: 2.2, 3.1
   - Independence: serial
-  - status: not_started
+  - status: passing
 - [ ] 7.2 實作 AudienceResolver（位於 reach）將 targetSpec 解析為收件人
   - Acceptance: WHEN 給定 targetSpec THEN 由 reach 模組統一解析為收件人清單，支援靜態名單與簡單條件分眾（會員等級、地區），campaign 不展開收件人（§4，FR-007/FR-013）
   - Depends on: 1.2

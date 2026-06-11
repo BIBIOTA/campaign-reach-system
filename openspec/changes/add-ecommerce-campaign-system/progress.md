@@ -322,3 +322,20 @@
   - Spec-reviewer: ✅ Spec compliant（5/5；DE→CC→shouldTrigger→RR 同一 topic 路徑2、重用 path-1 ReachRequestPublisher 下游一致、registry 例外隔離、at-least-once 處理後才 ack、campaign↛reach 守住）
   - Code-quality-reviewer: ✅ Approved（無 Critical/Important；handler/adapter 分離乾淨、例外隔離分層不重複包裹、deserializer trusted-packages 限定不放 *、gated factory 僅影響本 consumer；Minor：與 path-1 結構近似可接受、userId 為合約欄位保留、swallow-then-ack 缺 metric 觀測列 follow-up）
 - Next action: Section 6（6.1–6.3）全數 passing；執行 final pass（`./gradlew check` + `openspec validate add-ecommerce-campaign-system --strict`）後 invoke spec-driven-dev:verification-before-completion。
+
+## Session 38 — 2026-06-11 14:00
+- Stage: SDD
+- Task: 7.1 實作 reach_request 批次落庫與批次冪等
+- Transition: not_started → in_progress
+- Next action: 於新分支 feat/section-7-reach-orchestrator 派發 implementer subagent，於 reach/orchestrator 實作 ReachOrchestrator 消費 reach.requested（at-least-once）、以 unique(campaign_id, send_cycle_key, trigger_type) upsert 一筆 reach_request 去重、凍結 target_spec_snapshot/reach_plan_snapshot、已 DISPATCHING/DONE 直接 ack 跳過，並以 Flyway migration 建立 reach_request 表（對齊 05-er），完成後接 spec-reviewer 與 code-quality-reviewer。
+
+## Session 39 — 2026-06-11 14:45
+- Stage: SDD
+- Task: 7.1 實作 reach_request 批次落庫與批次冪等
+- Transition: in_progress → passing
+- Evidence:
+  - Commits: 9ce628d feat(reach): add reach_request batch landing with fan-out idempotency (task 7.1); 0b573bb docs(reach): document deliberate omission of listener configurer in reach Kafka factory (task 7.1 review)
+  - Tests: ReachRequestLanderTest 5 fast unit tests green（@Nested 對應三 scenario：首次消費插入 PENDING+凍結 target/reach 快照後進入展開；已 PENDING 續跑展開不再 insert；並發 insert 競態以 unique 約束擋下 re-read winner 不建第二筆；已 DISPATCHING/已 DONE 直接跳過 verifyNoInteractions(expander)）。完整 `./gradlew check` BUILD SUCCESSFUL（reach spotless/checkstyle/spotbugs/test + app ArchUnit + JaCoCo 全綠；Docker-gated 整合測試本沙箱無 Docker → skip）。
+  - Spec-reviewer: ✅ Spec compliant（5/5；V4__reach_request.sql 16 欄+unique(campaign_id,send_cycle_key,trigger_type)+trigger_type/reach_request_status enum 對齊 05-er、消費步驟對齊 01-sequence、entity 刻意不映 7.3 的 count/timestamp 欄為合理 scope 決策、reach↛campaign 守住）
+  - Code-quality-reviewer: ✅ Approved（無 Critical/Important；thin-listener→Kafka-free-handler 對齊 DomainEventConsumer 範式、專屬 typed at-least-once factory 與 campaign DLT 隔離有據、lost-insert-race + @Transactional saveAndFlush 正確、NoOpAudienceExpander plain @Component 為乾淨 7.3 handoff、spotbugs exclude 窄且有據；Minor #2 reach factory 未走 listener configurer → 已於 0b573bb 文件化刻意省略，因其 raw <Object,Object> 簽章與 typed deserializer 不相容且本專案未設 listener.* 調校）
+- Next action: dispatch implementer subagent for task 7.2（AudienceResolver：reach 模組將 targetSpec 解析為收件人清單，支援靜態名單與會員等級/地區條件分眾）。
