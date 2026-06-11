@@ -47,7 +47,11 @@ class CampaignDeactivationCancelsReachTasksIntegrationTest extends AbstractInteg
     private static final String OPERATOR_USER = "it-operator";
 
     private static final String OPERATOR_PASS = "it-operator-secret";
-    private static final Instant START = Instant.parse("2026-01-01T00:00:00Z");
+    // Far-future window so the real CampaignLifecycleScheduler (booted in this @SpringBootTest context,
+    // sweeping every fixed-delay tick) never auto-advances this campaign: a past startAt would let the
+    // scheduler race the test's manual SCHEDULED→RUNNING transition, bumping the optimistic-lock version
+    // and failing the next operator transition with a stale-version 409.
+    private static final Instant START = Instant.parse("2999-01-01T00:00:00Z");
     private static final Instant END = START.plusSeconds(86_400);
     private static final String REACH_PLAN =
             "{\"channel\":\"EMAIL\",\"templateRef\":\"welcome\",\"timing\":\"SCHEDULED\"}";
