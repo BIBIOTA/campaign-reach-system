@@ -24,10 +24,22 @@ dependencies {
     // and is tuned via EmailChannelProperties / programmatic CircuitBreakerConfig.
     implementation(libs.resilience4j.spring.boot3)
 
+    // Internal reach-metrics read REST (task 10.3, FR-018): a read-only query slice exposing
+    // campaign-level reach metrics + per-recipient status under /internal/reach/**. These endpoints
+    // are secured by the same /internal/** OPERATOR HTTP-Basic filter chain wired in the campaign
+    // module (CampaignSecurityConfig), so no second SecurityFilterChain is added here.
+    implementation(libs.spring.boot.starter.web)
+
     // reach may only talk to campaign through the shared kernel (event/config).
     // It must NOT depend on :campaign — enforced by the ArchUnit guard in :app.
     implementation(project(":shared"))
 
     // Unit tests for the orchestrator batch-landing decision logic (task 7.1).
     testImplementation(libs.spring.boot.starter.test)
+
+    // Web/MockMvc slice + security tests for the reach-metrics read endpoints (task 10.3). The
+    // /internal/** OPERATOR chain is owned by the campaign module at runtime (CampaignSecurityConfig);
+    // these test-only deps let the reach slice mirror that auth contract in isolation.
+    testImplementation(libs.spring.boot.starter.security)
+    testImplementation(libs.spring.security.test)
 }

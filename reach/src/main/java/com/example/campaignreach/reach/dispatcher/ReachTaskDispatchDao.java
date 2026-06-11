@@ -37,35 +37,69 @@ public class ReachTaskDispatchDao {
 
     /**
      * Stage-one claim: lock the next batch of dispatchable rows ({@code FOR UPDATE SKIP LOCKED} so
-     * concurrent workers take disjoint rows), mark them PROCESSING + lease, and return the fields the
-     * out-of-transaction send needs (joining the owning reach_request for the frozen reach plan). The
-     * {@code idx_reach_task_dispatch(status, next_retry_at, created_at)} index backs the predicate;
-     * oldest-first ordering keeps it FIFO-ish.
+     * concurrent workers take disjoint rows), cancel rows whose campaign has been deactivated, mark the
+     * remaining eligible rows PROCESSING + lease, and return the fields the out-of-transaction send
+     * needs (joining the owning reach_request for the frozen reach plan). The {@code
+     * idx_reach_task_dispatch(status, next_retry_at, created_at)} index backs the predicate; oldest-first
+     * ordering keeps it FIFO-ish.
+     *
+     * <p>The {@code disabled} CTE is a deliberate data-modifying side effect: PostgreSQL executes it even
+     * though the final SELECT returns only {@code claimed} rows, so disabled-campaign tasks are cancelled
+     * in the same short claim transaction without being handed to the dispatcher.
      */
     private static final String CLAIM_SQL_TEMPLATE =
             """
-            WITH claimed AS (
+            WITH candidates AS (
                 SELECT t.id
                 FROM reach_task t
+                JOIN campaign c ON c.id = t.campaign_id
                 WHERE t.status IN ('PENDING'::reach_task_status, 'RETRY_SCHEDULED'::reach_task_status)
                   AND (t.next_retry_at IS NULL OR t.next_retry_at <= ?)
                   AND t.channel IN (__CHANNELS__)
                 ORDER BY t.created_at
-                FOR UPDATE SKIP LOCKED
+                FOR UPDATE OF t SKIP LOCKED
                 LIMIT ?
+            ),
+            disabled AS (
+                UPDATE reach_task u
+                SET status = 'CANCELLED'::reach_task_status,
+                    locked_by = NULL,
+                    locked_until = NULL
+                FROM candidates, campaign c
+                WHERE u.id = candidates.id
+                  AND c.id = u.campaign_id
+                  AND c.status IN ('PAUSED'::campaign_status, 'ENDED'::campaign_status)
+                RETURNING u.id
+            ),
+            claimed AS (
+                UPDATE reach_task u
+                SET status = 'PROCESSING'::reach_task_status,
+                    locked_by = ?,
+                    locked_until = ?,
+                    processing_started_at = ?
+                FROM candidates, campaign c
+                WHERE u.id = candidates.id
+                  AND c.id = u.campaign_id
+                  AND c.status NOT IN ('PAUSED'::campaign_status, 'ENDED'::campaign_status)
+                RETURNING u.id, u.campaign_id, u.user_id, u.channel, u.send_cycle_key, u.reach_request_id,
+                    COALESCE(u.retry_count, 0) AS retry_count
             )
-            UPDATE reach_task u
-            SET status = 'PROCESSING'::reach_task_status,
-                locked_by = ?,
-                locked_until = ?,
-                processing_started_at = ?
-            FROM claimed
-            WHERE u.id = claimed.id
-            RETURNING u.id, u.campaign_id, u.user_id, u.channel, u.send_cycle_key,
-                (SELECT r.reach_plan_snapshot->>'templateRef' FROM reach_request r WHERE r.id = u.reach_request_id)
+            SELECT claimed.id, claimed.campaign_id, claimed.user_id, claimed.channel, claimed.send_cycle_key,
+                (SELECT r.reach_plan_snapshot->>'templateRef' FROM reach_request r WHERE r.id = claimed.reach_request_id)
                     AS template_ref,
-                COALESCE(u.retry_count, 0) AS retry_count
+                claimed.retry_count
+            FROM claimed
             """; // __CHANNELS__ is replaced with the channel IN-list placeholders (each cast ?::channel)
+
+    private static final String CANCEL_PENDING_FOR_CAMPAIGN_SQL =
+            """
+            UPDATE reach_task
+            SET status = 'CANCELLED'::reach_task_status,
+                locked_by = NULL,
+                locked_until = NULL
+            WHERE campaign_id = ?
+              AND status IN ('PENDING'::reach_task_status, 'RETRY_SCHEDULED'::reach_task_status)
+            """;
 
     private static final String MARK_SENT_SQL =
             """
@@ -192,6 +226,20 @@ public class ReachTaskDispatchDao {
                         rs.getString("send_cycle_key"),
                         rs.getString("template_ref"),
                         rs.getInt("retry_count"))));
+    }
+
+    /**
+     * Cancels not-yet-sent tasks for a campaign that entered PAUSED or ENDED. PROCESSING rows are
+     * deliberately outside the predicate: a row already claimed before cancellation is allowed to
+     * complete per the accepted bounded leakage window.
+     *
+     * @param campaignId campaign whose unsent tasks should be cancelled
+     * @return number of rows transitioned to CANCELLED
+     */
+    public int cancelPendingForCampaign(UUID campaignId) {
+        Integer cancelled =
+                transactionTemplate.execute(status -> jdbcTemplate.update(CANCEL_PENDING_FOR_CAMPAIGN_SQL, campaignId));
+        return cancelled == null ? 0 : cancelled;
     }
 
     /**

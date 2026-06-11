@@ -9,6 +9,16 @@ spring:
   application:
     name: campaign-reach-system
 
+  # Scheduling thread pool. Multiple independent @Scheduled jobs run across the deployable
+  # (campaign lifecycle sweep, reach dispatcher poll, lease reaper, reach_request count aggregation).
+  # Spring's default TaskScheduler is single-threaded, which would serialize them onto one thread and
+  # let a slow full-scan aggregation tick delay timely dispatch/reaping. A small pool keeps these
+  # jobs from head-of-line blocking each other (each job is still self-non-overlapping via fixedDelay).
+  task:
+    scheduling:
+      pool:
+        size: 4
+
   # PostgreSQL DataSource (design.md §3, §9). URL has no real default so a
   # missing value fails fast rather than silently using an embedded DB.
   datasource:

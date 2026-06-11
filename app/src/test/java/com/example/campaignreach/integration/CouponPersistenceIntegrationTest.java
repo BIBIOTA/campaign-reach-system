@@ -49,7 +49,16 @@ class CouponPersistenceIntegrationTest extends AbstractIntegrationTest {
     private CouponRedemptionRepository couponRedemptionRepository;
 
     @AfterEach
-    void clearOperator() {
+    void cleanUp() {
+        // Tear down every row this test seeded, in FK order (redemption → code → coupon_campaign →
+        // campaign). The PostgreSQL container is a JVM-wide singleton shared across all integration
+        // classes (AbstractIntegrationTest), so leftover coupon_campaign rows would otherwise block
+        // the global `DELETE FROM campaign` cleanup other classes run, failing them on the
+        // coupon_campaign_campaign_id_fkey constraint.
+        couponRedemptionRepository.deleteAll();
+        couponCodeRepository.deleteAll();
+        couponCampaignRepository.deleteAll();
+        campaignRepository.deleteAll();
         CurrentOperator.clear();
     }
 

@@ -458,3 +458,54 @@
   - Spec-reviewer: ✅ Spec compliant（5/5；scenario「回收卡死任務」由 ReachTaskReaperTest 與 ReachTaskDispatchDaoIntegrationTest 覆蓋，guarded `UPDATE ... WHERE status='PROCESSING' AND locked_until < ?` 對齊 02-state lease recovery，非 PROCESSING/未過期 lease 不動，未越界實作 10.1 取消語意）
   - Code-quality-reviewer: ✅ Approved（無 Critical/Important；Reaper 僅負責 scheduled tick + logging，DAO 保持短事務與參數化 SQL，reset 操作 idempotent 且不需要 ShedLock；測試含 wrapper 行為與真 DB SQL 行為）
 - Next action: Section 9（9.1–9.3）全數 passing；執行 final pass（`./gradlew check` + `openspec validate add-ecommerce-campaign-system --strict`）後 invoke spec-driven-dev:verification-before-completion。
+
+## Session 54 — 2026-06-11 17:47
+- Stage: SDD
+- Task: 10.1 實作活動暫停/結束時取消未送 task（取消競態語意）
+- Transition: not_started → in_progress
+- Next action: 派發 implementer subagent 實作活動 PAUSED/ENDED 時取消 PENDING/RETRY_SCHEDULED reach_task，並在 dispatcher claim 同一短事務內重檢 campaign.status 序列化取消與撈取。
+
+## Session 55 — 2026-06-11 18:00
+- Stage: SDD
+- Task: 10.1 實作活動暫停/結束時取消未送 task（取消競態語意）
+- Transition: in_progress → passing
+- Evidence:
+  - Commits: a9e289a Implement reach task cancellation on campaign deactivation
+  - Tests: `./gradlew check` BUILD SUCCESSFUL；`./gradlew spotlessApply :reach:check :app:test` BUILD SUCCESSFUL；`openspec validate add-ecommerce-campaign-system --strict` valid；Docker-gated ReachTaskDispatchDaoIntegrationTest locally skipped where Docker unavailable
+  - Spec-reviewer: ✅ Spec compliant（3/3 scenarios covered；diagram contract satisfied）
+  - Code-quality-reviewer: ✅ Approved（無 Critical/Important；2 項 Minor，其中 side-effect CTE 註解與 dispatcher 過期 out-of-scope 註解已修正並 amend）
+- Next action: dispatch implementer subagent for task 10.2（reach_request 計數背景聚合回填，避免逐筆 update 同一批次列熱點）。
+
+## Session 56 — 2026-06-11 18:00
+- Stage: SDD
+- Task: 10.2 實作 reach_request 計數背景聚合回填（避免第二熱點）
+- Transition: not_started → in_progress
+- Next action: 派發 implementer subagent 實作背景排程定期聚合 reach_task 狀態並回填 reach_request sent/failed/pending_count，避免在每筆 task 狀態變更時更新同一批次列。
+
+## Session 57 — 2026-06-11 22:30
+- Stage: SDD
+- Task: 10.2 實作 reach_request 計數背景聚合回填（避免第二熱點）
+- Transition: in_progress → passing
+- Evidence:
+  - Commits: c7bf6a7 Implement reach request count aggregation
+  - Tests: 單一 set-based `UPDATE reach_request … FROM aggregated`（active EXPANDING/DISPATCHING 批次、FILTER 折疊 reach_task 狀態為 pending/sent/failed_count、`IS DISTINCT FROM` 守衛只寫變動列）+ V9 `idx_reach_task_request_status (reach_request_id, status)` 支援聚合 join；`@Scheduled(fixedDelay :5000)` tick（@EnableScheduling 由 InfrastructureConfig 全域開啟）。測試：ReachRequestCountAggregatorTest（SQL 形狀/active 述詞）、ReachRequestCountAggregationSchedulerTest（tick 委派）、ReachTaskDispatchDaoIntegrationTest（@RequiresDocker 真 Postgres：狀態分桶 PENDING/PROCESSING/RETRY_SCHEDULED→pending、SENT→sent、FAILED/DLQ→failed、CANCELLED 排除；DONE 批次不掃；markSent 不同步更新批次列直到聚合跑）。Docker-gated IT 本沙箱依 @RequiresDocker 行為 skip。
+  - Spec-reviewer: ✅ Spec compliant（5/5；in-scope 場景「計數背景聚合避免熱點」THEN+AND 兩子句皆有真 DB 覆蓋、05-ER 計數欄位/enum/FK 與 V4/V9 對齊、set-based 且 scoped active 批次、grep 確認 dispatcher markSent/markFailed/scheduleRetry 無 reach_request 逐筆 counter write-back、未越界 10.3 查詢 API）
+  - Code-quality-reviewer: ✅ Approved（無 Critical/Important；aggregator(SQL projector)/scheduler(tick) 職責分離對齊既有 DAO/Reaper pattern、靜態參數化 SQL 無注入、hot-row 規避正確、行為層覆蓋落在 integration 層為正確分層、javadoc 同步；3 Minor：unit test 為 SQL 形狀斷言屬專案慣例、TransactionTemplate 包裝略多於單一 statement 所需但無害且與 DAO 一致、@SuppressFBWarnings(EI_EXPOSE_REP2) 與既有 idiom 一致——皆非阻擋）
+- Next action: dispatch implementer subagent for task 10.3（成效查詢 API：活動彙總送達率/失敗率/狀態分布 + 單筆收件人狀態查詢），依賴 10.2。
+
+## Session 58 — 2026-06-11 22:40
+- Stage: SDD
+- Task: 10.3 實作成效查詢 API（活動彙總 + 單筆收件人狀態）
+- Transition: not_started → in_progress
+- Next action: 派發 implementer subagent 於 reach 模組實作唯讀成效查詢 API——活動維度彙總（送達率/失敗率/各 ReachTaskStatus 人數分布，讀自 10.2 聚合的 reach_request 計數並由 reach_task 補狀態分布）與單筆收件人狀態查詢（user_id+campaign_id → 觸達狀態，PII 最小化只回狀態不回 email），對齊既有 /internal back-office OPERATOR Basic-auth 模式，完成後接 spec-reviewer 與 code-quality-reviewer。
+
+## Session 59 — 2026-06-11 22:55
+- Stage: SDD
+- Task: 10.3 實作成效查詢 API（活動彙總 + 單筆收件人狀態）
+- Transition: in_progress → passing
+- Evidence:
+  - Commits: 9b7a8a8 Implement reach metrics query API (task 10.3)（含 package-info.java stale-javadoc Minor 修正 amend）
+  - Tests: reach/metrics 唯讀查詢切片——GET /internal/reach/campaigns/{id}/metrics（CampaignReachMetrics：deliveredRate=SENT/total、failedRate=(FAILED+DLQ)/total、全 7 種 ReachTaskStatus 人數分布 grouped from reach_task；total=0 不除零）+ GET /internal/reach/campaigns/{id}/recipients/{userId}（RecipientReachView：PII 最小化僅回 campaignId/userId/channel/sendCycleKey/status）。測試：CampaignReachMetricsTest（rate math 含零分母）、ReachMetricsControllerTest（MockMvc slice：回應形狀 + email/message 缺席斷言 + auth 401/403/200）、ReachMetricsDaoIntegrationTest（@RequiresDocker 真 Postgres：跨兩批次 GROUP BY status、跨活動/他人列排除、非收件人空集）。`./gradlew check` BUILD SUCCESSFUL（spotless/checkstyle/spotbugsMain/test/ArchUnit reach↛campaign/JaCoCo 全綠；Docker-gated IT 本沙箱 auto-skip）。
+  - Spec-reviewer: ✅ Spec compliant（6/6；兩 in-scope 場景三層測試 name-mapped、deliveredRate/failedRate/全狀態分布齊備且零分母守衛、單筆查詢多 cycle/channel 集合 + 非收件人空集 200、PII 最小化無 email/content、05-ER 欄位/enum/索引契約符合、未動 10.2 aggregator/dispatcher、reach↛campaign 守住 campaignId 為純 UUID）
+  - Code-quality-reviewer: ✅ Approved（無 Critical/Important；controller→service→DAO 分層恰當、rate math 集中且測試覆蓋、SQL 全參數化 enum cast 對齊既有 DAO、defensive copy + null guard、PII 行為層斷言、@RequiresDocker IT 真 DB 行為涵蓋負向案例、spring-boot-starter-web 於單一 :app web context 不引入第二 component-scan；1 Minor：package-info stale javadoc 已 amend 修正；slice 鏡像 security chain 因 ArchUnit 邊界為合理做法非 smell）
+- Next action: Section 10（10.1–10.3）全數 passing；剩餘 not_started 任務為 11.1（PII/資料保留）與 12.1（10 萬筆壓測），非本次「Task 10」範圍——對 add-ecommerce-campaign-system 跑 final pass（`openspec validate --strict`）後可視需要 invoke spec-driven-dev:verification-before-completion。

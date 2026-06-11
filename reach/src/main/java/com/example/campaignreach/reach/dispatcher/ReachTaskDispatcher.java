@@ -60,9 +60,13 @@ import org.springframework.stereotype.Component;
  * throws, the row is left PROCESSING with an expired lease for the Reaper (task 9.3) to reclaim, so the
  * task is never silently lost (「不靜默遺失」).
  *
- * <p><strong>Out of scope.</strong> The Reaper is task 9.3, and the campaign PAUSED/ENDED cancellation
- * re-check is task 10.1 — neither is implemented here. A consumer for {@code reach.dlq} (replay tooling)
- * is also out of scope; this only publishes.
+ * <p><strong>Campaign cancellation (task 10.1).</strong> Stage-one claim re-checks the owning campaign
+ * status inside the same short DB transaction. If the campaign is already PAUSED/ENDED, the task is
+ * marked CANCELLED instead of PROCESSING; a task already PROCESSING before cancellation is allowed to
+ * complete.
+ *
+ * <p><strong>Out of scope.</strong> A consumer for {@code reach.dlq} (replay tooling) is out of scope;
+ * this dispatcher only publishes.
  */
 @Component
 public class ReachTaskDispatcher {
