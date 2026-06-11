@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -18,6 +17,7 @@ import com.example.campaignreach.reach.audience.TargetSpecParser;
 import com.example.campaignreach.shared.event.Channel;
 import com.example.campaignreach.shared.event.TriggerType;
 import java.time.Instant;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -31,6 +31,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.PreparedStatementSetter;
+import org.springframework.jdbc.core.RowMapper;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 
 /**
@@ -104,10 +106,11 @@ class PagedAudienceExpanderTest {
         when(audienceResolver.resolve(any(TargetSpec.class))).thenReturn(recipients);
     }
 
-    /** No user is frequency-capped (EXISTS returns false for every recipient). */
+    /** No user is frequency-capped (batch query returns empty set for every page). */
+    @SuppressWarnings("unchecked")
     private void noFrequencyCap() {
-        when(jdbcTemplate.queryForObject(anyString(), eq(Boolean.class), any(), any(), any()))
-                .thenReturn(Boolean.FALSE);
+        when(jdbcTemplate.query(anyString(), any(PreparedStatementSetter.class), any(RowMapper.class)))
+                .thenReturn(Collections.emptyList());
     }
 
     @Nested
@@ -183,18 +186,20 @@ class PagedAudienceExpanderTest {
 
         @Test
         @DisplayName("不同週期窗口內已觸達者被跳過，未被頻控者照常 INSERT（頻控與冪等分離）")
+        @SuppressWarnings("unchecked")
         void usersReachedInDifferentCycleWithinWindowAreSkipped() {
             List<Recipient> recipients = recipients(3);
             stubResolution(recipients);
-            // Cap the SECOND recipient only (true once, false otherwise).
-            when(jdbcTemplate.queryForObject(anyString(), eq(Boolean.class), any(), any(), any()))
-                    .thenReturn(Boolean.FALSE, Boolean.TRUE, Boolean.FALSE);
+            // Page 1 (r0, r1): batch query returns r1 as capped. Page 2 (r2): none capped.
+            when(jdbcTemplate.query(anyString(), any(PreparedStatementSetter.class), any(RowMapper.class)))
+                    .thenReturn(List.of(recipients.get(1).userId()))
+                    .thenReturn(Collections.emptyList());
 
             expander.expand(landedBatch(ReachRequestStatus.PENDING));
 
-            // The frequency-cap predicate keys on user_id AND a DIFFERENT send_cycle (<> current).
+            // Batch frequency-cap query must include the send_cycle_key <> ? exclusion clause.
             verify(jdbcTemplate, atLeastOnce())
-                    .queryForObject(contains("send_cycle_key <> ?"), eq(Boolean.class), any(), eq(SEND_CYCLE), any());
+                    .query(contains("send_cycle_key <> ?"), any(PreparedStatementSetter.class), any(RowMapper.class));
             // Only 2 of 3 survive the cap (page size 2 -> page1 inserts 1 survivor, page2 inserts 1).
             ArgumentCaptor<List<Object[]>> batches = batchCaptor();
             verify(jdbcTemplate, atLeastOnce()).batchUpdate(contains("ON CONFLICT"), batches.capture());
@@ -204,10 +209,13 @@ class PagedAudienceExpanderTest {
 
         @Test
         @DisplayName("整頁全被頻控時不發出空的 batchUpdate")
+        @SuppressWarnings("unchecked")
         void emptyPageAfterCapIssuesNoBatchUpdate() {
-            stubResolution(recipients(1));
-            when(jdbcTemplate.queryForObject(anyString(), eq(Boolean.class), any(), any(), any()))
-                    .thenReturn(Boolean.TRUE);
+            List<Recipient> page = recipients(1);
+            stubResolution(page);
+            // Batch query reports the single recipient as capped.
+            when(jdbcTemplate.query(anyString(), any(PreparedStatementSetter.class), any(RowMapper.class)))
+                    .thenReturn(List.of(page.get(0).userId()));
 
             expander.expand(landedBatch(ReachRequestStatus.PENDING));
 

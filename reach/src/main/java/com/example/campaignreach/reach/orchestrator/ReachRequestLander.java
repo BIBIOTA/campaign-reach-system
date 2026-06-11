@@ -8,7 +8,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Kafka-free batch-landing logic for an inbound {@link ReachRequested} (task 7.1, spec §5, FR-013,
@@ -45,61 +46,72 @@ public class ReachRequestLander {
 
     private final ReachRequestRepository repository;
     private final AudienceExpander audienceExpander;
+    private final TransactionTemplate transactionTemplate;
 
     /**
      * @param repository persistence port whose unique constraint is the dedup source of truth
      * @param audienceExpander seam that resolves {@code targetSpec} and fans the batch out into tasks
      *     (real implementation arrives in task 7.3; a no-op default keeps the landing path wired)
+     * @param transactionManager backs the short transaction that lands the {@link ReachRequest} row;
+     *     expansion runs outside that transaction so each page commits independently
      */
-    public ReachRequestLander(ReachRequestRepository repository, AudienceExpander audienceExpander) {
+    public ReachRequestLander(
+            ReachRequestRepository repository,
+            AudienceExpander audienceExpander,
+            PlatformTransactionManager transactionManager) {
         this.repository = repository;
         this.audienceExpander = audienceExpander;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
     /**
      * Lands the batch for one {@link ReachRequested} and routes it to expansion or skip per the
      * idempotency rules above. Safe to call again on Kafka redelivery: it never creates a second batch.
      *
+     * <p>The {@link ReachRequest} row is written inside a short transaction that commits before
+     * {@link AudienceExpander#expand} is called. This keeps the landing commit independent of the
+     * fan-out so each page in the expander can commit in its own transaction — the crash-resume
+     * design (design.md §9) depends on this boundary.
+     *
      * @param event the activity-level reach request (carries {@code targetSpec}/{@code reachPlan} JSON
      *     snapshots but no recipient list); must not be {@code null}
      */
-    @Transactional
     public void land(ReachRequested event) {
-        Optional<ReachRequest> existing = repository.findByCampaignIdAndSendCycleKeyAndTriggerType(
-                event.campaignId(), event.sendCycle(), event.triggerType());
-        if (existing.isPresent()) {
-            routeExisting(existing.get());
-            return;
+        ReachRequest resolved = transactionTemplate.execute(status -> {
+            Optional<ReachRequest> existing = repository.findByCampaignIdAndSendCycleKeyAndTriggerType(
+                    event.campaignId(), event.sendCycle(), event.triggerType());
+            if (existing.isPresent()) {
+                return existing.get();
+            }
+            try {
+                ReachRequest landed = repository.saveAndFlush(newBatch(event));
+                LOG.info(
+                        "Landed reach_request {} for campaign {} sendCycle={} triggerType={}",
+                        landed.getId(),
+                        landed.getCampaignId(),
+                        landed.getSendCycleKey(),
+                        landed.getTriggerType());
+                return landed;
+            } catch (DataIntegrityViolationException race) {
+                // Concurrent delivery of the same (campaign_id, send_cycle_key, trigger_type) won the insert;
+                // the unique constraint rejected ours. Re-read and route the row the other delivery landed so
+                // we never create a second batch.
+                LOG.debug(
+                        "Lost insert race for campaign {} sendCycle={}; resolving against existing batch",
+                        event.campaignId(),
+                        event.sendCycle());
+                return repository
+                        .findByCampaignIdAndSendCycleKeyAndTriggerType(
+                                event.campaignId(), event.sendCycle(), event.triggerType())
+                        .orElseThrow(() -> new IllegalStateException(
+                                "reach_request unique-constraint violation but no existing batch found for campaign "
+                                        + event.campaignId() + " sendCycle=" + event.sendCycle(),
+                                race));
+            }
+        });
+        if (resolved != null) {
+            routeExisting(resolved);
         }
-
-        ReachRequest landed;
-        try {
-            landed = repository.saveAndFlush(newBatch(event));
-        } catch (DataIntegrityViolationException race) {
-            // Concurrent delivery of the same (campaign_id, send_cycle_key, trigger_type) won the insert;
-            // the unique constraint rejected ours. Re-read and route the row the other delivery landed so
-            // we never create a second batch.
-            LOG.debug(
-                    "Lost insert race for campaign {} sendCycle={}; resolving against existing batch",
-                    event.campaignId(),
-                    event.sendCycle());
-            ReachRequest winner = repository
-                    .findByCampaignIdAndSendCycleKeyAndTriggerType(
-                            event.campaignId(), event.sendCycle(), event.triggerType())
-                    .orElseThrow(() -> new IllegalStateException(
-                            "reach_request unique-constraint violation but no existing batch found for campaign "
-                                    + event.campaignId() + " sendCycle=" + event.sendCycle(),
-                            race));
-            routeExisting(winner);
-            return;
-        }
-        LOG.info(
-                "Landed reach_request {} for campaign {} sendCycle={} triggerType={}",
-                landed.getId(),
-                landed.getCampaignId(),
-                landed.getSendCycleKey(),
-                landed.getTriggerType());
-        audienceExpander.expand(landed);
     }
 
     /**

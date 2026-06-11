@@ -20,6 +20,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.SimpleTransactionStatus;
 
 /**
  * Fast unit tests for {@link ReachRequestLander} (task 7.1; spec §5 scenarios "同事件重投只建一筆批次",
@@ -41,11 +43,15 @@ class ReachRequestLanderTest {
     @Mock
     private AudienceExpander audienceExpander;
 
+    @Mock
+    private PlatformTransactionManager transactionManager;
+
     private ReachRequestLander lander;
 
     @BeforeEach
     void setUp() {
-        lander = new ReachRequestLander(repository, audienceExpander);
+        when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
+        lander = new ReachRequestLander(repository, audienceExpander, transactionManager);
     }
 
     private static ReachRequested scheduledEvent() {
