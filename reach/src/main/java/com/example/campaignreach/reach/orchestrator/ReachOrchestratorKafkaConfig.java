@@ -64,6 +64,17 @@ public class ReachOrchestratorKafkaConfig {
                 new HashMap<>(kafkaProperties.buildConsumerProperties(sslBundles.getIfAvailable()));
         config.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
 
+        // application.yml pins the campaign consumer's deserializer via PROPERTIES
+        // (spring.deserializer.* / spring.json.value.default.type=DomainBehaviorEvent /
+        // spring.json.trusted.packages). We instead pass typed deserializer INSTANCES below, so those
+        // property-based keys must be stripped from this factory's copy of the config: a JsonDeserializer
+        // configured both by setters and by spring.json.* properties throws "JsonDeserializer must be
+        // configured with property setters, or via configuration properties; not both" when the reach
+        // listener container starts (which otherwise tears down the whole @SpringBootTest context).
+        config.remove(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG);
+        config.remove(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG);
+        config.keySet().removeIf(key -> key.startsWith("spring.json.") || key.startsWith("spring.deserializer."));
+
         JsonDeserializer<ReachRequested> valueDeserializer = new JsonDeserializer<>(ReachRequested.class);
         valueDeserializer.addTrustedPackages("com.example.campaignreach.shared.event");
         return new DefaultKafkaConsumerFactory<>(
