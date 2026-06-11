@@ -407,3 +407,9 @@
   - Spec-reviewer: ✅ Spec compliant（5/5；V7__suppression.sql user_id/channel/reason 對齊 design.md §10、reuse V6 channel pg enum、PII 最小化僅 user_id 無 email、composite PK(user_id,channel) channel-scoped 查表且雙向測試、SuppressionVerdict.failedStatus() 重用 ReachTaskStatus.FAILED 不增 ad-hoc 狀態、guard 僅回 verdict 不寫 reach_task 為 Section-9 dispatcher seam、無 dispatcher/retry/DLQ/retention/退訂入口外洩、reach↛campaign 守住；ER 未繪 suppression 但 §10+spec 明訂故非 scope creep）
   - Code-quality-reviewer: ✅ Approved（無 Critical/Important；@IdClass + NAMED_ENUM 映射與 AudienceListMember/ReachRequest 慣例一致、PII 最小化、SuppressionVerdict record 不變式對稱(suppressed⇔reason)+NOT_SUPPRESSED singleton、evaluate 信任邊界 null 守衛適度、測試驅動真實 guard 僅 mock repository 且 channel-scoping 雙向、檔案切分 Entry/Id/Repository/Reason/Verdict/Guard 內聚；composite PK 一通道一 reason 為 consume-only MVP 可接受權衡已記；2 Minor：test inline Mockito.mock FQN、suppressed_at 存而未讀皆比照 AudienceListMember.added_at 之 audit provenance 非投機，不阻擋）
 - Next action: Section 8（8.1–8.2）全數 passing；執行 final pass（`./gradlew check` + `openspec validate add-ecommerce-campaign-system --strict`）後 invoke spec-driven-dev:verification-before-completion。
+
+## Session 48 — 2026-06-11 19:30
+- Stage: SDD
+- Task: 9.1 實作兩階段事務發送（FOR UPDATE SKIP LOCKED + 租約）
+- Transition: not_started → in_progress
+- Next action: 派發 implementer subagent，於 reach/dispatcher 實作兩階段短事務發送（階段1 FOR UPDATE SKIP LOCKED 撈 PENDING/RETRY_SCHEDULED 且 next_retry_at<=now、breaker 未開時標 PROCESSING+locked_by/locked_until 後立即 commit；事務外 ChannelAdapter.send；階段2 新事務回寫 SENT+寫 send_result/清鎖 或 RETRY_SCHEDULED+指數退避；breaker 開於標 PROCESSING 前跳過維持 PENDING、標 PROCESSING 後快速失敗走階段2 RETRY_SCHEDULED），新增 V8 send_result migration，完成後接 spec-reviewer 與 code-quality-reviewer。

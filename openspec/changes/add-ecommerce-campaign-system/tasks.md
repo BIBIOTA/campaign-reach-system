@@ -188,7 +188,7 @@
   - Acceptance: WHEN breaker 於標 PROCESSING 前已開啟 THEN 跳過該筆、任務維持 PENDING；WHEN breaker 在已標 PROCESSING 後快速失敗 THEN 比照可重試走階段2回寫 RETRY_SCHEDULED，不卡在 PROCESSING（§6）
   - Depends on: 7.3, 8.1, 8.2
   - Independence: serial
-  - status: not_started
+  - status: in_progress
 - [ ] 9.2 實作重試分類、退避上限與 DLQ
   - Acceptance: WHEN 可重試錯誤（網路/429/5xx）THEN 走指數退避 1m→5m→30m 最多 3 次；WHEN 不可重試（地址無效/退訂）THEN 直接 FAILED（§6，FR-015/US-006）
   - Acceptance: WHEN 重試超過上限 THEN task 進 `reach.dlq` + 標記，供人工檢視與重放，不靜默遺失（§6，FR-016/US-006）

@@ -85,6 +85,7 @@ public class EmailAdapter implements ChannelAdapter {
      *     non-consuming state read — it does not acquire a breaker permit, so it never perturbs the
      *     sliding-window accounting.
      */
+    @Override
     public boolean isAvailable() {
         CircuitBreaker.State state = circuitBreaker.getState();
         return state != CircuitBreaker.State.OPEN && state != CircuitBreaker.State.FORCED_OPEN;

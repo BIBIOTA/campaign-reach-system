@@ -32,4 +32,21 @@ public interface ChannelAdapter {
      *     (transient provider failure, or the circuit breaker short-circuiting the call)
      */
     SendResult send(ReachMessage message);
+
+    /**
+     * Whether a send over this channel is worth attempting right now — the dispatcher's pre-claim
+     * breaker check (scenario「breaker 開啟時不卡任務」). When this returns {@code false} the dispatcher
+     * skips claiming tasks for this channel and leaves them PENDING for a later re-scan, rather than
+     * marking them PROCESSING only to fast-fail.
+     *
+     * <p>The default is {@code true}: an adapter with no degradation gating is always available.
+     * {@link EmailAdapter} overrides this to report its circuit-breaker state (non-consuming — it does
+     * not acquire a breaker permit, so it never perturbs the sliding-window accounting).
+     *
+     * @return {@code true} if a send should be attempted; {@code false} while the channel is degraded
+     *     (e.g. the breaker is OPEN)
+     */
+    default boolean isAvailable() {
+        return true;
+    }
 }
