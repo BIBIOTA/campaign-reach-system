@@ -139,7 +139,7 @@ class ReachLoadReliabilityIntegrationTest extends AbstractIntegrationTest {
         ReachRequest request = landedRequest(campaignId, "cycle-LOAD");
 
         List<Recipient> recipients = IntStream.range(0, RECIPIENT_COUNT)
-                .mapToObj(i -> new Recipient(UUID.randomUUID()))
+                .mapToObj(i -> new Recipient(new UUID(0L, i)))
                 .toList();
         AudienceResolver resolver = mock(AudienceResolver.class);
         when(resolver.resolve(any(TargetSpec.class))).thenReturn(recipients);
@@ -193,7 +193,7 @@ class ReachLoadReliabilityIntegrationTest extends AbstractIntegrationTest {
         ReachRequest bigRequest = landedRequest(bigCampaignId, "cycle-BIG");
         int bigCount = Math.min(RECIPIENT_COUNT, 5_000); // representative heavy load; keeps the isolation test fast
         List<Recipient> bigRecipients = IntStream.range(0, bigCount)
-                .mapToObj(i -> new Recipient(UUID.randomUUID()))
+                .mapToObj(i -> new Recipient(new UUID(0L, i)))
                 .toList();
         AudienceResolver resolver = mock(AudienceResolver.class);
         when(resolver.resolve(any(TargetSpec.class))).thenReturn(bigRecipients);
@@ -342,7 +342,7 @@ class ReachLoadReliabilityIntegrationTest extends AbstractIntegrationTest {
                 requestId,
                 campaignId,
                 UUID.randomUUID(),
-                sendCycle + "-" + taskId,
+                sendCycle,
                 Timestamp.from(Instant.now()));
         return taskId;
     }
@@ -396,8 +396,8 @@ class ReachLoadReliabilityIntegrationTest extends AbstractIntegrationTest {
             int recipientCount, Duration fanOut, Duration dispatch, Map<String, Integer> distribution) {
         Runtime runtime = Runtime.getRuntime();
         long usedHeapMb = (runtime.totalMemory() - runtime.freeMemory()) / (1024 * 1024);
-        double fanOutRate = recipientCount / Math.max(0.001, fanOut.toMillis() / 1000.0);
-        double dispatchRate = recipientCount / Math.max(0.001, dispatch.toMillis() / 1000.0);
+        double fanOutRate = recipientCount / Math.max(1e-9, fanOut.toNanos() / 1_000_000_000.0);
+        double dispatchRate = recipientCount / Math.max(1e-9, dispatch.toNanos() / 1_000_000_000.0);
         boolean fullScale = recipientCount >= FULL_SCALE_THRESHOLD;
 
         StringBuilder sb = new StringBuilder();
@@ -460,8 +460,11 @@ class ReachLoadReliabilityIntegrationTest extends AbstractIntegrationTest {
 
         @Override
         public SendResult send(ReachMessage message) {
-            sendCount.incrementAndGet();
-            return new SendResult("stub-" + UUID.randomUUID());
+            long count = sendCount.incrementAndGet();
+            // Monotonic counter (not UUID.randomUUID) keeps providerMessageId unique without a SecureRandom
+            // call on the dispatch hot path, so the measured dispatch throughput reflects the persistence
+            // chain rather than entropy gathering.
+            return new SendResult("stub-" + count);
         }
     }
 }
