@@ -2,7 +2,7 @@ package com.example.campaignreach.reach.channel;
 
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -16,12 +16,14 @@ import org.springframework.context.annotation.Configuration;
  * tunables (sliding window, failure-rate threshold, minimum calls, cool-down, half-open probes) come
  * from {@code campaignreach.reach.email.circuit-breaker.*} with the documented defaults.
  *
- * <p>The breaker is obtained from a <em>managed</em> {@link CircuitBreakerRegistry} bean rather than a
- * throwaway local registry, so the {@code emailChannel} breaker is discoverable for observability
- * (Micrometer metrics / actuator). When the {@code resilience4j-spring-boot3} starter contributes its
- * own registry that one is used (this config only supplies a default via {@code
- * @ConditionalOnMissingBean}); either way the breaker is registered against a registry the rest of the
- * app can observe.
+ * <p>The breaker is obtained from the {@link CircuitBreakerRegistry} contributed by the {@code
+ * resilience4j-spring-boot3} auto-configuration (Micrometer metrics / actuator enabled). No fallback
+ * registry is defined here — a {@code @ConditionalOnMissingBean} in a regular {@code @Configuration}
+ * would be evaluated before auto-configuration and would silently disable the starter's full wiring.
+ *
+ * <p>{@link EmailAdapter} bean registration is also controlled here via
+ * {@code @Bean @ConditionalOnBean(EmailProviderClient.class)} to avoid the non-deterministic
+ * component-scan ordering that results from placing {@code @ConditionalOnBean} on a {@code @Component}.
  */
 @Configuration
 @EnableConfigurationProperties(EmailChannelProperties.class)
@@ -31,25 +33,24 @@ public class EmailChannelConfig {
     public static final String EMAIL_BREAKER_NAME = "emailChannel";
 
     /**
-     * Falls back to a default {@link CircuitBreakerRegistry} only when the {@code
-     * resilience4j-spring-boot3} starter has not already contributed one, so the breaker is always
-     * registered against an observable, application-managed registry.
-     *
-     * @return a managed circuit-breaker registry
-     */
-    @Bean
-    @ConditionalOnMissingBean
-    public CircuitBreakerRegistry circuitBreakerRegistry() {
-        return CircuitBreakerRegistry.ofDefaults();
-    }
-
-    /**
-     * @param registry the managed registry the breaker is registered against (observable via metrics)
+     * @param registry the auto-configured registry (from resilience4j-spring-boot3) — metrics and
+     *     actuator integration are fully active
      * @param properties the bound Email-channel tunables
      * @return the breaker that {@link EmailAdapter} executes the provider call through
      */
     @Bean
     public CircuitBreaker emailChannelBreaker(CircuitBreakerRegistry registry, EmailChannelProperties properties) {
         return registry.circuitBreaker(EMAIL_BREAKER_NAME, properties.toCircuitBreakerConfig());
+    }
+
+    /**
+     * Registers {@link EmailAdapter} only when an {@link EmailProviderClient} bean is present.
+     * Declared here (not via {@code @Component @ConditionalOnBean}) so the condition is evaluated
+     * after all bean definitions are loaded, avoiding non-deterministic component-scan ordering.
+     */
+    @Bean
+    @ConditionalOnBean(EmailProviderClient.class)
+    public EmailAdapter emailAdapter(EmailProviderClient providerClient, CircuitBreaker emailChannelBreaker) {
+        return new EmailAdapter(providerClient, emailChannelBreaker);
     }
 }

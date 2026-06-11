@@ -3,8 +3,6 @@ package com.example.campaignreach.reach.channel;
 import com.example.campaignreach.shared.event.Channel;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
-import org.springframework.stereotype.Component;
 
 /**
  * {@link ChannelAdapter} for the EMAIL channel, wrapping the external Email provider in a circuit
@@ -18,13 +16,10 @@ import org.springframework.stereotype.Component;
  *
  * <p><strong>Registration is conditional on an {@link EmailProviderClient} bean being present.</strong>
  * Task 8.1 intentionally ships only the adapter + breaker seam; the concrete SendGrid/SES {@code
- * EmailProviderClient} binding (and its {@code EMAIL_PROVIDER_API_KEY} wiring) lands in a later
- * section. Until that provider bean exists, this adapter does <em>not</em> register, so the Spring
- * context starts cleanly instead of failing on an unsatisfiable dependency — and, crucially, no
- * silent no-op "send" can happen in production: there is simply no EMAIL adapter until a real
- * provider is wired in. {@code @ConditionalOnBean} is honoured because this is a component-scanned
- * bean evaluated after the (future) provider configuration; the real binding must register its
- * {@code EmailProviderClient} bean to activate this adapter.
+ * EmailProviderClient} binding lands in a later section. Until that provider bean exists, this
+ * adapter does <em>not</em> register — registration is controlled by {@link EmailChannelConfig}
+ * via {@code @Bean @ConditionalOnBean(EmailProviderClient.class)}, which evaluates the condition
+ * after all bean definitions are loaded (avoids non-deterministic component-scan ordering).
  *
  * <p>Failure translation is the dispatcher seam (Section 9 does the write-back):
  *
@@ -38,8 +33,6 @@ import org.springframework.stereotype.Component;
  *       counts it toward its failure rate.
  * </ul>
  */
-@Component
-@ConditionalOnBean(EmailProviderClient.class)
 public class EmailAdapter implements ChannelAdapter {
 
     private final EmailProviderClient providerClient;
@@ -93,6 +86,7 @@ public class EmailAdapter implements ChannelAdapter {
      *     sliding-window accounting.
      */
     public boolean isAvailable() {
-        return circuitBreaker.getState() != CircuitBreaker.State.OPEN;
+        CircuitBreaker.State state = circuitBreaker.getState();
+        return state != CircuitBreaker.State.OPEN && state != CircuitBreaker.State.FORCED_OPEN;
     }
 }
