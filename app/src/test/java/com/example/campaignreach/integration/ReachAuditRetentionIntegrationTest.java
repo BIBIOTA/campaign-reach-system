@@ -3,6 +3,7 @@ package com.example.campaignreach.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.campaignreach.reach.dispatcher.ReachAuditTrailPurger;
+import com.example.campaignreach.reach.dispatcher.ReachAuditTrailPurger.PurgeResult;
 import com.example.campaignreach.reach.dispatcher.RetentionProperties;
 import java.sql.Timestamp;
 import java.time.Duration;
@@ -89,17 +90,22 @@ class ReachAuditRetentionIntegrationTest extends AbstractIntegrationTest {
         UUID agedInFlight = seedTask(requestId, campaignId, now.minus(Duration.ofDays(60)), "PENDING");
         // (3) Fresh + terminal (FAILED) → retained (within retention window).
         UUID freshTerminal = seedTask(requestId, campaignId, now.minus(Duration.ofDays(1)), "FAILED");
+        // (4) Exactly at the cutoff (created_at == now - retention) + terminal → retained (predicate is
+        //     strictly `created_at < cutoff`, so the boundary row survives).
+        UUID boundaryTerminal = seedTask(requestId, campaignId, now.minus(retention), "SENT");
 
         ReachAuditTrailPurger purger =
                 new ReachAuditTrailPurger(jdbcTemplate, transactionManager, new RetentionProperties(retention));
 
-        int purged = purger.purgeExpired(now);
+        PurgeResult purged = purger.purgeExpired(now);
 
-        assertThat(purged).isEqualTo(1);
+        assertThat(purged.tasks()).isEqualTo(1);
+        assertThat(purged.sendResults()).isEqualTo(1); // the one aged-terminal task's child
         assertThat(taskExists(agedTerminal)).isFalse();
         assertThat(sendResultCountFor(agedTerminal)).isZero(); // child deleted with parent, no FK violation
         assertThat(taskExists(agedInFlight)).isTrue(); // in-flight never purged
         assertThat(taskExists(freshTerminal)).isTrue(); // within retention window
+        assertThat(taskExists(boundaryTerminal)).isTrue(); // exactly at cutoff: strict `<` retains it
     }
 
     private List<String> columnsOf(String table) {

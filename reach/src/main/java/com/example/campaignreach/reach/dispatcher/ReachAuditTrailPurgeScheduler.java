@@ -1,5 +1,6 @@
 package com.example.campaignreach.reach.dispatcher;
 
+import com.example.campaignreach.reach.dispatcher.ReachAuditTrailPurger.PurgeResult;
 import java.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,9 +35,12 @@ public class ReachAuditTrailPurgeScheduler {
     /** One retention purge tick. */
     @Scheduled(fixedDelayString = "${campaignreach.reach.retention.fixed-delay-ms:3600000}")
     public void purgeExpired() {
-        int purged = purger.purgeExpired(Instant.now());
-        if (purged > 0) {
-            LOG.info("Retention purge removed {} expired reach_task(s) and their send_result rows", purged);
+        PurgeResult purged = purger.purgeExpired(Instant.now());
+        if (purged.tasks() > 0) {
+            LOG.info(
+                    "Retention purge removed {} expired reach_task(s) and {} send_result row(s)",
+                    purged.tasks(),
+                    purged.sendResults());
         }
     }
 }
