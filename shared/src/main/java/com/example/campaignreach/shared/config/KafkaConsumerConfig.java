@@ -13,6 +13,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
+import org.springframework.kafka.listener.CommonErrorHandler;
 import org.springframework.kafka.listener.ContainerProperties;
 
 /**
@@ -76,18 +77,29 @@ public class KafkaConsumerConfig {
      * {@code kafkaListenerContainerFactory} so it never silently shadows the default bean; consumers
      * must opt in explicitly via {@code @KafkaListener(containerFactory = "atLeastOnceKafkaListenerContainerFactory")}.
      *
+     * <p><strong>Poison-pill handling.</strong> A consumer module may contribute a single
+     * {@link CommonErrorHandler} bean (e.g. a {@code DefaultErrorHandler} with finite retries + a
+     * dead-letter recoverer); when present it is attached here so a record that keeps failing is, after
+     * its retries, dead-lettered and its offset advanced instead of blocking the partition forever. When
+     * absent the container keeps the framework default (infinite seek-retry), preserving at-least-once.
+     * Exactly one such bean may exist per application context; with several at-least-once consumers the
+     * policy must be unified rather than letting one module's handler bind to all listeners.
+     *
      * @param configurer Spring Boot configurer that applies {@code spring.kafka.listener.*} settings
      * @param consumerFactory the auto-commit-disabled consumer factory
+     * @param errorHandler optional consumer-supplied poison-pill / dead-letter policy
      * @return a container factory enforcing manual, post-persistence offset commits
      */
     @Bean
     public ConcurrentKafkaListenerContainerFactory<Object, Object> atLeastOnceKafkaListenerContainerFactory(
             ConcurrentKafkaListenerContainerFactoryConfigurer configurer,
-            ConsumerFactory<Object, Object> consumerFactory) {
+            ConsumerFactory<Object, Object> consumerFactory,
+            ObjectProvider<CommonErrorHandler> errorHandler) {
         ConcurrentKafkaListenerContainerFactory<Object, Object> factory =
                 new ConcurrentKafkaListenerContainerFactory<>();
         configurer.configure(factory, consumerFactory);
         factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL_IMMEDIATE);
+        errorHandler.ifUnique(factory::setCommonErrorHandler);
         return factory;
     }
 }

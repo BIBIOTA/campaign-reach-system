@@ -16,6 +16,7 @@ class KafkaTopicContractTest {
     @Test
     void topicNamesMatchDesignSection9() {
         assertThat(KafkaTopics.DOMAIN_EVENTS).isEqualTo("domain.events");
+        assertThat(KafkaTopics.DOMAIN_EVENTS_DLT).isEqualTo("domain.events.DLT");
         assertThat(KafkaTopics.REACH_REQUESTED).isEqualTo("reach.requested");
         assertThat(KafkaTopics.REACH_DLQ).isEqualTo("reach.dlq");
     }
