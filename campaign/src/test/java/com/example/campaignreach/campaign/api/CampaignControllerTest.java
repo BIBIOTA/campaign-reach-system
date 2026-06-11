@@ -274,7 +274,8 @@ class CampaignControllerTest {
     @Test
     void 合法狀態切換() throws Exception {
         UUID id = UUID.randomUUID();
-        when(repository.save(any(Campaign.class))).thenAnswer(inv -> inv.getArgument(0));
+        // transition() flushes via saveAndFlush so the response returns the materialised @Version.
+        when(repository.saveAndFlush(any(Campaign.class))).thenAnswer(inv -> inv.getArgument(0));
 
         // DRAFT → SCHEDULED
         when(repository.findById(id)).thenReturn(Optional.of(discountCampaign(id, CampaignStatus.DRAFT)));

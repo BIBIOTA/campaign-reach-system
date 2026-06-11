@@ -137,7 +137,11 @@ public class CampaignApplicationService {
         assertVersionMatches(campaign, request.version());
         CampaignStatus previousStatus = campaign.getStatus();
         campaign.transitionTo(request.targetStatus());
-        Campaign saved = repository.save(campaign);
+        // saveAndFlush so the @Version increment Hibernate defers until flush is materialised before
+        // toView reads it: the response must carry the *new* version so an operator chaining lifecycle
+        // transitions (e.g. SCHEDULED → RUNNING → PAUSED) echoes a current value rather than a stale one
+        // that would fail the next write with a spurious 409. Mirrors CampaignLifecycleScheduler.
+        Campaign saved = repository.saveAndFlush(campaign);
         publishStatusChanged(saved, previousStatus);
         return toView(saved);
     }
