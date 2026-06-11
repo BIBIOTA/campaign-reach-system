@@ -526,3 +526,34 @@
   - Spec-reviewer: ✅ Spec compliant（5/5；四場景皆 name-mapped 測試斷言 THEN——不落 PII（V6/V8 + catalog 斷言）、suppression hit→FAILED 不送（既有 8.2 SuppressionGuard/dispatcher 覆蓋）、保留參數存在且 null→fail-fast 非永久、屆期 FK 有序刪除且僅 terminal；ER 05 schema 契約符合僅引用既有欄位、無新增 PII 欄位；無 over-engineering、無 ShedLock 合理）
   - Code-quality-reviewer: ✅ Approved（無 Critical/Important；忠實沿用 ReachRequestCountAggregator/ReachTaskReaper/DispatcherProperties 既有模式、FK 有序刪除與 cutoff 單次計算正確、SQL 全參數化 enum cast 對齊、validation 落在 config 綁定信任邊界、單元測試以 ArgumentCaptor 驗 cutoff/SQL 順序/status 述詞非 tautological mock；3 Minor：inline java.sql.Timestamp FQN 已修為 import、status 清單於兩 DELETE 重複屬 house-style 可接受、returnsZero 測試粒度 Minor 皆不阻擋）
 - Next action: 對 add-ecommerce-campaign-system 跑 final pass（cross-task 整合測試 + `openspec validate {change-id} --strict`），剩餘 not_started 僅 12.1（10 萬筆壓測），非本次「Task 11」範圍；隨後可 invoke spec-driven-dev:verification-before-completion。
+
+## Session 62 — 2026-06-11 23:59
+- Stage: SDD
+- Task: 12.1 以 10 萬筆級壓測驗證全鏈路並產出報告
+- Transition: not_started → in_progress
+- Next action: 於新分支 `feat/task-12-load-test-reliability` 派發 implementer subagent 實作 @RequiresDocker 大量觸達可靠性壓測——以 10 萬筆級受眾驅動 reach_request 落庫 → PagedAudienceExpander fan-out → ReachTaskDispatcher 兩階段發送全鏈路，斷言各 ReachTask 狀態正確收斂，並產出處理速率/各狀態分布/資源使用報告（作為演進至百萬筆級基準）；驗證大量發送不拖垮其他活動/設定。完成後接 spec-reviewer 與 code-quality-reviewer。
+
+## Session 63 — 2026-06-12 00:30
+- Stage: SDD
+- Task: 12.1 以 10 萬筆級壓測驗證全鏈路並產出報告
+- Transition: in_progress → passing
+- Evidence:
+  - Commits: cfde6cc test: add 100k-scale full-chain reach load/reliability IT + report (Task 12.1)（含 code-quality Minor 修正 amend：static import any/Collectors、抽 FULL_SCALE_THRESHOLD 常數、pumpUntilDrained 收斂不變式 javadoc）
+  - Tests: 新增 `ReachLoadReliabilityIntegrationTest`（@RequiresDocker，純測試無生產碼變更）。`fullChainReliablyCompletesAt100kScaleAndConvergesAllStatuses`——以 `RECIPIENT_COUNT`（預設 100,000，可 `-Dreach.loadtest.recipients` 覆寫）真實驅動 reachRequestRepository landing → PagedAudienceExpander.expand（真實 ON CONFLICT fan-out）→ ReachTaskDispatcher.dispatchPoll（真實 FOR UPDATE SKIP LOCKED claim + markSent 寫回）pumpUntilDrained；斷言以真實 DB GROUP BY 查回的非終態（PENDING/PROCESSING/RETRY_SCHEDULED）=0、終態（SENT+FAILED+DLQ+CANCELLED）=N、SENT=N，並產出 build dir 報告（處理速率/各狀態分布/資源使用）+ SLF4J log。`heavySendDoesNotStarveOtherCampaigns`——第二活動 config 列指紋未變、自有 task 仍 PENDING 且仍可獨立 claimBatch，證 per-campaign key + SKIP LOCKED 隔離。`./gradlew check` BUILD SUCCESSFUL（spotless/checkstyle/spotbugsMain/test/ArchUnit/JaCoCo 全綠；Docker-gated IT 本沙箱 auto-skip）。
+  - Spec-reviewer: ✅ Spec compliant（5/5；兩 scenario 各對應 name-mapped 測試，收斂斷言非套套邏輯以真實 DB 查回驗證、報告三部分齊備、測試真實驅動 01-sequence-reach-flow 下游順序未 mock 持久層、diff 純測試無越界功能；規模縮放可參數化且已承認為觀察事項）
+  - Code-quality-reviewer: ✅ Approved（無 Critical/Important；結構清楚四段分隔、斷言查 DB 落地非 stub 回傳、pumpUntilDrained 有 maxPolls 防呆且 stub 永成功保證收斂、teardown 四表先子後父、seeding 沿用鄰近 IT pattern；4 Minor——收斂不變式文件債/魔術數常數/2 處 static import——已於 amend 全數修正）
+- Next action: 12.1 為本 change 最後一個 task，全部 task 皆 passing；對 add-ecommerce-campaign-system 跑 final pass（`openspec validate {change-id} --strict`）後 invoke spec-driven-dev:verification-before-completion。
+- Blockers: 無（唯一 verification-pending 為環境性 Docker auto-skip，已於 tasks.md 12.1 記錄，留待 verification-before-completion Stage 5）。
+
+## Session 64 — 2026-06-11 (PR #15 review-driven 修正)
+- Stage: SDD（requesting-code-review → receiving-code-review）
+- Task: 12.1 以 10 萬筆級壓測驗證全鏈路並產出報告（passing；本次為 review 後品質修正，task 狀態不變）
+- Transition: passing → passing（無 scope 變更，純測試修正 + 文件歸因更正）
+- Trigger: 對 PR #15 派發 code-reviewer subagent。Critical 0；Important 1（`heavySendDoesNotStarveOtherCampaigns` 隔離歸因錯誤且中段斷言脆弱）；Minor 3。
+- Evidence:
+  - Important 修正（採方案 b）：`heavySendDoesNotStarveOtherCampaigns` 改寫為**兩 worker 並發 drain 共享 EMAIL 佇列**——以 `CyclicBarrier` 於各 worker 首次 send rendezvous，證兩者同時持有 disjoint claimed batch（`FOR UPDATE SKIP LOCKED` 非阻塞；阻塞則 gate timeout→記錄→fail）；斷言改為 spec 真正要的 liveness：兩 worker 各 sent>0、送出總數=N（disjoint 恰一次）、第二活動全數 SENT（未被餓死）且 config 指紋未變。移除原本靠 `created_at` FIFO 運氣的「drain 完後仍 PENDING」脆弱斷言。
+  - 歸因更正（review 確認 `ReachTaskDispatchDao.claimBatch` 為 channel-wide FIFO、**不**依 campaign 分區）：測試 class/method javadoc、load-test 報告（新增 Isolation 段）、`verification-report.md` scenario coverage 表三處皆更正為「互不影響源自 SKIP LOCKED 非阻塞並發；per-campaign 熱分區規避在 request 層以 `reach.requested` 依 `reach_request_id` 分區達成（Kafka，design.md §9，非本 DB 壓測範圍）」。
+  - Minor 處理：#2（`maxPolls` 除數與 batchSize 註解不一致）已修兩處註解；#1（100k CI 實際 wall-time）列為 CI 綠跑後回填、非程式問題；#3（page-size 2000/batch 500 ≠ 生產預設）為刻意量測純持久化吞吐、javadoc+報告已標明，維持現狀。
+  - Build: `./gradlew check` BUILD SUCCESSFUL；`:app:compileTestJava` 通過；IT 本沙箱仍 @RequiresDocker auto-skip（tests=2 skipped=2 failures=0）。
+- Next action: 待 CI（有 Docker）實跑新並發測試後回填 verification-report.md / tasks.md 的實際數值，收尾 verification-pending；隨後可 `openspec archive`。
+- Blockers: 無（新並發測試之實跑驗證與既有 Docker auto-skip caveat 同屬環境性 verification-pending，非阻擋合併）。
