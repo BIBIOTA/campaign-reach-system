@@ -259,4 +259,42 @@ class ReachTaskDispatchDaoIntegrationTest extends AbstractIntegrationTest {
         assertThat(row.get("locked_until")).isNull();
         assertThat(row.get("next_retry_at")).isNull();
     }
+
+    /**
+     * Assertion 6 — markDeadLettered (task 9.2). Transitions PROCESSING→DLQ (the single guarded MVP
+     * edge), records last_error, and clears the lease. The guard {@code WHERE status='PROCESSING'} means
+     * a row not in PROCESSING is untouched.
+     */
+    @Test
+    void markDeadLetteredTransitionsDlqRecordsErrorAndClearsLease() {
+        UUID requestId = seedRequest();
+        Instant now = Instant.now();
+        UUID taskId = seedTask(requestId, "RETRY_SCHEDULED", Channel.EMAIL, now.minus(Duration.ofMinutes(1)));
+
+        ReachTaskDispatchDao dao = dao();
+        dao.claimBatch(WORKER_ID, List.of(Channel.EMAIL), 10, LEASE, now); // → PROCESSING
+
+        dao.markDeadLettered(taskId, "retries-exhausted:provider timeout", now);
+
+        Map<String, Object> row = taskRow(taskId);
+        assertThat(row.get("status")).isEqualTo("DLQ");
+        assertThat(row.get("locked_by")).isNull();
+        assertThat(row.get("locked_until")).isNull();
+        assertThat(row.get("next_retry_at")).isNull();
+        String lastError =
+                jdbcTemplate.queryForObject("SELECT last_error FROM reach_task WHERE id = ?", String.class, taskId);
+        assertThat(lastError).isEqualTo("retries-exhausted:provider timeout");
+    }
+
+    /** A non-PROCESSING row is left untouched by markDeadLettered (the WHERE status='PROCESSING' guard). */
+    @Test
+    void markDeadLetteredLeavesNonProcessingRowUntouched() {
+        UUID requestId = seedRequest();
+        Instant now = Instant.now();
+        UUID taskId = seedTask(requestId, "PENDING", Channel.EMAIL, null); // never claimed → stays PENDING
+
+        dao().markDeadLettered(taskId, "retries-exhausted:x", now);
+
+        assertThat(taskRow(taskId).get("status")).isEqualTo("PENDING");
+    }
 }

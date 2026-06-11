@@ -17,8 +17,11 @@ public interface EmailProviderClient {
      *
      * @param message the message to deliver
      * @return the provider's accepted-send result
-     * @throws RuntimeException if the provider call fails (timeout, transport error, 5xx); the
-     *     {@link EmailAdapter} translates such failures into {@link RetryableSendException} and the
+     * @throws NonRetryableSendException if the provider reports a <em>permanent</em> failure (e.g. an
+     *     invalid recipient address) that must not be retried; {@link EmailAdapter} lets it propagate
+     *     unchanged and the breaker is configured to ignore it (it is not a provider-health signal).
+     * @throws RuntimeException if the provider call fails transiently (timeout, transport error, 5xx);
+     *     the {@link EmailAdapter} translates such failures into {@link RetryableSendException} and the
      *     circuit breaker counts them toward its failure rate.
      */
     SendResult deliver(ReachMessage message);

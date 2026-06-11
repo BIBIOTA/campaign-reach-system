@@ -61,7 +61,7 @@ public class ReachTaskDispatchDao {
                 processing_started_at = ?
             FROM claimed
             WHERE u.id = claimed.id
-            RETURNING u.id, u.user_id, u.channel,
+            RETURNING u.id, u.campaign_id, u.user_id, u.channel, u.send_cycle_key,
                 (SELECT r.reach_plan_snapshot::text FROM reach_request r WHERE r.id = u.reach_request_id) AS reach_plan,
                 COALESCE(u.retry_count, 0) AS retry_count
             """; // __CHANNELS__ is replaced with the channel IN-list placeholders (each cast ?::channel)
@@ -102,6 +102,18 @@ public class ReachTaskDispatchDao {
             """
             UPDATE reach_task
             SET status = 'FAILED'::reach_task_status,
+                last_attempt_at = ?,
+                last_error = ?,
+                next_retry_at = NULL,
+                locked_by = NULL,
+                locked_until = NULL
+            WHERE id = ? AND status = 'PROCESSING'::reach_task_status
+            """;
+
+    private static final String MARK_DEAD_LETTERED_SQL =
+            """
+            UPDATE reach_task
+            SET status = 'DLQ'::reach_task_status,
                 last_attempt_at = ?,
                 last_error = ?,
                 next_retry_at = NULL,
@@ -169,8 +181,10 @@ public class ReachTaskDispatchDao {
                 },
                 (rs, rowNum) -> new ClaimedTask(
                         rs.getObject("id", UUID.class),
+                        rs.getObject("campaign_id", UUID.class),
                         rs.getObject("user_id", UUID.class),
                         Channel.valueOf(rs.getString("channel")),
+                        rs.getString("send_cycle_key"),
                         templateExtractor.extract(rs.getString("reach_plan")),
                         rs.getInt("retry_count"))));
     }
@@ -209,11 +223,9 @@ public class ReachTaskDispatchDao {
     }
 
     /**
-     * Stage two (short transaction): a terminal failure (non-retryable reason, or retries exhausted).
-     * Transitions PROCESSING → FAILED, records the error, and clears the lease.
-     *
-     * <p>Task 9.2 owns the {@code reach.dlq} publishing leg that follows retry-exhaustion; 9.1 stops at
-     * the FAILED transition. (Seam for 9.2.)
+     * Stage two (short transaction): a terminal failure for a <em>non-retryable</em> reason (suppression
+     * hit, or a permanent provider failure such as an invalid address). Transitions PROCESSING → FAILED,
+     * records the error, and clears the lease.
      *
      * @param taskId the claimed task id
      * @param error a short error description stored in {@code last_error}
@@ -222,5 +234,29 @@ public class ReachTaskDispatchDao {
     public void markFailed(UUID taskId, String error, Instant now) {
         Timestamp nowTs = Timestamp.from(now);
         transactionTemplate.executeWithoutResult(status -> jdbcTemplate.update(MARK_FAILED_SQL, nowTs, error, taskId));
+    }
+
+    /**
+     * Stage two (short transaction): dead-letter an exhausted task (task 9.2, spec「失敗保留與 DLQ」).
+     * Transitions PROCESSING → DLQ, records the last error, and clears the lease — so the task is
+     * durably retained for manual inspection / replay rather than silently lost.
+     *
+     * <p>The transition is the single guarded step PROCESSING → DLQ (not PROCESSING → FAILED → DLQ): the
+     * MVP lifecycle subset is {@code PENDING/PROCESSING/SENT/FAILED/DLQ} and the row is only ever in
+     * PROCESSING when this runs, so one atomic guarded {@code WHERE status='PROCESSING'} update is the
+     * simplest correct realization of the diagram's path into DLQ without introducing an illegal edge or
+     * an intermediate-state write that a concurrent reader could observe. The dispatcher publishes the
+     * {@code reach.dlq} event <em>before</em> calling this (publish-then-mark, see {@code
+     * ReachTaskDispatcher}), so a crash between publish and mark leaves the row PROCESSING with an
+     * expired lease for the Reaper (task 9.3) — never silently lost.
+     *
+     * @param taskId the claimed task id
+     * @param error a short error description stored in {@code last_error}
+     * @param now the write-back instant
+     */
+    public void markDeadLettered(UUID taskId, String error, Instant now) {
+        Timestamp nowTs = Timestamp.from(now);
+        transactionTemplate.executeWithoutResult(
+                status -> jdbcTemplate.update(MARK_DEAD_LETTERED_SQL, nowTs, error, taskId));
     }
 }

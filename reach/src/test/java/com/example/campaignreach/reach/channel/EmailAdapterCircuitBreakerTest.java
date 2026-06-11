@@ -200,6 +200,44 @@ class EmailAdapterCircuitBreakerTest {
     }
 
     @Nested
+    @DisplayName("不可重試分類不污染 breaker")
+    class NonRetryableClassification {
+
+        @Test
+        @DisplayName("不可重試 provider 失敗 → 原樣拋 NonRetryableSendException（非 retryable），且不計入 breaker")
+        void nonRetryableProviderFailureSurfacesAndIsNotCounted() {
+            // Threshold 50% over a window of 2: if a non-retryable failure were counted, one failure plus
+            // one success would NOT trip, but to prove it is IGNORED entirely we drive only failures and
+            // assert the breaker never opens.
+            CircuitBreaker cb = breaker(2, 50f, Duration.ofSeconds(30), 2);
+            EmailAdapter adapter = new EmailAdapter(providerClient, cb);
+            when(providerClient.deliver(MESSAGE)).thenThrow(new NonRetryableSendException("invalid address"));
+
+            assertThatThrownBy(() -> adapter.send(MESSAGE)).isInstanceOf(NonRetryableSendException.class);
+            assertThatThrownBy(() -> adapter.send(MESSAGE)).isInstanceOf(NonRetryableSendException.class);
+            assertThatThrownBy(() -> adapter.send(MESSAGE)).isInstanceOf(NonRetryableSendException.class);
+
+            // Ignored exceptions are counted as neither success nor failure: the breaker stays CLOSED.
+            assertThat(cb.getState()).isEqualTo(CircuitBreaker.State.CLOSED);
+            assertThat(cb.getMetrics().getNumberOfFailedCalls()).isZero();
+        }
+
+        @Test
+        @DisplayName("transient provider 失敗仍轉為 RetryableSendException.providerFailure（並計入 breaker）")
+        void transientFailureStillSurfacesAsRetryableProviderFailure() {
+            CircuitBreaker cb = breaker(8, 50f, Duration.ofSeconds(30), 2);
+            EmailAdapter adapter = new EmailAdapter(providerClient, cb);
+            when(providerClient.deliver(MESSAGE)).thenThrow(new RuntimeException("provider 503"));
+
+            assertThatThrownBy(() -> adapter.send(MESSAGE))
+                    .isInstanceOf(RetryableSendException.class)
+                    .matches(ex -> !((RetryableSendException) ex).isBreakerOpen(), "providerFailure");
+            // A transient failure IS counted toward the breaker's failure accounting.
+            assertThat(cb.getMetrics().getNumberOfFailedCalls()).isEqualTo(1);
+        }
+    }
+
+    @Nested
     @DisplayName("基本契約")
     class BasicContract {
 

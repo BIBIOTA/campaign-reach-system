@@ -29,8 +29,13 @@ import io.github.resilience4j.circuitbreaker.CircuitBreaker;
  *       can query {@link #isAvailable()} before claiming a task and skip it while leaving it PENDING
  *       (scenario「breaker 開啟時不卡任務」), or, if already PROCESSING, treat the fast-fail as a
  *       retryable failure → RETRY_SCHEDULED (scenario「已 PROCESSING 後 breaker 失敗」).
- *   <li>A real provider failure → {@link RetryableSendException#providerFailure} and the breaker
+ *   <li>A transient provider failure → {@link RetryableSendException#providerFailure} and the breaker
  *       counts it toward its failure rate.
+ *   <li>A permanent provider failure (the provider seam throws {@link NonRetryableSendException}, e.g.
+ *       invalid address) → propagates unchanged so the dispatcher fast-fails the task to {@code FAILED}
+ *       without burning a retry, and it is <em>not</em> counted by the breaker (configured via {@code
+ *       ignoreExceptions} in {@link EmailChannelProperties#toCircuitBreakerConfig()}) because a bad
+ *       address is a per-recipient data problem, not a provider-health signal (task 9.2, §6 FR-015).
  * </ul>
  */
 public class EmailAdapter implements ChannelAdapter {
@@ -71,8 +76,12 @@ public class EmailAdapter implements ChannelAdapter {
             // Breaker is OPEN (or a half-open probe was rejected): the provider was never contacted.
             throw RetryableSendException.breakerOpen(
                     "email circuit breaker is open; skipping provider call", breakerRejected);
+        } catch (NonRetryableSendException nonRetryable) {
+            // A permanent provider failure (e.g. invalid address): propagate unchanged so the dispatcher
+            // fast-fails the task. The breaker is configured to ignore this type, so it is not counted.
+            throw nonRetryable;
         } catch (RuntimeException providerFailure) {
-            // The provider call itself failed; the breaker has already recorded it as a failure.
+            // The provider call itself failed transiently; the breaker has already recorded it as a failure.
             throw RetryableSendException.providerFailure("email provider call failed", providerFailure);
         }
     }

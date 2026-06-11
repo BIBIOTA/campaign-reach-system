@@ -14,26 +14,42 @@ import java.util.UUID;
  * reach_plan_snapshot} of the owning {@code reach_request}.
  *
  * @param taskId the {@code reach_task} primary key (the stage-two write-back targets this id)
+ * @param campaignId the owning campaign (carried for the dead-letter event / partition key, task 9.2)
  * @param userId the upstream member identity to reach
  * @param channel the delivery channel chosen at fan-out time (the dispatcher selects the matching
  *     adapter)
+ * @param sendCycleKey the send-cycle key of the originating request (dead-letter replay context +
+ *     partition key composite, task 9.2)
  * @param templateRef the content template reference from the frozen reach plan
  * @param retryCount the number of retries already scheduled before this attempt ({@code 0} for a
  *     task that has not yet failed) — drives the backoff schedule and the bounded-attempts terminal
  *     condition
  */
-public record ClaimedTask(UUID taskId, UUID userId, Channel channel, String templateRef, int retryCount) {
+public record ClaimedTask(
+        UUID taskId,
+        UUID campaignId,
+        UUID userId,
+        Channel channel,
+        String sendCycleKey,
+        String templateRef,
+        int retryCount) {
 
-    /** Validates the invariants: identity, channel, and template must be present. */
+    /** Validates the invariants: identity, channel, send cycle, and template must be present. */
     public ClaimedTask {
         if (taskId == null) {
             throw new IllegalArgumentException("taskId must not be null");
+        }
+        if (campaignId == null) {
+            throw new IllegalArgumentException("campaignId must not be null");
         }
         if (userId == null) {
             throw new IllegalArgumentException("userId must not be null");
         }
         if (channel == null) {
             throw new IllegalArgumentException("channel must not be null");
+        }
+        if (sendCycleKey == null || sendCycleKey.isBlank()) {
+            throw new IllegalArgumentException("sendCycleKey must not be blank");
         }
         if (templateRef == null || templateRef.isBlank()) {
             throw new IllegalArgumentException("templateRef must not be blank");

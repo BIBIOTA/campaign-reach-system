@@ -1,18 +1,21 @@
 package com.example.campaignreach.reach.dispatcher;
 
 import com.example.campaignreach.reach.channel.ChannelAdapter;
+import com.example.campaignreach.reach.channel.NonRetryableSendException;
 import com.example.campaignreach.reach.channel.ReachMessage;
 import com.example.campaignreach.reach.channel.RetryableSendException;
 import com.example.campaignreach.reach.channel.SendResult;
 import com.example.campaignreach.reach.channel.SuppressionGuard;
 import com.example.campaignreach.reach.channel.SuppressionVerdict;
 import com.example.campaignreach.shared.event.Channel;
+import com.example.campaignreach.shared.event.ReachTaskDeadLettered;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -44,10 +47,21 @@ import org.springframework.stereotype.Component;
  * batch. {@code FOR UPDATE SKIP LOCKED} already makes concurrent workers claim disjoint rows, so the
  * poll needs no {@code @SchedulerLock}.
  *
- * <p><strong>Scope (task 9.1).</strong> The retryable-vs-non-retryable provider taxonomy beyond the
- * suppression FAILED branch, and the retry-exhaustion → {@code reach.dlq} publishing, are task 9.2;
- * here retries exhaust to FAILED (the DLQ leg is a documented seam). The Reaper is task 9.3, and the
- * campaign PAUSED/ENDED cancellation re-check is task 10.1 — neither is implemented here.
+ * <p><strong>Retry classification (task 9.2).</strong> A {@link NonRetryableSendException} (a permanent
+ * provider failure such as an invalid address) fast-fails the task straight to FAILED without burning a
+ * retry (state edge {@code PROCESSING --> FAILED : 不可重試}); a {@link RetryableSendException} backs off
+ * via the exponential schedule; and a genuinely-unexpected {@code RuntimeException} is intentionally
+ * routed through the retryable path so a single task's failure is isolated and the task is never lost.
+ *
+ * <p><strong>Retry-exhaustion → DLQ (task 9.2).</strong> When a task exhausts its bounded retries it is
+ * dead-lettered, not silently dropped: the dispatcher publishes a {@link ReachTaskDeadLettered} event to
+ * {@code reach.dlq} <em>first</em> and only then marks the row DLQ (publish-then-mark). If the publish
+ * throws, the row is left PROCESSING with an expired lease for the Reaper (task 9.3) to reclaim, so the
+ * task is never silently lost (「不靜默遺失」).
+ *
+ * <p><strong>Out of scope.</strong> The Reaper is task 9.3, and the campaign PAUSED/ENDED cancellation
+ * re-check is task 10.1 — neither is implemented here. A consumer for {@code reach.dlq} (replay tooling)
+ * is also out of scope; this only publishes.
  */
 @Component
 public class ReachTaskDispatcher {
@@ -57,6 +71,7 @@ public class ReachTaskDispatcher {
     private final ReachTaskDispatchDao dispatchDao;
     private final ChannelAdapterRegistry adapterRegistry;
     private final SuppressionGuard suppressionGuard;
+    private final ObjectProvider<ReachDlqPublisher> dlqPublisher;
     private final DispatcherProperties properties;
     private final String workerId;
 
@@ -64,16 +79,21 @@ public class ReachTaskDispatcher {
      * @param dispatchDao the two-phase claim / write-back persistence
      * @param adapterRegistry routes a channel to its adapter
      * @param suppressionGuard pre-send suppression check (a hit → non-retryable FAILED)
+     * @param dlqPublisher the {@code reach.dlq} producer, looked up lazily: it is gated behind the
+     *     Kafka at-least-once flag, so in a no-Kafka context it is absent and an exhausted task is left
+     *     PROCESSING (rather than silently FAILED) for the Reaper to revisit — never lost
      * @param properties batch size + lease duration tunables
      */
     public ReachTaskDispatcher(
             ReachTaskDispatchDao dispatchDao,
             ChannelAdapterRegistry adapterRegistry,
             SuppressionGuard suppressionGuard,
+            ObjectProvider<ReachDlqPublisher> dlqPublisher,
             DispatcherProperties properties) {
         this.dispatchDao = dispatchDao;
         this.adapterRegistry = adapterRegistry;
         this.suppressionGuard = suppressionGuard;
+        this.dlqPublisher = dlqPublisher;
         this.properties = properties;
         this.workerId = resolveWorkerId();
     }
@@ -110,12 +130,31 @@ public class ReachTaskDispatcher {
     }
 
     /**
-     * Dispatches one claimed task: pre-send suppression check, then the out-of-transaction send, then
-     * the stage-two write-back. The broad catch isolates one task's unexpected failure from the rest of
-     * the batch; the task remains PROCESSING with its lease and is recovered by the Reaper (task 9.3).
+     * Dispatches one claimed task, isolating any failure from the rest of the batch. The outer broad
+     * catch guarantees that a failure anywhere — including in a stage-two write-back or a DLQ publish —
+     * never aborts the poll: the task simply remains PROCESSING with its lease for the Reaper (task 9.3)
+     * to reclaim. This is the per-task isolation boundary (see class javadoc); the inner
+     * {@link #dispatchTask} body does the classification and write-back.
      */
     @SuppressWarnings("checkstyle:IllegalCatch") // deliberate broad catch: per-task exception isolation
     private void dispatch(ClaimedTask task, Instant now) {
+        try {
+            dispatchTask(task, now);
+        } catch (RuntimeException isolated) {
+            // A failure escaping the classification/write-back (e.g. a DLQ publish that threw, or a
+            // write-back DB error): isolate it so the batch continues. The task stays PROCESSING with an
+            // expired lease and is recovered by the Reaper — never silently lost (「不靜默遺失」).
+            LOG.warn("Isolated failure finalizing reach_task {}: {}", task.taskId(), isolated.getMessage(), isolated);
+        }
+    }
+
+    /**
+     * Classifies and writes back one claimed task: pre-send suppression check, then the
+     * out-of-transaction send, then the stage-two write-back (markSent / scheduleRetry / markFailed /
+     * dead-letter). Exceptions thrown here are isolated by {@link #dispatch}.
+     */
+    @SuppressWarnings("checkstyle:IllegalCatch") // deliberate broad catch: retryable fallback (see below)
+    private void dispatchTask(ClaimedTask task, Instant now) {
         try {
             // Pre-send suppression (退訂 / 硬退信 / 投訴) is a non-retryable reason → FAILED, do not send.
             SuppressionVerdict verdict = suppressionGuard.evaluate(task.userId(), task.channel());
@@ -130,17 +169,21 @@ public class ReachTaskDispatcher {
             ReachMessage message = new ReachMessage(task.userId(), task.channel(), task.templateRef());
             SendResult result = adapter.send(message);
             dispatchDao.markSent(task.taskId(), result.providerMessageId(), now);
+        } catch (NonRetryableSendException nonRetryable) {
+            // Permanent provider failure (e.g. invalid address): fast-fail to FAILED immediately, no
+            // retry burned (state edge PROCESSING --> FAILED : 不可重試). Distinct from the broad
+            // RuntimeException fallback below, which stays routed to the retryable path on purpose.
+            dispatchDao.markFailed(task.taskId(), "non-retryable:" + nonRetryable.getMessage(), now);
         } catch (RetryableSendException retryable) {
             // Retryable failure (transient provider error OR breaker short-circuit after PROCESSING):
-            // stage-two write-back to RETRY_SCHEDULED with exponential backoff, or FAILED once exhausted.
+            // stage-two write-back to RETRY_SCHEDULED with exponential backoff, or dead-letter once exhausted.
             writeBackRetryable(task, retryable.getMessage(), now);
         } catch (RuntimeException unexpected) {
             // A genuinely-unexpected exception is INTENTIONALLY routed through the retryable path so a
             // single task's failure is isolated (per-task isolation, see class javadoc) and the task is
-            // never lost: it retries with backoff and converges to FAILED once attempts are exhausted.
-            // Fine-grained permanent-error fast-fail classification (so a non-retryable failure FAILs
-            // immediately instead of burning retries) is deliberately DEFERRED to task 9.2 with the DLQ
-            // leg; 9.1 keeps one uniform retryable fallback on purpose.
+            // never lost: it retries with backoff and converges to the DLQ once attempts are exhausted.
+            // The explicit non-retryable taxonomy now lives in the NonRetryableSendException branch above;
+            // an unclassified RuntimeException remains conservatively retryable so it is never lost.
             LOG.warn(
                     "Unexpected failure dispatching reach_task {}: {}",
                     task.taskId(),
@@ -152,17 +195,42 @@ public class ReachTaskDispatcher {
 
     /**
      * Stage-two write-back for a retryable failure: schedule the next exponential-backoff retry, or —
-     * once {@link RetryBackoffSchedule#MAX_ATTEMPTS} retries are exhausted — terminate as FAILED. (Task
-     * 9.2 owns the retry-exhaustion → {@code reach.dlq} leg that follows the FAILED transition.)
+     * once {@link RetryBackoffSchedule#MAX_ATTEMPTS} retries are exhausted — dead-letter the task.
      */
     private void writeBackRetryable(ClaimedTask task, String error, Instant now) {
         if (RetryBackoffSchedule.canRetry(task.retryCount())) {
             Duration backoff = RetryBackoffSchedule.backoffFor(task.retryCount());
             dispatchDao.scheduleRetry(task.taskId(), now.plus(backoff), error, now);
         } else {
-            // Retries exhausted — terminal FAILED. SEAM: task 9.2 publishes to reach.dlq from here.
-            dispatchDao.markFailed(task.taskId(), "retries-exhausted:" + error, now);
+            deadLetter(task, "retries-exhausted:" + error, now);
         }
+    }
+
+    /**
+     * Dead-letter an exhausted task with at-least-once / 「不靜默遺失」 semantics: <strong>publish
+     * first, then mark</strong>. The {@link ReachTaskDeadLettered} event is published to {@code
+     * reach.dlq} synchronously (bounded wait, throws on failure); only if that succeeds is the row marked
+     * DLQ. If the publish throws — or no publisher is wired (no-Kafka context) — the row is left
+     * PROCESSING with its expired lease and the exception propagates through the per-task broad catch, so
+     * the Reaper (task 9.3) revisits it and the task is never silently lost.
+     */
+    private void deadLetter(ClaimedTask task, String reason, Instant now) {
+        ReachDlqPublisher publisher = dlqPublisher.getIfAvailable();
+        if (publisher == null) {
+            throw new IllegalStateException("no ReachDlqPublisher wired; cannot dead-letter reach_task " + task.taskId()
+                    + " — leaving it PROCESSING for the Reaper rather than silently losing it");
+        }
+        ReachTaskDeadLettered event = new ReachTaskDeadLettered(
+                task.taskId(),
+                task.campaignId(),
+                task.userId(),
+                task.channel(),
+                task.sendCycleKey(),
+                reason,
+                task.retryCount(),
+                now);
+        publisher.publish(event); // throws on failure/timeout → mark below is skipped, task not lost
+        dispatchDao.markDeadLettered(task.taskId(), reason, now);
     }
 
     /** A stable-ish per-process lease owner id for {@code locked_by} (host + a random suffix). */

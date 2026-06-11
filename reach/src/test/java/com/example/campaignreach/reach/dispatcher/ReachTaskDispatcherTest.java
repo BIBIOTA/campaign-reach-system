@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -14,6 +15,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.example.campaignreach.reach.channel.ChannelAdapter;
+import com.example.campaignreach.reach.channel.NonRetryableSendException;
 import com.example.campaignreach.reach.channel.ReachMessage;
 import com.example.campaignreach.reach.channel.RetryableSendException;
 import com.example.campaignreach.reach.channel.SendResult;
@@ -21,6 +23,7 @@ import com.example.campaignreach.reach.channel.SuppressionGuard;
 import com.example.campaignreach.reach.channel.SuppressionReason;
 import com.example.campaignreach.reach.channel.SuppressionVerdict;
 import com.example.campaignreach.shared.event.Channel;
+import com.example.campaignreach.shared.event.ReachTaskDeadLettered;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -31,8 +34,10 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.ObjectProvider;
 
 /**
  * Behaviour-driven tests for {@link ReachTaskDispatcher} (task 9.1). The DAO and channel adapter are
@@ -53,6 +58,12 @@ class ReachTaskDispatcherTest {
     @Mock
     private ChannelAdapter emailAdapter;
 
+    @Mock
+    private ReachDlqPublisher dlqPublisher;
+
+    @Mock
+    private ObjectProvider<ReachDlqPublisher> dlqPublisherProvider;
+
     private ReachTaskDispatcher dispatcher;
 
     @BeforeEach
@@ -60,13 +71,26 @@ class ReachTaskDispatcherTest {
         when(emailAdapter.channel()).thenReturn(Channel.EMAIL);
         // Default: recipients are not suppressed unless a test overrides it (the suppression-hit case).
         lenient().when(suppressionGuard.evaluate(any(), any())).thenReturn(SuppressionVerdict.notSuppressed());
+        // Default: a DLQ publisher is available (the exhaustion-path tests rely on it).
+        lenient().when(dlqPublisherProvider.getIfAvailable()).thenReturn(dlqPublisher);
         ChannelAdapterRegistry registry = new ChannelAdapterRegistry(List.of(emailAdapter));
         dispatcher = new ReachTaskDispatcher(
-                dispatchDao, registry, suppressionGuard, new DispatcherProperties(50, Duration.ofMinutes(5)));
+                dispatchDao,
+                registry,
+                suppressionGuard,
+                dlqPublisherProvider,
+                new DispatcherProperties(50, Duration.ofMinutes(5)));
     }
 
     private ClaimedTask task(int retryCount) {
-        return new ClaimedTask(UUID.randomUUID(), UUID.randomUUID(), Channel.EMAIL, "welcome", retryCount);
+        return new ClaimedTask(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                Channel.EMAIL,
+                "cycle-key",
+                "welcome",
+                retryCount);
     }
 
     private void claimReturns(ClaimedTask... tasks) {
@@ -156,8 +180,8 @@ class ReachTaskDispatcherTest {
         }
 
         @Test
-        @DisplayName("重試耗盡（已重試 3 次後再失敗）→ FAILED，不再排程重試")
-        void exhaustedRetriesTerminateAsFailed() {
+        @DisplayName("重試耗盡（已重試 3 次後再失敗）→ 進 reach.dlq 並標記 DLQ，不再排程重試")
+        void exhaustedRetriesAreDeadLettered() {
             ClaimedTask exhausted = task(RetryBackoffSchedule.MAX_ATTEMPTS);
             claimReturns(exhausted);
             when(emailAdapter.send(any(ReachMessage.class)))
@@ -165,8 +189,69 @@ class ReachTaskDispatcherTest {
 
             dispatcher.dispatchPoll();
 
-            verify(dispatchDao).markFailed(eq(exhausted.taskId()), anyString(), any());
+            verify(dlqPublisher).publish(any(ReachTaskDeadLettered.class));
+            verify(dispatchDao).markDeadLettered(eq(exhausted.taskId()), anyString(), any());
             verify(dispatchDao, never()).scheduleRetry(any(), any(), any(), any());
+            verify(dispatchDao, never()).markFailed(any(), any(), any());
+        }
+    }
+
+    @Nested
+    @DisplayName("重試耗盡進 DLQ（不靜默遺失）")
+    class ExhaustionDeadLetters {
+
+        @Test
+        @DisplayName("耗盡 → 先 publish reach.dlq 再標記 DLQ（publish 在 mark 之前）")
+        void publishesBeforeMarking() {
+            ClaimedTask exhausted = task(RetryBackoffSchedule.MAX_ATTEMPTS);
+            claimReturns(exhausted);
+            when(emailAdapter.send(any(ReachMessage.class)))
+                    .thenThrow(RetryableSendException.providerFailure("503", new RuntimeException()));
+
+            dispatcher.dispatchPoll();
+
+            InOrder order = inOrder(dlqPublisher, dispatchDao);
+            order.verify(dlqPublisher).publish(any(ReachTaskDeadLettered.class));
+            order.verify(dispatchDao).markDeadLettered(eq(exhausted.taskId()), anyString(), any());
+        }
+
+        @Test
+        @DisplayName("dead-letter 事件帶足供人工檢視/重放的識別欄位（無 PII）")
+        void deadLetterEventCarriesIdentificationFields() {
+            ClaimedTask exhausted = task(RetryBackoffSchedule.MAX_ATTEMPTS);
+            claimReturns(exhausted);
+            when(emailAdapter.send(any(ReachMessage.class)))
+                    .thenThrow(RetryableSendException.providerFailure("503", new RuntimeException()));
+
+            dispatcher.dispatchPoll();
+
+            ArgumentCaptor<ReachTaskDeadLettered> event = ArgumentCaptor.forClass(ReachTaskDeadLettered.class);
+            verify(dlqPublisher).publish(event.capture());
+            assertThat(event.getValue().reachTaskId()).isEqualTo(exhausted.taskId());
+            assertThat(event.getValue().campaignId()).isEqualTo(exhausted.campaignId());
+            assertThat(event.getValue().userId()).isEqualTo(exhausted.userId());
+            assertThat(event.getValue().channel()).isEqualTo(Channel.EMAIL);
+            assertThat(event.getValue().attempts()).isEqualTo(RetryBackoffSchedule.MAX_ATTEMPTS);
+        }
+
+        @Test
+        @DisplayName("publish 失敗 → 不標記 DLQ（任務不靜默遺失，留待 Reaper 重新取走）")
+        void publishFailureLeavesRowUnmarked() {
+            ClaimedTask exhausted = task(RetryBackoffSchedule.MAX_ATTEMPTS);
+            claimReturns(exhausted);
+            when(emailAdapter.send(any(ReachMessage.class)))
+                    .thenThrow(RetryableSendException.providerFailure("503", new RuntimeException()));
+            // The publish throws (broker down / timeout): the row must NOT be marked, so it is not lost.
+            org.mockito.Mockito.doThrow(new IllegalStateException("broker down"))
+                    .when(dlqPublisher)
+                    .publish(any(ReachTaskDeadLettered.class));
+
+            // The per-task broad catch isolates the failure; the poll completes without throwing.
+            dispatcher.dispatchPoll();
+
+            verify(dlqPublisher).publish(any(ReachTaskDeadLettered.class));
+            verify(dispatchDao, never()).markDeadLettered(any(), any(), any());
+            verify(dispatchDao, never()).markFailed(any(), any(), any());
         }
     }
 
@@ -187,6 +272,23 @@ class ReachTaskDispatcherTest {
             verify(emailAdapter, never()).send(any());
             verify(dispatchDao).markFailed(eq(t.taskId()), anyString(), any());
             verify(dispatchDao, never()).scheduleRetry(any(), any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("外部呼叫回傳不可重試原因（無效地址）→ 立即 FAILED，不排程重試、不增加重試次數")
+        void nonRetryableProviderFailureFailsImmediately() {
+            ClaimedTask t = task(0);
+            claimReturns(t);
+            when(emailAdapter.send(any(ReachMessage.class)))
+                    .thenThrow(new NonRetryableSendException("invalid recipient address"));
+
+            dispatcher.dispatchPoll();
+
+            verify(dispatchDao).markFailed(eq(t.taskId()), anyString(), any());
+            // No retry burned and no dead-lettering: a permanent failure terminates straight to FAILED.
+            verify(dispatchDao, never()).scheduleRetry(any(), any(), any(), any());
+            verify(dispatchDao, never()).markDeadLettered(any(), any(), any());
+            verifyNoInteractions(dlqPublisher);
         }
     }
 
