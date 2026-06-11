@@ -9,7 +9,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Drives time-based campaign lifecycle transitions (task 6.1, FR-012, US-002): when a campaign
@@ -23,9 +24,15 @@ import org.springframework.transaction.annotation.Transactional;
  * whose {@code startAt} and {@code endAt} are both already past converges
  * {@code SCHEDULED → RUNNING → ENDED} within one tick.
  *
- * <p>Per-campaign failures are isolated (the established repo convention; see {@code
- * ReachTriggerEvaluatorRegistry} and CLAUDE.md): one bad campaign is logged and skipped so it does
- * not abort the rest of the sweep.
+ * <p><b>Per-campaign isolation.</b> The sweep itself is <em>not</em> wrapped in a single
+ * transaction. Instead each campaign's {@code transitionTo} + {@code saveAndFlush} runs in its own
+ * transaction via {@link TransactionTemplate}, and the broad catch wraps that whole boundary. This
+ * makes the isolation real: a concurrent operator edit that loses the optimistic-lock race raises
+ * {@code ObjectOptimisticLockingFailureException} on {@code saveAndFlush} (see
+ * {@link CampaignRepository}), which rolls back only that one campaign's transaction and is caught
+ * here — the remaining campaigns are unaffected. (Contrast {@code ReachTriggerEvaluatorRegistry},
+ * whose broad catch wraps pure in-memory evaluation; a write inside a shared transaction would not
+ * be equivalently isolated, which is why each campaign needs its own boundary.)
  *
  * <p>Scope note: this scheduler only advances lifecycle status timing. It emits no Kafka events and
  * scans no send cycles — those are separate tasks.
@@ -36,18 +43,21 @@ public class CampaignLifecycleScheduler {
     private static final Logger LOG = LoggerFactory.getLogger(CampaignLifecycleScheduler.class);
 
     private final CampaignRepository campaignRepository;
+    private final TransactionTemplate transactionTemplate;
 
-    public CampaignLifecycleScheduler(CampaignRepository campaignRepository) {
+    public CampaignLifecycleScheduler(
+            CampaignRepository campaignRepository, PlatformTransactionManager transactionManager) {
         this.campaignRepository = campaignRepository;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
     /**
      * One lifecycle sweep: auto-start due {@code SCHEDULED} campaigns, then auto-end due
-     * {@code RUNNING}/{@code PAUSED} campaigns. Transactional so the whole tick commits atomically and
-     * each {@code save} flows through the optimistic-lock version.
+     * {@code RUNNING}/{@code PAUSED} campaigns. The sweep is deliberately non-transactional; each
+     * campaign is advanced in its own transaction (see {@link #transition}) so one campaign's
+     * optimistic-lock loss is isolated and the sweep continues.
      */
     @Scheduled(fixedDelayString = "${campaignreach.scheduler.lifecycle.fixed-delay-ms:60000}")
-    @Transactional
     public void advanceLifecycle() {
         Instant now = Instant.now();
         autoStart(now);
@@ -72,14 +82,18 @@ public class CampaignLifecycleScheduler {
     }
 
     /**
-     * Applies one guarded transition and persists it, isolating any per-campaign failure so the sweep
-     * continues.
+     * Applies one guarded transition and persists it in its own transaction, isolating any
+     * per-campaign failure so the sweep continues. The {@code saveAndFlush} forces the write — and
+     * any {@code ObjectOptimisticLockingFailureException} from a concurrent edit — to surface inside
+     * this boundary (and this catch), rather than at an outer commit.
      */
     @SuppressWarnings("checkstyle:IllegalCatch") // deliberate broad catch: per-campaign exception isolation
     private void transition(Campaign campaign, CampaignStatus target) {
         try {
-            campaign.transitionTo(target);
-            campaignRepository.save(campaign);
+            transactionTemplate.executeWithoutResult(status -> {
+                campaign.transitionTo(target);
+                campaignRepository.saveAndFlush(campaign);
+            });
             LOG.info("Auto-advanced campaign {} to {}", campaign.getId(), target);
         } catch (RuntimeException ex) {
             LOG.warn("Failed to auto-advance campaign {} to {}: {}", campaign.getId(), target, ex.getMessage(), ex);

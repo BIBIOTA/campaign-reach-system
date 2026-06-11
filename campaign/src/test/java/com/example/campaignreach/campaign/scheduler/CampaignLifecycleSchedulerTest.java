@@ -3,6 +3,7 @@ package com.example.campaignreach.campaign.scheduler;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -22,11 +23,20 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionStatus;
 
 /**
  * Fast unit tests for the time-driven lifecycle sweep (task 6.1, scenario "起訖時間自動推進"). No Kafka,
  * no Spring context: the {@link CampaignRepository} is stubbed and transitions are asserted against
  * the guarded edges from {@code diagrams/02-state-campaign-and-task-lifecycle.puml}.
+ *
+ * <p>The scheduler runs each campaign in its own transaction via a {@code TransactionTemplate}. Here
+ * it is backed by a Mockito-mocked {@link PlatformTransactionManager}: the template still invokes the
+ * per-campaign callback (so the transition + {@code saveAndFlush} logic genuinely runs), and on a
+ * thrown exception the template rolls that one transaction back — exercising real per-campaign
+ * isolation rather than a mock artifact.
  */
 @ExtendWith(MockitoExtension.class)
 class CampaignLifecycleSchedulerTest {
@@ -37,11 +47,14 @@ class CampaignLifecycleSchedulerTest {
     @Mock
     private CampaignRepository campaignRepository;
 
+    @Mock
+    private PlatformTransactionManager transactionManager;
+
     private CampaignLifecycleScheduler scheduler;
 
     @BeforeEach
     void setUp() {
-        scheduler = new CampaignLifecycleScheduler(campaignRepository);
+        scheduler = new CampaignLifecycleScheduler(campaignRepository, transactionManager);
     }
 
     private static Campaign campaign(CampaignStatus status, Instant startAt, Instant endAt) {
@@ -61,7 +74,7 @@ class CampaignLifecycleSchedulerTest {
         scheduler.advanceLifecycle();
 
         assertThat(due.getStatus()).isEqualTo(CampaignStatus.RUNNING);
-        verify(campaignRepository).save(due);
+        verify(campaignRepository).saveAndFlush(due);
     }
 
     @Test
@@ -76,7 +89,7 @@ class CampaignLifecycleSchedulerTest {
         scheduler.advanceLifecycle();
 
         assertThat(due.getStatus()).isEqualTo(CampaignStatus.ENDED);
-        verify(campaignRepository).save(due);
+        verify(campaignRepository).saveAndFlush(due);
     }
 
     @Test
@@ -91,7 +104,7 @@ class CampaignLifecycleSchedulerTest {
         scheduler.advanceLifecycle();
 
         assertThat(due.getStatus()).isEqualTo(CampaignStatus.ENDED);
-        verify(campaignRepository).save(due);
+        verify(campaignRepository).saveAndFlush(due);
     }
 
     @Test
@@ -121,7 +134,7 @@ class CampaignLifecycleSchedulerTest {
 
         scheduler.advanceLifecycle();
 
-        verify(campaignRepository, never()).save(any());
+        verify(campaignRepository, never()).saveAndFlush(any());
     }
 
     @Test
@@ -136,11 +149,12 @@ class CampaignLifecycleSchedulerTest {
 
         scheduler.advanceLifecycle();
 
-        verify(campaignRepository, never()).save(any());
+        verify(campaignRepository, never()).saveAndFlush(any());
     }
 
     @Test
-    @DisplayName("per-campaign exception isolation: one failing campaign does not stop the others")
+    @DisplayName("per-campaign exception isolation: a saveAndFlush optimistic-lock loss rolls back only "
+            + "its own transaction and the sweep continues")
     void perCampaignExceptionIsolation() {
         Campaign bad = campaign(CampaignStatus.SCHEDULED, PAST, FUTURE);
         Campaign good = campaign(CampaignStatus.SCHEDULED, PAST, FUTURE);
@@ -148,12 +162,21 @@ class CampaignLifecycleSchedulerTest {
                 .thenReturn(List.of(bad, good));
         when(campaignRepository.findByStatusInAndEndAtLessThanEqual(ArgumentMatchers.anyCollection(), any()))
                 .thenReturn(List.of());
-        when(campaignRepository.save(bad)).thenThrow(new RuntimeException("boom"));
+        // Real Hibernate surfaces a concurrent operator edit as ObjectOptimisticLockingFailureException
+        // on flush; saveAndFlush forces it inside the per-campaign transaction boundary (and catch).
+        var badStatus = mock(TransactionStatus.class);
+        var goodStatus = mock(TransactionStatus.class);
+        when(transactionManager.getTransaction(any())).thenReturn(badStatus, goodStatus);
+        when(campaignRepository.saveAndFlush(bad))
+                .thenThrow(new ObjectOptimisticLockingFailureException(Campaign.class, bad.getId()));
 
         scheduler.advanceLifecycle();
 
-        // good was still advanced and saved despite bad throwing on save
+        // bad ran in its own transaction which was rolled back; good still advanced and committed in a
+        // separate transaction — real per-campaign isolation, not a swallowed mock throw.
+        verify(transactionManager).rollback(badStatus);
+        verify(transactionManager).commit(goodStatus);
         assertThat(good.getStatus()).isEqualTo(CampaignStatus.RUNNING);
-        verify(campaignRepository).save(good);
+        verify(campaignRepository).saveAndFlush(good);
     }
 }
