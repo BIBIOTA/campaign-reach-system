@@ -297,4 +297,106 @@ class ReachTaskDispatchDaoIntegrationTest extends AbstractIntegrationTest {
 
         assertThat(taskRow(taskId).get("status")).isEqualTo("PENDING");
     }
+
+    /**
+     * Seeds one PROCESSING reach_task with a held lease ({@code locked_by}/{@code locked_until}),
+     * simulating a worker that claimed the task and is mid-send (or crashed). The lease expiry is set
+     * relative to a given instant so the reaper-cutoff predicate can be exercised both ways.
+     */
+    private UUID seedProcessingWithLease(UUID requestId, Instant lockedUntil) {
+        UUID taskId = UUID.randomUUID();
+        jdbcTemplate.update(
+                """
+                INSERT INTO reach_task
+                    (id, reach_request_id, campaign_id, user_id, send_cycle_key, channel, status,
+                     retry_count, processing_started_at, locked_by, locked_until, created_at)
+                VALUES (?, ?, ?, ?, ?, 'EMAIL'::channel, 'PROCESSING'::reach_task_status, ?, ?, ?, ?, ?)
+                """,
+                taskId,
+                requestId,
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                "cycle-" + taskId,
+                0,
+                Timestamp.from(Instant.now()),
+                WORKER_ID,
+                Timestamp.from(lockedUntil),
+                Timestamp.from(Instant.now()));
+        return taskId;
+    }
+
+    /**
+     * Reaper assertion 1 — a PROCESSING row whose lease expired ({@code locked_until < now}) is reset to
+     * PENDING with {@code locked_by}/{@code locked_until} cleared, so the dispatcher poll re-claims it.
+     * {@code processing_started_at} is retained as an audit trace of the prior attempt.
+     */
+    @Test
+    void reapExpiredLeasesResetsStuckProcessingRowToPending() {
+        UUID requestId = seedRequest();
+        Instant now = Instant.now();
+        UUID stuck = seedProcessingWithLease(requestId, now.minus(Duration.ofMinutes(1))); // expired lease
+
+        int reaped = dao().reapExpiredLeases(now);
+
+        assertThat(reaped).isEqualTo(1);
+        Map<String, Object> row = taskRow(stuck);
+        assertThat(row.get("status")).isEqualTo("PENDING");
+        assertThat(row.get("locked_by")).isNull();
+        assertThat(row.get("locked_until")).isNull();
+        assertThat(row.get("processing_started_at")).isNotNull(); // audit trace retained
+    }
+
+    /** Reaper assertion 2 — a PROCESSING row whose lease is still valid ({@code locked_until >= now}) is NOT reaped. */
+    @Test
+    void reapExpiredLeasesLeavesValidLeaseUntouched() {
+        UUID requestId = seedRequest();
+        Instant now = Instant.now();
+        UUID live = seedProcessingWithLease(requestId, now.plus(Duration.ofMinutes(5))); // lease still valid
+
+        int reaped = dao().reapExpiredLeases(now);
+
+        assertThat(reaped).isEqualTo(0);
+        Map<String, Object> row = taskRow(live);
+        assertThat(row.get("status")).isEqualTo("PROCESSING");
+        assertThat(row.get("locked_by")).isEqualTo(WORKER_ID);
+        assertThat(row.get("locked_until")).isNotNull();
+    }
+
+    /**
+     * Reaper assertion 3 — non-PROCESSING rows are untouched by the {@code WHERE status='PROCESSING'}
+     * guard even when they carry an old timestamp (a SENT and a RETRY_SCHEDULED row stay as-is).
+     */
+    @Test
+    void reapExpiredLeasesLeavesNonProcessingRowsUntouched() {
+        UUID requestId = seedRequest();
+        Instant now = Instant.now();
+        UUID sent = seedTask(requestId, "SENT", Channel.EMAIL, null);
+        UUID retryScheduled = seedTask(requestId, "RETRY_SCHEDULED", Channel.EMAIL, now.minus(Duration.ofMinutes(10)));
+
+        int reaped = dao().reapExpiredLeases(now);
+
+        assertThat(reaped).isEqualTo(0);
+        assertThat(taskRow(sent).get("status")).isEqualTo("SENT");
+        assertThat(taskRow(retryScheduled).get("status")).isEqualTo("RETRY_SCHEDULED");
+    }
+
+    /** Reaper assertion 4 — the returned count matches the number of rows actually reset. */
+    @Test
+    void reapExpiredLeasesReturnsCountOfRowsReset() {
+        UUID requestId = seedRequest();
+        Instant now = Instant.now();
+        seedProcessingWithLease(requestId, now.minus(Duration.ofMinutes(1)));
+        seedProcessingWithLease(requestId, now.minus(Duration.ofMinutes(2)));
+        seedProcessingWithLease(requestId, now.plus(Duration.ofMinutes(5))); // still valid → not counted
+
+        int reaped = dao().reapExpiredLeases(now);
+
+        assertThat(reaped).isEqualTo(2);
+        Integer stillProcessing = jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM reach_task WHERE status = 'PROCESSING'::reach_task_status", Integer.class);
+        assertThat(stillProcessing).isEqualTo(1);
+        Integer nowPending = jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM reach_task WHERE status = 'PENDING'::reach_task_status", Integer.class);
+        assertThat(nowPending).isEqualTo(2);
+    }
 }

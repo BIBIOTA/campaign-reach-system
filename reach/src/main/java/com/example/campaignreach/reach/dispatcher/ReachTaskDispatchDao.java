@@ -122,6 +122,16 @@ public class ReachTaskDispatchDao {
             WHERE id = ? AND status = 'PROCESSING'::reach_task_status
             """;
 
+    private static final String REAP_EXPIRED_LEASES_SQL =
+            """
+            UPDATE reach_task
+            SET status = 'PENDING'::reach_task_status,
+                locked_by = NULL,
+                locked_until = NULL
+            WHERE status = 'PROCESSING'::reach_task_status
+              AND locked_until < ?
+            """;
+
     private final JdbcTemplate jdbcTemplate;
     private final TransactionTemplate transactionTemplate;
     private final ReachPlanTemplateExtractor templateExtractor;
@@ -258,5 +268,27 @@ public class ReachTaskDispatchDao {
         Timestamp nowTs = Timestamp.from(now);
         transactionTemplate.executeWithoutResult(
                 status -> jdbcTemplate.update(MARK_DEAD_LETTERED_SQL, nowTs, error, taskId));
+    }
+
+    /**
+     * Reaper reset (task 9.3, short transaction): reclaim tasks stuck in PROCESSING whose lease has
+     * expired — the symptom of a worker that claimed a task (stage one) then crashed before writing the
+     * outcome back (stage two). The single guarded {@code UPDATE … WHERE status='PROCESSING' AND
+     * locked_until < ?} resets each such row to PENDING and clears the lease, so the dispatcher's next
+     * poll re-claims it (a PENDING row with an unchanged/elapsed {@code next_retry_at} satisfies the
+     * stage-one claim predicate {@code next_retry_at IS NULL OR <= now}). {@code processing_started_at}
+     * is intentionally left untouched as an audit trace of the prior attempt.
+     *
+     * <p>The guard makes the reset idempotent and safe under concurrent reapers: a row already reset to
+     * PENDING no longer matches, and two reapers resetting the same row is harmless — so no distributed
+     * lock is required.
+     *
+     * @param now the single reap-tick instant; rows whose lease expired strictly before this are reset
+     * @return the number of rows reset to PENDING (0 when nothing is stuck)
+     */
+    public int reapExpiredLeases(Instant now) {
+        Timestamp nowTs = Timestamp.from(now);
+        Integer reaped = transactionTemplate.execute(status -> jdbcTemplate.update(REAP_EXPIRED_LEASES_SQL, nowTs));
+        return reaped == null ? 0 : reaped;
     }
 }
