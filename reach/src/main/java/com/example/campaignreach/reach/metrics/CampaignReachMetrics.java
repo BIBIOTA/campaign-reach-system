@@ -32,7 +32,9 @@ public record CampaignReachMetrics(
 
     /** Defensively copies {@code statusDistribution} so the response cannot be mutated post-construction. */
     public CampaignReachMetrics {
-        statusDistribution = statusDistribution == null ? Map.of() : Map.copyOf(new EnumMap<>(statusDistribution));
+        statusDistribution = statusDistribution == null || statusDistribution.isEmpty()
+                ? Map.of()
+                : Map.copyOf(new EnumMap<>(statusDistribution));
     }
 
     /**
