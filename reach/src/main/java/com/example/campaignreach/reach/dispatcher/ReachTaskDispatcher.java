@@ -11,7 +11,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -136,8 +135,12 @@ public class ReachTaskDispatcher {
             // stage-two write-back to RETRY_SCHEDULED with exponential backoff, or FAILED once exhausted.
             writeBackRetryable(task, retryable.getMessage(), now);
         } catch (RuntimeException unexpected) {
-            // Any other unexpected failure is isolated and treated as retryable so the task is not lost;
-            // it converges to FAILED once attempts are exhausted (9.2 adds the DLQ leg).
+            // A genuinely-unexpected exception is INTENTIONALLY routed through the retryable path so a
+            // single task's failure is isolated (per-task isolation, see class javadoc) and the task is
+            // never lost: it retries with backoff and converges to FAILED once attempts are exhausted.
+            // Fine-grained permanent-error fast-fail classification (so a non-retryable failure FAILs
+            // immediately instead of burning retries) is deliberately DEFERRED to task 9.2 with the DLQ
+            // leg; 9.1 keeps one uniform retryable fallback on purpose.
             LOG.warn(
                     "Unexpected failure dispatching reach_task {}: {}",
                     task.taskId(),
@@ -173,8 +176,11 @@ public class ReachTaskDispatcher {
         return host + "-" + Long.toHexString(ProcessHandle.current().pid());
     }
 
-    /** @return the lease owner id this dispatcher writes to {@code locked_by} (test visibility). */
-    Optional<String> workerId() {
-        return Optional.ofNullable(workerId);
+    /**
+     * @return the lease owner id this dispatcher writes to {@code locked_by} (test visibility). Always
+     *     non-null: {@link #resolveWorkerId()} falls back to {@code "unknown"} on an UnknownHost.
+     */
+    String workerId() {
+        return workerId;
     }
 }
