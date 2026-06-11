@@ -413,3 +413,48 @@
 - Task: 9.1 實作兩階段事務發送（FOR UPDATE SKIP LOCKED + 租約）
 - Transition: not_started → in_progress
 - Next action: 派發 implementer subagent，於 reach/dispatcher 實作兩階段短事務發送（階段1 FOR UPDATE SKIP LOCKED 撈 PENDING/RETRY_SCHEDULED 且 next_retry_at<=now、breaker 未開時標 PROCESSING+locked_by/locked_until 後立即 commit；事務外 ChannelAdapter.send；階段2 新事務回寫 SENT+寫 send_result/清鎖 或 RETRY_SCHEDULED+指數退避；breaker 開於標 PROCESSING 前跳過維持 PENDING、標 PROCESSING 後快速失敗走階段2 RETRY_SCHEDULED），新增 V8 send_result migration，完成後接 spec-reviewer 與 code-quality-reviewer。
+
+## Session 49 — 2026-06-11 20:30
+- Stage: SDD
+- Task: 9.1 實作兩階段事務發送（FOR UPDATE SKIP LOCKED + 租約）
+- Transition: in_progress → passing
+- Evidence:
+  - Commits: 7f45534 feat(reach): two-phase transactional dispatcher with claim lease + exponential backoff (task 9.1); 1280cf3 test(reach): add Testcontainers IT for dispatcher claim/write-back SQL + tidy workerId (task 9.1 review)
+  - Tests: RetryBackoffScheduleTest(3) + ReachPlanTemplateExtractorTest(4) + ReachTaskDispatcherTest(8) fast 單元測試 green（撈取標 PROCESSING、可重試指數退避 1m/5m/30m、重試耗盡→FAILED、不可重試（suppression 命中）→FAILED、breaker 開啟前跳過維持 PENDING、breaker 標 PROCESSING 後快速失敗→RETRY_SCHEDULED）+ ReachTaskDispatchDaoIntegrationTest(5 @RequiresDocker：claim+lease+next_retry_at IS NULL OR <=now 分支、SKIP LOCKED 互斥、markSent 寫 send_result+ON CONFLICT dedup、scheduleRetry retry_count+next_retry_at+清鎖、markFailed 清鎖）。`./gradlew check` BUILD SUCCESSFUL（spotless/checkstyle/spotbugs/test + ArchUnit reach↛campaign + JaCoCo 全綠；Docker-gated IT 本沙箱 5 skipped，implementer 另起臨時 Postgres 實跑驗證 claim CTE/enum cast/reach_plan_snapshot join/ON CONFLICT dedup 皆符合斷言）。新增 V8__send_result.sql（id/reach_task_id FK/provider_message_id/outcome/occurred_at + idx + partial unique，PII 最小化）。
+  - Spec-reviewer: ✅ Spec compliant（5/5；5 場景皆有 scenario-named 行為測試、01/02/05 三圖契約符合、兩階段為真正分離短事務且 adapter.send() 在交易外滿足 NFR-002、breaker 前置檢查留 PENDING、PROCESSING 後 breaker fast-fail→RETRY_SCHEDULED、退避 1m→5m→30m max3、reach↛campaign 守住、未越界實作 9.2 DLQ 發佈/9.3 Reaper/10.1 取消 re-check）
+  - Code-quality-reviewer: ✅ Approved（再審；首審 1 Important：ReachTaskDispatchDao claim/write-back SQL 零整合測試覆蓋 → 已於 1280cf3 補 ReachTaskDispatchDaoIntegrationTest（@RequiresDocker、真 Postgres+Flyway、斷言查實際 DB row 非 mock，含 SKIP LOCKED 互斥/ON CONFLICT dedup/IS NULL OR 分支）對齊 ReachTaskFanOutIntegrationTest bar；2 Minor：workerId() 假性 Optional → 改回 plain String、unexpected-RuntimeException 路由註解收緊明示延後 9.2 皆已修；兩階段交易紀律、SQL 全參數綁定無注入、isAvailable() default method 取捨、send_result provider_message_id 可空性處理皆獲肯定）
+- Next action: dispatch implementer subagent for task 9.2（重試分類 taxonomy 細化、退避上限、重試耗盡 → reach.dlq Kafka 發佈 + 標記，承接 9.1 留下的 DLQ seam），依賴 9.1。
+
+## Session 50 — 2026-06-11 20:45
+- Stage: SDD
+- Task: 9.2 實作重試分類、退避上限與 DLQ
+- Transition: not_started → in_progress
+- Next action: 派發 implementer subagent，新增非重試分類 seam（NonRetryableSendException，地址無效等永久錯誤 → dispatcher 立即 markFailed 不燒重試額度，EmailAdapter 不把其包成 retryable、不計入 breaker）+ 承接 9.1 writeBackRetryable 的 DLQ seam：重試耗盡時改為標記 DLQ 狀態並發佈至 reach.dlq topic（新增 reach 側 ReachDlqPublisher + shared/event DLQ 事件 schema + PartitionKeys.forReachDlq 鍵），退避 1m→5m→30m max3 已由 9.1 完成，完成後接 spec-reviewer 與 code-quality-reviewer。
+
+## Session 51 — 2026-06-11 21:30
+- Stage: SDD
+- Task: 9.2 實作重試分類、退避上限與 DLQ
+- Transition: in_progress → passing
+- Evidence:
+  - Commits: 0223ed0 feat(reach): add retry classification + reach.dlq dead-lettering on exhaustion (task 9.2)
+  - Tests: ReachTaskDispatcherTest（非重試→立即 markFailed 未燒重試/未 dead-letter、耗盡 publishesBeforeMarking InOrder、deadLetterEventCarriesIdentificationFields、publishFailureLeavesRowUnmarked 不靜默遺失）+ EmailAdapterCircuitBreakerTest（NonRetryableSendException surface 且 breaker getNumberOfFailedCalls()==0、transient 仍 retryable 且計入==1）+ ReachDlqPublisherTest（success/broker-rejection/timeout，key=campaignId:sendCycleKey）+ EventSchemaContractTest（ReachTaskDeadLettered round-trip+必填+無 email/address/content）+ ReachTaskDispatchDaoIntegrationTest（@RequiresDocker：markDeadLettered PROCESSING→DLQ+清 lease+非 PROCESSING 不動）。`./gradlew check` BUILD SUCCESSFUL（spotless/checkstyle/spotbugsMain/test + ArchUnit reach↛campaign + JaCoCo 全綠；Docker-gated IT 本沙箱 auto-skip）。
+  - Spec-reviewer: ✅ Spec compliant（5/5；3 in-scope scenario 全覆蓋、單步 PROCESSING→DLQ 在 02-state MVP 子集 note 下為可辯護讀法且無非法邊+guarded WHERE status='PROCESSING'、NonRetryableSendException 先於 broad catch 立即 FAILED 不前進 retry_count、.ignoreExceptions 不污染 breaker 有真實 metric 斷言、publish-then-mark 不靜默遺失經測試實證、ReachDlqPublisher 同步有界+拋錯 at-least-once+forReachDlq 鍵、ReachTaskDeadLettered PII 最小化、reach↛campaign + shared↛reach/campaign 守住；未越界 9.3/10.1/consumer/真實 provider）
+  - Code-quality-reviewer: ✅ Approved（無 Critical/Important；dispatch/dispatchTask 隔離正確、publish-then-mark InOrder 有測、no-publisher 拋錯非 silent no-op、.ignoreExceptions 慣用、markDeadLettered 與 markFailed 平行 guarded+enum cast+具名欄位 row-mapper 無錯位、事件 PII 最小化；3 Minor：測試內 FQN Mockito.mock/doThrow 可改 static import、ReachDlqPublisher 與 ReachRequestPublisher try/catch 跨模組重複屬可接受（邊界使然不抽共用）、ReachTaskDispatcherTest 類別 javadoc 仍寫 task 9.1 可順手更新——皆非阻擋）
+- Next action: dispatch implementer subagent for task 9.3（Reaper job：背景排程定期掃 status=PROCESSING AND locked_until<now() 重置為 PENDING，回收 worker crash 卡死任務），依賴 9.1。
+
+## Session 52 — 2026-06-11 21:45
+- Stage: SDD
+- Task: 9.3 實作 Reaper job（回收卡死的 PROCESSING 任務）
+- Transition: not_started → in_progress
+- Next action: 派發 implementer subagent，於 reach/dispatcher 實作 Reaper 背景排程（@Scheduled 定期 UPDATE reach_task SET status=PENDING、清 locked_by/locked_until WHERE status='PROCESSING' AND locked_until<now()，回收 worker crash 卡死任務，重置後由既有 dispatcher poll 重取），完成後接 spec-reviewer 與 code-quality-reviewer。
+
+## Session 53 — 2026-06-11 21:55
+- Stage: SDD
+- Task: 9.3 實作 Reaper job（回收卡死的 PROCESSING 任務）
+- Transition: in_progress → passing
+- Evidence:
+  - Commits: c697fd4 feat(reach): add Reaper job to reclaim expired-lease PROCESSING tasks (task 9.3)
+  - Tests: `./gradlew :reach:test --tests com.example.campaignreach.reach.dispatcher.ReachTaskReaperTest --tests com.example.campaignreach.reach.dispatcher.ReachTaskDispatcherTest --tests com.example.campaignreach.reach.dispatcher.RetryBackoffScheduleTest :app:test --tests com.example.campaignreach.integration.ReachTaskDispatchDaoIntegrationTest` BUILD SUCCESSFUL；`./gradlew :reach:check :app:test` BUILD SUCCESSFUL（spotless/checkstyle/spotbugs/Jacoco + ArchUnit app tests green；Docker-gated integration tests follow existing @RequiresDocker behavior locally）
+  - Spec-reviewer: ✅ Spec compliant（5/5；scenario「回收卡死任務」由 ReachTaskReaperTest 與 ReachTaskDispatchDaoIntegrationTest 覆蓋，guarded `UPDATE ... WHERE status='PROCESSING' AND locked_until < ?` 對齊 02-state lease recovery，非 PROCESSING/未過期 lease 不動，未越界實作 10.1 取消語意）
+  - Code-quality-reviewer: ✅ Approved（無 Critical/Important；Reaper 僅負責 scheduled tick + logging，DAO 保持短事務與參數化 SQL，reset 操作 idempotent 且不需要 ShedLock；測試含 wrapper 行為與真 DB SQL 行為）
+- Next action: Section 9（9.1–9.3）全數 passing；執行 final pass（`./gradlew check` + `openspec validate add-ecommerce-campaign-system --strict`）後 invoke spec-driven-dev:verification-before-completion。
