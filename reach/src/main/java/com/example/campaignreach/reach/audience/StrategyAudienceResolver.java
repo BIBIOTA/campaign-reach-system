@@ -16,8 +16,10 @@ import org.springframework.stereotype.Component;
  *       level / region), since member master data lives upstream.
  * </ul>
  *
- * <p>Dispatch is by kind, so adding a future kind (e.g. a tag system) means adding a branch/strategy,
- * not editing the existing ones (OCP) — mirroring the campaign evaluator-registry pattern.
+ * <p>Dispatch is an exhaustive {@code switch} over the two MVP kinds — compiler-checked with no
+ * default, so a newly added {@link TargetSpec.Kind} forces this method to be revisited rather than
+ * silently falling through. With only two kinds this is simpler than a strategy registry; if the kind
+ * space grows (e.g. a tag system) this is the single place that changes.
  */
 @Component
 public class StrategyAudienceResolver implements AudienceResolver {

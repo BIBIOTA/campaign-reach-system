@@ -1,5 +1,6 @@
 package com.example.campaignreach.reach.audience;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;
@@ -52,7 +53,7 @@ public class TargetSpecParser {
         JsonNode root;
         try {
             root = objectMapper.readTree(json);
-        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+        } catch (JsonProcessingException e) {
             throw new IllegalArgumentException("targetSpec JSON is malformed: " + e.getOriginalMessage(), e);
         }
         if (root == null || !root.isObject()) {
