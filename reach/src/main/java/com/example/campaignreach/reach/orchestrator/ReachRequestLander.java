@@ -32,7 +32,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  *       entirely (the caller acks); redelivery does not re-resolve the audience or re-insert tasks.
  *   <li><em>Present and {@link ReachRequestStatus#PENDING} / {@link ReachRequestStatus#EXPANDING}</em> —
  *       a partially-expanded batch is resumed by re-entering expansion (the expander is itself
- *       crash-resumable in task 7.3).
+ *       crash-resumable via paged ON CONFLICT inserts).
  * </ul>
  *
  * <p>This class is deliberately Kafka-free so it can be unit-tested without a broker; the
@@ -51,7 +51,7 @@ public class ReachRequestLander {
     /**
      * @param repository persistence port whose unique constraint is the dedup source of truth
      * @param audienceExpander seam that resolves {@code targetSpec} and fans the batch out into tasks
-     *     (real implementation arrives in task 7.3; a no-op default keeps the landing path wired)
+     *     ({@link PagedAudienceExpander} — paged, crash-resumable fan-out)
      * @param transactionManager backs the short transaction that lands the {@link ReachRequest} row;
      *     expansion runs outside that transaction so each page commits independently
      */

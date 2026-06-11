@@ -197,7 +197,10 @@ class PagedAudienceExpanderTest {
 
             expander.expand(landedBatch(ReachRequestStatus.PENDING));
 
-            // Batch frequency-cap query must include the send_cycle_key <> ? exclusion clause.
+            // Batch frequency-cap query must be same-campaign scoped (campaign_id = ?) and keep the
+            // send_cycle_key <> ? exclusion clause (orthogonal to same-cycle idempotency).
+            verify(jdbcTemplate, atLeastOnce())
+                    .query(contains("campaign_id = ?"), any(PreparedStatementSetter.class), any(RowMapper.class));
             verify(jdbcTemplate, atLeastOnce())
                     .query(contains("send_cycle_key <> ?"), any(PreparedStatementSetter.class), any(RowMapper.class));
             // Only 2 of 3 survive the cap (page size 2 -> page1 inserts 1 survivor, page2 inserts 1).

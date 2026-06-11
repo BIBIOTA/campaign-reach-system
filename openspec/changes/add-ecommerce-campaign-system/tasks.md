@@ -158,8 +158,9 @@
 - [x] 7.3 實作分頁 fan-out 展開 ReachTask（斷點續跑 + 頻控 + 任務冪等）
   - Acceptance: WHEN 展開受眾 THEN 分頁（每批 M 筆）批次 INSERT ReachTask(PENDING)，以 `ON CONFLICT DO NOTHING` 落在四欄 unique `(campaign_id, user_id, send_cycle_key, channel)`，同一週期同一人不重複建立（§5，FR-014/US-006）
   - Acceptance: WHEN 展開到一半 crash 後 Kafka 重投 THEN 已寫入 task 不重複、未寫入續寫，最終收斂到完整 N 筆，計數不被重複污染（§5，NFR-003）
-  - Acceptance: WHEN 建立 ReachTask 前 THEN 查詢該用戶於時間窗口內歷史 reach_task，命中則跳過（頻控，與冪等語意分離）（§5，US-006）
+  - Acceptance: WHEN 建立 ReachTask 前 THEN 查詢該用戶於**同一活動**時間窗口內歷史 reach_task（`campaign_id = :cid AND send_cycle_key <> :currentCycle`），命中則跳過（頻控為同活動範圍、非跨活動全域疲勞控制，與冪等語意分離）（§5，US-006，design.md §264 / prd FR-014）
   - Acceptance: WHEN 展開完成 THEN reach_request.status 推進 PENDING→EXPANDING→DISPATCHING，`total_count` 一次回填（§5）
+  - follow-up: 目前僅 INSERT 分頁，受眾**解析**仍一次將整份 recipient list（STATIC_LIST 連同整張 audience_list）載入記憶體——MVP 量級可接受，但於 100k fan-out NFR 壓測（任務 12.x）前需改為 streaming/Pageable AudienceResolver；程式碼 `PagedAudienceExpander.expand()` 已標註此限制
   - Depends on: 7.1, 7.2
   - Independence: serial
   - status: passing

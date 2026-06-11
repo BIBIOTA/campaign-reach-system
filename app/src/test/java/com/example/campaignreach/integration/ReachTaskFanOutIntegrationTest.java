@@ -146,39 +146,57 @@ class ReachTaskFanOutIntegrationTest extends AbstractIntegrationTest {
                 .isEqualTo(5);
     }
 
-    /** Scenario: 短時間頻控跳過 — a user with a recent task in a DIFFERENT cycle is skipped by the freq cap. */
+    /**
+     * Scenario: 短時間頻控跳過（同活動範圍）— a user with a recent task in a DIFFERENT cycle of the SAME
+     * campaign is skipped by the freq cap, while a user whose only recent task is in ANOTHER campaign is
+     * NOT capped (frequency capping is same-campaign scoped, not a cross-campaign global cap).
+     */
     @Test
-    void userWithRecentDifferentCycleTaskIsSkippedByFrequencyCap() {
+    void frequencyCapIsScopedToTheSameCampaign() {
         UUID campaignId = UUID.randomUUID();
+        UUID otherCampaignId = UUID.randomUUID();
         UUID cappedUser = UUID.randomUUID();
         UUID freshUser = UUID.randomUUID();
+        UUID otherCampaignUser = UUID.randomUUID();
 
-        // Seed a historical task for cappedUser in a DIFFERENT send cycle, created just now (within window).
-        jdbcTemplate.update(
-                """
-                INSERT INTO reach_task (id, reach_request_id, campaign_id, user_id, send_cycle_key, channel, status, created_at)
-                VALUES (?, ?, ?, ?, 'cycle-PRIOR', 'EMAIL'::channel, 'PENDING'::reach_task_status, ?)
-                """,
-                UUID.randomUUID(),
-                landedRequest(campaignId, "cycle-PRIOR").getId(),
-                campaignId,
-                cappedUser,
-                Timestamp.from(Instant.now()));
+        // Seed a historical task for cappedUser in a DIFFERENT cycle of the SAME campaign (within window).
+        seedHistoricalTask(campaignId, "cycle-PRIOR", cappedUser);
+        // Seed a recent task for otherCampaignUser in ANOTHER campaign — must NOT cap this campaign's reach.
+        seedHistoricalTask(otherCampaignId, "cycle-OTHER", otherCampaignUser);
 
         ReachRequest request = landedRequest(campaignId, "cycle-NOW");
         AudienceResolver resolver = mock(AudienceResolver.class);
         when(resolver.resolve(ArgumentMatchers.any(TargetSpec.class)))
-                .thenReturn(recipients(List.of(cappedUser, freshUser)));
+                .thenReturn(recipients(List.of(cappedUser, freshUser, otherCampaignUser)));
 
         expanderFor(resolver).expand(request);
 
-        // Only the fresh user is inserted for this request; the capped user is skipped (frequency cap).
-        assertThat(taskCount(request.getId())).isEqualTo(1);
-        Integer cappedRows = jdbcTemplate.queryForObject(
+        // freshUser + otherCampaignUser are inserted; only the same-campaign cappedUser is skipped.
+        assertThat(taskCount(request.getId())).isEqualTo(2);
+        assertThat(insertedForUser(request.getId(), cappedUser)).isZero();
+        assertThat(insertedForUser(request.getId(), otherCampaignUser)).isEqualTo(1);
+    }
+
+    /** Inserts a recent reach_task (created now, within the freq-cap window) for the given campaign/cycle/user. */
+    private void seedHistoricalTask(UUID campaignId, String sendCycle, UUID userId) {
+        jdbcTemplate.update(
+                """
+                INSERT INTO reach_task (id, reach_request_id, campaign_id, user_id, send_cycle_key, channel, status, created_at)
+                VALUES (?, ?, ?, ?, ?, 'EMAIL'::channel, 'PENDING'::reach_task_status, ?)
+                """,
+                UUID.randomUUID(),
+                landedRequest(campaignId, sendCycle).getId(),
+                campaignId,
+                userId,
+                sendCycle,
+                Timestamp.from(Instant.now()));
+    }
+
+    private Integer insertedForUser(UUID reachRequestId, UUID userId) {
+        return jdbcTemplate.queryForObject(
                 "SELECT count(*) FROM reach_task WHERE reach_request_id = ? AND user_id = ?",
                 Integer.class,
-                request.getId(),
-                cappedUser);
-        assertThat(cappedRows).isZero();
+                reachRequestId,
+                userId);
     }
 }
