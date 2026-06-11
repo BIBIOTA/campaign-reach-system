@@ -61,10 +61,39 @@ class ReachTaskDispatchDaoIntegrationTest extends AbstractIntegrationTest {
         jdbcTemplate.update("DELETE FROM send_result");
         jdbcTemplate.update("DELETE FROM reach_task");
         jdbcTemplate.update("DELETE FROM reach_request");
+        jdbcTemplate.update("DELETE FROM campaign");
+    }
+
+    /** Seeds one campaign row with the given lifecycle status. */
+    private UUID seedCampaign(String status) {
+        UUID campaignId = UUID.randomUUID();
+        Instant now = Instant.now();
+        jdbcTemplate.update(
+                """
+                INSERT INTO campaign
+                    (id, name, type, status, start_at, end_at, rule_config, target_spec, reach_plan,
+                     version, created_at, updated_at)
+                VALUES (?, ?, 'DISCOUNT'::campaign_type, ?::campaign_status, ?, ?, '{}'::jsonb, '{}'::jsonb,
+                    ?::jsonb, 0, ?, ?)
+                """,
+                campaignId,
+                "Campaign " + campaignId,
+                status,
+                Timestamp.from(now.minus(Duration.ofHours(1))),
+                Timestamp.from(now.plus(Duration.ofHours(1))),
+                REACH_PLAN,
+                Timestamp.from(now),
+                Timestamp.from(now));
+        return campaignId;
     }
 
     /** Seeds one reach_request (carrying the frozen reach_plan_snapshot the claim join reads). */
     private UUID seedRequest() {
+        return seedRequest(seedCampaign("RUNNING"));
+    }
+
+    /** Seeds one reach_request for a specific campaign. */
+    private UUID seedRequest(UUID campaignId) {
         UUID requestId = UUID.randomUUID();
         jdbcTemplate.update(
                 """
@@ -73,7 +102,7 @@ class ReachTaskDispatchDaoIntegrationTest extends AbstractIntegrationTest {
                 VALUES (?, ?, 'SCHEDULED_BATCH'::trigger_type, ?, ?::jsonb, 'DISPATCHING'::reach_request_status, ?)
                 """,
                 requestId,
-                UUID.randomUUID(),
+                campaignId,
                 "cycle-" + requestId,
                 REACH_PLAN,
                 Timestamp.from(Instant.now()));
@@ -83,6 +112,8 @@ class ReachTaskDispatchDaoIntegrationTest extends AbstractIntegrationTest {
     /** Seeds one reach_task row with the given status/channel/next_retry_at, owned by {@code requestId}. */
     private UUID seedTask(UUID requestId, String status, Channel channel, Instant nextRetryAt) {
         UUID taskId = UUID.randomUUID();
+        UUID campaignId = jdbcTemplate.queryForObject(
+                "SELECT campaign_id FROM reach_request WHERE id = ?", UUID.class, requestId);
         jdbcTemplate.update(
                 """
                 INSERT INTO reach_task
@@ -92,7 +123,7 @@ class ReachTaskDispatchDaoIntegrationTest extends AbstractIntegrationTest {
                 """,
                 taskId,
                 requestId,
-                UUID.randomUUID(),
+                campaignId,
                 UUID.randomUUID(),
                 "cycle-" + taskId,
                 channel.name(),
@@ -438,5 +469,57 @@ class ReachTaskDispatchDaoIntegrationTest extends AbstractIntegrationTest {
         Integer nowPending = jdbcTemplate.queryForObject(
                 "SELECT count(*) FROM reach_task WHERE status = 'PENDING'::reach_task_status", Integer.class);
         assertThat(nowPending).isEqualTo(2);
+    }
+
+    /** Cancellation assertion 1 — PAUSED/ENDED cancellation targets only not-yet-sent tasks. */
+    @Test
+    void cancelPendingForCampaignCancelsPendingAndRetryScheduledButLeavesProcessing() {
+        UUID campaignId = seedCampaign("RUNNING");
+        UUID requestId = seedRequest(campaignId);
+        Instant now = Instant.now();
+        UUID pending = seedTask(requestId, "PENDING", Channel.EMAIL, null);
+        UUID retryScheduled = seedTask(requestId, "RETRY_SCHEDULED", Channel.EMAIL, now.minus(Duration.ofMinutes(1)));
+        UUID processing = seedTask(requestId, "PROCESSING", Channel.EMAIL, null);
+
+        int cancelled = dao().cancelPendingForCampaign(campaignId);
+
+        assertThat(cancelled).isEqualTo(2);
+        assertThat(taskRow(pending).get("status")).isEqualTo("CANCELLED");
+        assertThat(taskRow(retryScheduled).get("status")).isEqualTo("CANCELLED");
+        assertThat(taskRow(processing).get("status")).isEqualTo("PROCESSING");
+    }
+
+    /** Cancellation assertion 2 — claim re-checks campaign status and cancels disabled campaigns. */
+    @Test
+    void claimBatchCancelsDisabledCampaignTasksInsteadOfMarkingProcessing() {
+        UUID campaignId = seedCampaign("PAUSED");
+        UUID requestId = seedRequest(campaignId);
+        UUID taskId = seedTask(requestId, "PENDING", Channel.EMAIL, null);
+
+        List<ClaimedTask> claimed = dao().claimBatch(WORKER_ID, List.of(Channel.EMAIL), 10, LEASE, Instant.now());
+
+        assertThat(claimed).isEmpty();
+        Map<String, Object> row = taskRow(taskId);
+        assertThat(row.get("status")).isEqualTo("CANCELLED");
+        assertThat(row.get("locked_by")).isNull();
+        assertThat(row.get("processing_started_at")).isNull();
+    }
+
+    /** Cancellation assertion 3 — a row already PROCESSING before cancellation is allowed to finish. */
+    @Test
+    void cancelPendingForCampaignLeavesAlreadyProcessingTaskClaimedAndMarkSentCanComplete() {
+        UUID campaignId = seedCampaign("RUNNING");
+        UUID requestId = seedRequest(campaignId);
+        Instant now = Instant.now();
+        UUID taskId = seedTask(requestId, "PENDING", Channel.EMAIL, null);
+        ReachTaskDispatchDao dao = dao();
+        dao.claimBatch(WORKER_ID, List.of(Channel.EMAIL), 10, LEASE, now);
+
+        jdbcTemplate.update("UPDATE campaign SET status = 'PAUSED'::campaign_status WHERE id = ?", campaignId);
+        int cancelled = dao.cancelPendingForCampaign(campaignId);
+        dao.markSent(taskId, WORKER_ID, "provider-msg-" + taskId, now.plus(Duration.ofSeconds(1)));
+
+        assertThat(cancelled).isZero();
+        assertThat(taskRow(taskId).get("status")).isEqualTo("SENT");
     }
 }

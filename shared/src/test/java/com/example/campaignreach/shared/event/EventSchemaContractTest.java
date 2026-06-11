@@ -124,6 +124,20 @@ class EventSchemaContractTest {
     }
 
     @Test
+    void campaignStatusChangedRoundTripsThroughJackson() throws Exception {
+        var event = new CampaignStatusChanged(
+                UUID.randomUUID(), "RUNNING", "PAUSED", Instant.parse("2026-06-09T10:00:00Z"));
+
+        String wire = mapper.writeValueAsString(event);
+        JsonNode json = mapper.readTree(wire);
+
+        assertThat(mapper.readValue(wire, CampaignStatusChanged.class)).isEqualTo(event);
+        assertThat(json.fieldNames())
+                .toIterable()
+                .containsExactlyInAnyOrder("campaignId", "previousStatus", "newStatus", "occurredAt");
+    }
+
+    @Test
     void reachTaskDeadLetteredRoundTripsAndIsPiiMinimized() throws Exception {
         var event = new ReachTaskDeadLettered(
                 UUID.randomUUID(),

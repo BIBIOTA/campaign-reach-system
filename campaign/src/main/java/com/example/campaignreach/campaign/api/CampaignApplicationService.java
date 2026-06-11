@@ -6,10 +6,13 @@ import com.example.campaignreach.campaign.domain.CampaignStatus;
 import com.example.campaignreach.campaign.domain.rule.RuleConfig;
 import com.example.campaignreach.campaign.domain.rule.RuleConfigMapper;
 import com.example.campaignreach.campaign.domain.rule.RuleConfigValidationException;
+import com.example.campaignreach.shared.event.CampaignStatusChanged;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,6 +32,7 @@ public class CampaignApplicationService {
 
     private final CampaignRepository repository;
     private final RuleConfigMapper ruleConfigMapper;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * Dedicated codec owning the {@code target_spec} / {@code reach_plan} JSON column format. Like
@@ -38,9 +42,13 @@ public class CampaignApplicationService {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     /** Wires the campaign repository and the rule validation/serialization mapper. */
-    public CampaignApplicationService(CampaignRepository repository, RuleConfigMapper ruleConfigMapper) {
+    public CampaignApplicationService(
+            CampaignRepository repository,
+            RuleConfigMapper ruleConfigMapper,
+            ApplicationEventPublisher eventPublisher) {
         this.repository = repository;
         this.ruleConfigMapper = ruleConfigMapper;
+        this.eventPublisher = eventPublisher;
     }
 
     /** Creates a campaign in {@code DRAFT} (FR-006), validating the rule before persist. Returns the new id + version. */
@@ -127,8 +135,16 @@ public class CampaignApplicationService {
     public CampaignView transition(UUID id, ChangeCampaignStatusRequest request) {
         Campaign campaign = require(id);
         assertVersionMatches(campaign, request.version());
+        CampaignStatus previousStatus = campaign.getStatus();
         campaign.transitionTo(request.targetStatus());
-        return toView(repository.save(campaign));
+        Campaign saved = repository.save(campaign);
+        publishStatusChanged(saved, previousStatus);
+        return toView(saved);
+    }
+
+    private void publishStatusChanged(Campaign campaign, CampaignStatus previousStatus) {
+        eventPublisher.publishEvent(new CampaignStatusChanged(
+                campaign.getId(), previousStatus.name(), campaign.getStatus().name(), Instant.now()));
     }
 
     private Campaign require(UUID id) {

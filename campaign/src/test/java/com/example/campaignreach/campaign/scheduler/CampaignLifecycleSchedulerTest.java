@@ -23,6 +23,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
@@ -50,11 +51,14 @@ class CampaignLifecycleSchedulerTest {
     @Mock
     private PlatformTransactionManager transactionManager;
 
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
     private CampaignLifecycleScheduler scheduler;
 
     @BeforeEach
     void setUp() {
-        scheduler = new CampaignLifecycleScheduler(campaignRepository, transactionManager);
+        scheduler = new CampaignLifecycleScheduler(campaignRepository, eventPublisher, transactionManager);
     }
 
     private static Campaign campaign(CampaignStatus status, Instant startAt, Instant endAt) {
