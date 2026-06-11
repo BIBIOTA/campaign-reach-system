@@ -30,7 +30,14 @@ public record CampaignReachMetrics(
         double failedRate,
         Map<ReachTaskStatus, Long> statusDistribution) {
 
-    /** Defensively copies {@code statusDistribution} so the response cannot be mutated post-construction. */
+    /**
+     * Defensively copies {@code statusDistribution} so the response cannot be mutated
+     * post-construction. The {@code null}/empty branch yields {@link Map#of()} and exists only to keep
+     * a <em>directly</em>-constructed instance robust: the {@link #fromStatusCounts} builder — the only
+     * production path — always passes a fully-populated seven-key {@link EnumMap}, so it never takes
+     * that branch. (Wrapping in {@code new EnumMap<>(source)} before {@link Map#copyOf} avoids the
+     * {@code EnumMap(Map)} copy-constructor NPE on an empty plain map that cannot infer the key type.)
+     */
     public CampaignReachMetrics {
         statusDistribution = statusDistribution == null || statusDistribution.isEmpty()
                 ? Map.of()

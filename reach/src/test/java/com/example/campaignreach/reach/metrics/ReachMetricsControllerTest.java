@@ -136,4 +136,15 @@ class ReachMetricsControllerTest {
                         .with(user("intruder").roles("VIEWER")))
                 .andExpect(status().isForbidden());
     }
+
+    /**
+     * A malformed {@code campaignId} path variable fails {@code UUID} conversion and is rejected with
+     * 400 (not 404/500). Requires authentication first, since the {@code /internal/**} chain runs
+     * before the controller so an anonymous malformed request would 401 before any UUID parsing.
+     */
+    @Test
+    void malformedCampaignIdIsRejectedWith400() throws Exception {
+        mockMvc.perform(get("/internal/reach/campaigns/not-a-uuid/metrics").with(httpBasic("op", "pw")))
+                .andExpect(status().isBadRequest());
+    }
 }
