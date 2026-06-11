@@ -47,6 +47,15 @@ dependencies {
 
 tasks.withType<Test>().configureEach {
     useJUnitPlatform()
+    // Surface the real cause of test failures (incl. Spring context-startup failures) in CI logs,
+    // where the default summary prints only stack-trace frame locations without exception messages.
+    testLogging {
+        events("failed")
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+        showCauses = true
+        showStackTraces = true
+        showExceptions = true
+    }
 }
 
 // Code formatting — single source of truth: Palantir Java Format (4-space indent).
