@@ -339,3 +339,20 @@
   - Spec-reviewer: ✅ Spec compliant（5/5；V4__reach_request.sql 16 欄+unique(campaign_id,send_cycle_key,trigger_type)+trigger_type/reach_request_status enum 對齊 05-er、消費步驟對齊 01-sequence、entity 刻意不映 7.3 的 count/timestamp 欄為合理 scope 決策、reach↛campaign 守住）
   - Code-quality-reviewer: ✅ Approved（無 Critical/Important；thin-listener→Kafka-free-handler 對齊 DomainEventConsumer 範式、專屬 typed at-least-once factory 與 campaign DLT 隔離有據、lost-insert-race + @Transactional saveAndFlush 正確、NoOpAudienceExpander plain @Component 為乾淨 7.3 handoff、spotbugs exclude 窄且有據；Minor #2 reach factory 未走 listener configurer → 已於 0b573bb 文件化刻意省略，因其 raw <Object,Object> 簽章與 typed deserializer 不相容且本專案未設 listener.* 調校）
 - Next action: dispatch implementer subagent for task 7.2（AudienceResolver：reach 模組將 targetSpec 解析為收件人清單，支援靜態名單與會員等級/地區條件分眾）。
+
+## Session 40 — 2026-06-11 15:00
+- Stage: SDD
+- Task: 7.2 實作 AudienceResolver（位於 reach）將 targetSpec 解析為收件人
+- Transition: not_started → in_progress
+- Next action: 派發 implementer subagent，於 reach/audience 實作 AudienceResolver（resolve(TargetSpec)→List<Recipient>）+ reach 自有 TargetSpec/Recipient 模型（解析事件帶的 targetSpec JSON：kind STATIC_LIST/CONDITION、listId、conditions）；STATIC_LIST 由新增 audience_list/audience_list_member 表（V5 migration，對齊 05-er 區塊 A）查詢解析，CONDITION（會員等級/地區）委派 MemberDirectory port（MVP 最小實作，會員主檔屬上游電商主站），campaign 不展開收件人，完成後接 spec-reviewer 與 code-quality-reviewer。
+
+## Session 41 — 2026-06-11 15:30
+- Stage: SDD
+- Task: 7.2 實作 AudienceResolver（位於 reach）將 targetSpec 解析為收件人
+- Transition: in_progress → passing
+- Evidence:
+  - Commits: c6ba61b feat(reach): add AudienceResolver resolving targetSpec to recipients (task 7.2); ad886b4 docs(reach): clarify switch-dispatch rationale and import JsonProcessingException (task 7.2 review)
+  - Tests: TargetSpecParserTest 8 + StrategyAudienceResolverTest 2 = 10 fast unit tests green（@Nested「受眾一律由 reach 解析」：STATIC_LIST→audienceListMemberRepository.findByListId 映射 Recipient、CONDITION→MemberDirectory port，各以 verifyNoInteractions 驗證另一 collaborator 未被呼叫；parser trust-boundary：合法 STATIC_LIST/CONDITION 解析、blank/malformed/unknown-kind/缺 listId/缺 conditions 各帶 actionable reason 拒絕）。完整 `./gradlew check` BUILD SUCCESSFUL（reach spotless/checkstyle/spotbugs/test + app ArchUnit + JaCoCo 全綠；Docker-gated 整合測試 skip）。
+  - Spec-reviewer: ✅ Spec compliant（5/5；AudienceResolver 介面簽章對齊 03-class、V5__audience_list.sql 複合 PK(list_id,user_id)+FK 對齊 05-er 區塊 A、CONDITION MVP stub 比照 5.1 FlashSale 為 acceptable「支援」、無 7.3 reach_task fan-out 外洩、reach 自有 TargetSpec/Recipient 不 import campaign DTO、reach↛campaign 守住）
+  - Code-quality-reviewer: ✅ Approved（無 Critical/Important；module-boundary 紀律佳、trust-boundary parser 單一驗證點、PII 最小化 Recipient 僅 userId、@IdClass 複合鍵 equals/hashCode 正確、record 防禦性複製 conditions、MvpMemberDirectory 誠實標注 MVP seam、ObjectMapper.copy() 避 EI_EXPOSE_REP2、無 silent spotbugs exclude；3 Minor：switch 非 registry 之 Javadoc 誇大→已於 ad886b4 修正、inline FQN→已 import、test 子類 override 觀察不需改）
+- Next action: dispatch implementer subagent for task 7.3（分頁 fan-out 展開 ReachTask：每批 M 筆 INSERT ON CONFLICT DO NOTHING 落四欄 unique、斷點續跑、頻控、status PENDING→EXPANDING→DISPATCHING + total_count 回填），依賴 7.1、7.2。

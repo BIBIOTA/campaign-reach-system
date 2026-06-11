@@ -150,11 +150,11 @@
   - Depends on: 2.2, 3.1
   - Independence: serial
   - status: passing
-- [ ] 7.2 實作 AudienceResolver（位於 reach）將 targetSpec 解析為收件人
+- [x] 7.2 實作 AudienceResolver（位於 reach）將 targetSpec 解析為收件人
   - Acceptance: WHEN 給定 targetSpec THEN 由 reach 模組統一解析為收件人清單，支援靜態名單與簡單條件分眾（會員等級、地區），campaign 不展開收件人（§4，FR-007/FR-013）
   - Depends on: 1.2
   - Independence: parallel-safe
-  - status: not_started
+  - status: passing
 - [ ] 7.3 實作分頁 fan-out 展開 ReachTask（斷點續跑 + 頻控 + 任務冪等）
   - Acceptance: WHEN 展開受眾 THEN 分頁（每批 M 筆）批次 INSERT ReachTask(PENDING)，以 `ON CONFLICT DO NOTHING` 落在四欄 unique `(campaign_id, user_id, send_cycle_key, channel)`，同一週期同一人不重複建立（§5，FR-014/US-006）
   - Acceptance: WHEN 展開到一半 crash 後 Kafka 重投 THEN 已寫入 task 不重複、未寫入續寫，最終收斂到完整 N 筆，計數不被重複污染（§5，NFR-003）
