@@ -123,6 +123,39 @@ class EventSchemaContractTest {
                 .containsExactlyInAnyOrder("reachTaskId", "providerMessageId", "outcome", "occurredAt");
     }
 
+    @Test
+    void reachTaskDeadLetteredRoundTripsAndIsPiiMinimized() throws Exception {
+        var event = new ReachTaskDeadLettered(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                Channel.EMAIL,
+                "sched:c:2026-06-09T10:00",
+                "retries-exhausted:provider timeout",
+                3,
+                Instant.parse("2026-06-09T10:00:00Z"));
+
+        String wire = mapper.writeValueAsString(event);
+        JsonNode json = mapper.readTree(wire);
+
+        assertThat(mapper.readValue(wire, ReachTaskDeadLettered.class)).isEqualTo(event);
+        assertThat(json.fieldNames())
+                .toIterable()
+                .containsExactlyInAnyOrder(
+                        "reachTaskId",
+                        "campaignId",
+                        "userId",
+                        "channel",
+                        "sendCycleKey",
+                        "reason",
+                        "attempts",
+                        "occurredAt");
+        // PII-minimized (NFR-005): never carries the resolved address or rendered content.
+        assertThat(json.has("email")).isFalse();
+        assertThat(json.has("address")).isFalse();
+        assertThat(json.has("content")).isFalse();
+    }
+
     // --- Compact-constructor validation: invalid events MUST fail at construction, before they can
     // be serialized onto the wire (so a malformed event never reaches a consumer's deserializer). ---
 
@@ -185,5 +218,30 @@ class EventSchemaContractTest {
         // providerMessageId is nullable (provider may return none on early failure).
         assertThat(new SendResultRecorded(id, null, "FAILED", now).providerMessageId())
                 .isNull();
+    }
+
+    @Test
+    void reachTaskDeadLetteredRejectsMissingRequiredFields() {
+        UUID id = UUID.randomUUID();
+        Instant now = Instant.parse("2026-06-09T10:00:00Z");
+        assertThatThrownBy(() -> new ReachTaskDeadLettered(null, id, id, Channel.EMAIL, "c", "r", 3, now))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new ReachTaskDeadLettered(id, null, id, Channel.EMAIL, "c", "r", 3, now))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new ReachTaskDeadLettered(id, id, null, Channel.EMAIL, "c", "r", 3, now))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new ReachTaskDeadLettered(id, id, id, null, "c", "r", 3, now))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new ReachTaskDeadLettered(id, id, id, Channel.EMAIL, " ", "r", 3, now))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("sendCycleKey");
+        assertThatThrownBy(() -> new ReachTaskDeadLettered(id, id, id, Channel.EMAIL, "c", " ", 3, now))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("reason");
+        assertThatThrownBy(() -> new ReachTaskDeadLettered(id, id, id, Channel.EMAIL, "c", "r", -1, now))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("attempts");
+        assertThatThrownBy(() -> new ReachTaskDeadLettered(id, id, id, Channel.EMAIL, "c", "r", 3, null))
+                .isInstanceOf(NullPointerException.class);
     }
 }

@@ -182,24 +182,24 @@
 
 ## 9. Reach dispatcher — 兩階段事務發送、重試、DLQ
 
-- [ ] 9.1 實作兩階段事務發送（FOR UPDATE SKIP LOCKED + 租約）
+- [x] 9.1 實作兩階段事務發送（FOR UPDATE SKIP LOCKED + 租約）
   - Acceptance: WHEN dispatcher 撈取任務 THEN 階段1短事務以 `FOR UPDATE SKIP LOCKED` 撈 status IN (PENDING, RETRY_SCHEDULED) AND next_retry_at<=now()，標 PROCESSING + locked_by/locked_until 後立即 commit 釋放 DB 連線（§5，NFR-002）
   - Acceptance: WHEN 外部呼叫於事務外完成 THEN 階段2新事務回寫：成功→SENT 並寫 send_result、清 locked_by；失敗→RETRY_SCHEDULED 設指數退避 next_retry_at（§5，NFR-003）
   - Acceptance: WHEN breaker 於標 PROCESSING 前已開啟 THEN 跳過該筆、任務維持 PENDING；WHEN breaker 在已標 PROCESSING 後快速失敗 THEN 比照可重試走階段2回寫 RETRY_SCHEDULED，不卡在 PROCESSING（§6）
   - Depends on: 7.3, 8.1, 8.2
   - Independence: serial
-  - status: not_started
-- [ ] 9.2 實作重試分類、退避上限與 DLQ
+  - status: passing
+- [x] 9.2 實作重試分類、退避上限與 DLQ
   - Acceptance: WHEN 可重試錯誤（網路/429/5xx）THEN 走指數退避 1m→5m→30m 最多 3 次；WHEN 不可重試（地址無效/退訂）THEN 直接 FAILED（§6，FR-015/US-006）
   - Acceptance: WHEN 重試超過上限 THEN task 進 `reach.dlq` + 標記，供人工檢視與重放，不靜默遺失（§6，FR-016/US-006）
   - Depends on: 9.1
   - Independence: serial
-  - status: not_started
-- [ ] 9.3 實作 Reaper job（回收卡死的 PROCESSING 任務）
+  - status: passing
+- [x] 9.3 實作 Reaper job（回收卡死的 PROCESSING 任務）
   - Acceptance: WHEN worker crash 導致 task 卡在 PROCESSING AND locked_until<now() THEN Reaper 背景排程定期重置為 PENDING，避免任務卡死（§5）
   - Depends on: 9.1
   - Independence: serial
-  - status: not_started
+  - status: passing
 
 ## 10. 取消競態與成效報表
 

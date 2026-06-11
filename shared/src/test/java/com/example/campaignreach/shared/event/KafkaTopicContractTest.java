@@ -19,6 +19,7 @@ class KafkaTopicContractTest {
         assertThat(KafkaTopics.DOMAIN_EVENTS_DLT).isEqualTo("domain.events.DLT");
         assertThat(KafkaTopics.REACH_REQUESTED).isEqualTo("reach.requested");
         assertThat(KafkaTopics.REACH_DLQ).isEqualTo("reach.dlq");
+        assertThat(KafkaTopics.SEND_RESULT_RECORDED).isEqualTo("send.result.recorded");
     }
 
     @Test
@@ -92,5 +93,16 @@ class KafkaTopicContractTest {
         String sourceTaskKey = "44444444-4444-4444-4444-444444444444";
 
         assertThat(PartitionKeys.forReachDlq(sourceTaskKey)).isEqualTo(sourceTaskKey);
+    }
+
+    @Test
+    void sendResultRecordedKeyIsReachTaskId() {
+        UUID reachTaskId = UUID.fromString("55555555-5555-5555-5555-555555555555");
+
+        String first = PartitionKeys.forSendResultRecorded(reachTaskId);
+        String second = PartitionKeys.forSendResultRecorded(reachTaskId);
+
+        assertThat(first).isEqualTo(reachTaskId.toString());
+        assertThat(first).isEqualTo(second);
     }
 }

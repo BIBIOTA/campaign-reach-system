@@ -37,6 +37,10 @@ public record EmailChannelProperties(CircuitBreaker circuitBreaker) {
                 .failureRateThreshold(circuitBreaker.failureRateThreshold())
                 .waitDurationInOpenState(circuitBreaker.waitDurationInOpenState())
                 .permittedNumberOfCallsInHalfOpenState(circuitBreaker.permittedNumberOfCallsInHalfOpenState())
+                // A non-retryable provider failure (e.g. invalid address, task 9.2) is a per-recipient
+                // data problem, not a provider-health signal: tell the breaker to IGNORE it so it is
+                // counted as neither success nor failure and never trips the breaker for healthy traffic.
+                .ignoreExceptions(NonRetryableSendException.class)
                 // Move OPEN -> HALF_OPEN automatically once the cool-down elapses, via Resilience4j's
                 // background scheduler, so recovery does not depend on an inbound call arriving to
                 // trigger the transition.
