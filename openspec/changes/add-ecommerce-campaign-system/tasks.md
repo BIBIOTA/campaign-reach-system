@@ -203,24 +203,24 @@
 
 ## 10. 取消競態與成效報表
 
-- [ ] 10.1 實作活動暫停/結束時取消未送 task（取消競態語意）
+- [x] 10.1 實作活動暫停/結束時取消未送 task（取消競態語意）
   - Acceptance: WHEN 活動進入 PAUSED/ENDED THEN 批次 `UPDATE reach_task SET status='CANCELLED' WHERE campaign_id=:cid AND status IN ('PENDING','RETRY_SCHEDULED')`，PROCESSING 不在取消範圍（§6，FR-017/US-002）
   - Acceptance: WHEN dispatcher 階段1撈取與取消並行 THEN 同短事務內重檢 `campaign.status NOT IN ('PAUSED','ENDED')`，已停用者改標 CANCELLED、不標 PROCESSING，由 DB 列鎖序列化二者（§6）
   - Acceptance: WHEN 某筆在取消前瞬間已 PROCESSING THEN 允許其完成（有界極小洩漏窗口，明確接受），不引入分散式中止（§6）
   - Depends on: 9.1, 4.2
   - Independence: serial
-  - status: not_started
-- [ ] 10.2 實作 reach_request 計數背景聚合回填（避免第二熱點）
+  - status: passing
+- [x] 10.2 實作 reach_request 計數背景聚合回填（避免第二熱點）
   - Acceptance: WHEN 報表讀取批次計數 THEN sent/failed/pending_count 由背景排程定期聚合 reach_task 回填（秒級延遲可接受），不逐筆即時 update 同一批次列（§5/§8 S-2，NFR-002）
   - Depends on: 7.3, 9.1
   - Independence: serial
-  - status: not_started
-- [ ] 10.3 實作成效查詢 API（活動彙總 + 單筆收件人狀態）
+  - status: passing
+- [x] 10.3 實作成效查詢 API（活動彙總 + 單筆收件人狀態）
   - Acceptance: WHEN 查詢活動成效 THEN 回傳送達率/失敗率/各狀態人數分布（FR-018，US-007）
   - Acceptance: WHEN 查詢特定收件人於某活動 THEN 回傳其觸達狀態（待發送/已送達/失敗等）（FR-018，US-007，NFR-005）
   - Depends on: 10.2
   - Independence: serial
-  - status: not_started
+  - status: in_progress
 
 ## 11. PII / 安全 / 資料保留
 
