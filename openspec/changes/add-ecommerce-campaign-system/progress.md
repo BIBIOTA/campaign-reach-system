@@ -498,3 +498,14 @@
 - Task: 10.3 實作成效查詢 API（活動彙總 + 單筆收件人狀態）
 - Transition: not_started → in_progress
 - Next action: 派發 implementer subagent 於 reach 模組實作唯讀成效查詢 API——活動維度彙總（送達率/失敗率/各 ReachTaskStatus 人數分布，讀自 10.2 聚合的 reach_request 計數並由 reach_task 補狀態分布）與單筆收件人狀態查詢（user_id+campaign_id → 觸達狀態，PII 最小化只回狀態不回 email），對齊既有 /internal back-office OPERATOR Basic-auth 模式，完成後接 spec-reviewer 與 code-quality-reviewer。
+
+## Session 59 — 2026-06-11 22:55
+- Stage: SDD
+- Task: 10.3 實作成效查詢 API（活動彙總 + 單筆收件人狀態）
+- Transition: in_progress → passing
+- Evidence:
+  - Commits: 9b7a8a8 Implement reach metrics query API (task 10.3)（含 package-info.java stale-javadoc Minor 修正 amend）
+  - Tests: reach/metrics 唯讀查詢切片——GET /internal/reach/campaigns/{id}/metrics（CampaignReachMetrics：deliveredRate=SENT/total、failedRate=(FAILED+DLQ)/total、全 7 種 ReachTaskStatus 人數分布 grouped from reach_task；total=0 不除零）+ GET /internal/reach/campaigns/{id}/recipients/{userId}（RecipientReachView：PII 最小化僅回 campaignId/userId/channel/sendCycleKey/status）。測試：CampaignReachMetricsTest（rate math 含零分母）、ReachMetricsControllerTest（MockMvc slice：回應形狀 + email/message 缺席斷言 + auth 401/403/200）、ReachMetricsDaoIntegrationTest（@RequiresDocker 真 Postgres：跨兩批次 GROUP BY status、跨活動/他人列排除、非收件人空集）。`./gradlew check` BUILD SUCCESSFUL（spotless/checkstyle/spotbugsMain/test/ArchUnit reach↛campaign/JaCoCo 全綠；Docker-gated IT 本沙箱 auto-skip）。
+  - Spec-reviewer: ✅ Spec compliant（6/6；兩 in-scope 場景三層測試 name-mapped、deliveredRate/failedRate/全狀態分布齊備且零分母守衛、單筆查詢多 cycle/channel 集合 + 非收件人空集 200、PII 最小化無 email/content、05-ER 欄位/enum/索引契約符合、未動 10.2 aggregator/dispatcher、reach↛campaign 守住 campaignId 為純 UUID）
+  - Code-quality-reviewer: ✅ Approved（無 Critical/Important；controller→service→DAO 分層恰當、rate math 集中且測試覆蓋、SQL 全參數化 enum cast 對齊既有 DAO、defensive copy + null guard、PII 行為層斷言、@RequiresDocker IT 真 DB 行為涵蓋負向案例、spring-boot-starter-web 於單一 :app web context 不引入第二 component-scan；1 Minor：package-info stale javadoc 已 amend 修正；slice 鏡像 security chain 因 ArchUnit 邊界為合理做法非 smell）
+- Next action: Section 10（10.1–10.3）全數 passing；剩餘 not_started 任務為 11.1（PII/資料保留）與 12.1（10 萬筆壓測），非本次「Task 10」範圍——對 add-ecommerce-campaign-system 跑 final pass（`openspec validate --strict`）後可視需要 invoke spec-driven-dev:verification-before-completion。

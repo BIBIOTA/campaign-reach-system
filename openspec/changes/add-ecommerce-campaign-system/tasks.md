@@ -220,7 +220,7 @@
   - Acceptance: WHEN 查詢特定收件人於某活動 THEN 回傳其觸達狀態（待發送/已送達/失敗等）（FR-018，US-007，NFR-005）
   - Depends on: 10.2
   - Independence: serial
-  - status: in_progress
+  - status: passing
 
 ## 11. PII / 安全 / 資料保留
 
