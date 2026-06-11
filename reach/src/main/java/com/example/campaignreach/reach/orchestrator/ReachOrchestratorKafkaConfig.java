@@ -75,6 +75,15 @@ public class ReachOrchestratorKafkaConfig {
      * so offsets commit only on explicit post-landing acknowledgement. Referenced by name from
      * {@link ReachRequestedConsumer}.
      *
+     * <p><strong>Why not the {@code ConcurrentKafkaListenerContainerFactoryConfigurer}.</strong> The
+     * shared kernel applies {@code spring.kafka.listener.*} auto-config via that configurer, but its
+     * signature is raw {@code <Object, Object>} (it drives deserialization through property class-names,
+     * not typed instances). This factory deliberately keeps the strongly-typed
+     * {@code <String, ReachRequested>} deserializer instances for clarity and compile-time safety, so it
+     * sets the consumer factory directly. The trade-off is that {@code spring.kafka.listener.*} tuning
+     * (concurrency, poll timeout, idle interval) is not auto-applied here — none is set in this project;
+     * if such tuning is ever needed it must be configured on this factory explicitly.
+     *
      * @param consumerFactory the typed, auto-commit-disabled consumer factory
      * @return the reach-requested listener container factory
      */
