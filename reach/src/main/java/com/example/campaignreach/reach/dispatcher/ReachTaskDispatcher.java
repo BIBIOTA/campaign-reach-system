@@ -159,7 +159,7 @@ public class ReachTaskDispatcher {
             // Pre-send suppression (退訂 / 硬退信 / 投訴) is a non-retryable reason → FAILED, do not send.
             SuppressionVerdict verdict = suppressionGuard.evaluate(task.userId(), task.channel());
             if (verdict.suppressed()) {
-                dispatchDao.markFailed(task.taskId(), "suppressed:" + verdict.reason(), now);
+                dispatchDao.markFailed(task.taskId(), workerId, "suppressed:" + verdict.reason(), now);
                 return;
             }
 
@@ -168,12 +168,12 @@ public class ReachTaskDispatcher {
                     .orElseThrow(() -> new IllegalStateException("no ChannelAdapter for channel " + task.channel()));
             ReachMessage message = new ReachMessage(task.userId(), task.channel(), task.templateRef());
             SendResult result = adapter.send(message);
-            dispatchDao.markSent(task.taskId(), result.providerMessageId(), now);
+            dispatchDao.markSent(task.taskId(), workerId, result.providerMessageId(), now);
         } catch (NonRetryableSendException nonRetryable) {
             // Permanent provider failure (e.g. invalid address): fast-fail to FAILED immediately, no
             // retry burned (state edge PROCESSING --> FAILED : 不可重試). Distinct from the broad
             // RuntimeException fallback below, which stays routed to the retryable path on purpose.
-            dispatchDao.markFailed(task.taskId(), "non-retryable:" + nonRetryable.getMessage(), now);
+            dispatchDao.markFailed(task.taskId(), workerId, "non-retryable:" + nonRetryable.getMessage(), now);
         } catch (RetryableSendException retryable) {
             // Retryable failure (transient provider error OR breaker short-circuit after PROCESSING):
             // stage-two write-back to RETRY_SCHEDULED with exponential backoff, or dead-letter once exhausted.
@@ -200,7 +200,7 @@ public class ReachTaskDispatcher {
     private void writeBackRetryable(ClaimedTask task, String error, Instant now) {
         if (RetryBackoffSchedule.canRetry(task.retryCount())) {
             Duration backoff = RetryBackoffSchedule.backoffFor(task.retryCount());
-            dispatchDao.scheduleRetry(task.taskId(), now.plus(backoff), error, now);
+            dispatchDao.scheduleRetry(task.taskId(), workerId, now.plus(backoff), error, now);
         } else {
             deadLetter(task, "retries-exhausted:" + error, now);
         }
@@ -230,7 +230,7 @@ public class ReachTaskDispatcher {
                 task.retryCount(),
                 now);
         publisher.publish(event); // throws on failure/timeout → mark below is skipped, task not lost
-        dispatchDao.markDeadLettered(task.taskId(), reason, now);
+        dispatchDao.markDeadLettered(task.taskId(), workerId, reason, now);
     }
 
     /** A stable-ish per-process lease owner id for {@code locked_by} (host + a random suffix). */

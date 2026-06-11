@@ -3,7 +3,6 @@ package com.example.campaignreach.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.campaignreach.reach.dispatcher.ClaimedTask;
-import com.example.campaignreach.reach.dispatcher.ReachPlanTemplateExtractor;
 import com.example.campaignreach.reach.dispatcher.ReachTaskDispatchDao;
 import com.example.campaignreach.shared.event.Channel;
 import java.sql.Timestamp;
@@ -30,11 +29,12 @@ import org.springframework.transaction.PlatformTransactionManager;
  * hardest-to-eyeball SQL is only really exercised here against real Postgres: the {@code FOR UPDATE
  * SKIP LOCKED} claim CTE, the dynamic {@code __CHANNELS__} placeholder substitution, the {@code
  * ?::reach_task_status} / {@code ?::channel} enum casts, the {@code reach_plan_snapshot::text} join,
- * the {@code next_retry_at <= ?} {@code IS NULL OR} branch, and the partial-unique {@code ON CONFLICT
- * (provider_message_id) ... DO NOTHING} send_result dedup.
+ * the {@code next_retry_at <= ?} {@code IS NULL OR} branch, the direct JSONB {@code templateRef}
+ * extraction, and the partial-unique {@code ON CONFLICT (provider_message_id) ... DO NOTHING}
+ * send_result dedup.
  *
- * <p>The real wiring (JdbcTemplate, transaction manager, template extractor) is used against the
- * container DB; rows are seeded via raw SQL casting to the Postgres enum types.
+ * <p>The real wiring (JdbcTemplate, transaction manager) is used against the container DB; rows are
+ * seeded via raw SQL casting to the Postgres enum types.
  */
 class ReachTaskDispatchDaoIntegrationTest extends AbstractIntegrationTest {
 
@@ -52,11 +52,8 @@ class ReachTaskDispatchDaoIntegrationTest extends AbstractIntegrationTest {
     @Autowired
     private PlatformTransactionManager transactionManager;
 
-    @Autowired
-    private ReachPlanTemplateExtractor templateExtractor;
-
     private ReachTaskDispatchDao dao() {
-        return new ReachTaskDispatchDao(jdbcTemplate, transactionManager, templateExtractor);
+        return new ReachTaskDispatchDao(jdbcTemplate, transactionManager);
     }
 
     @AfterEach
@@ -134,7 +131,7 @@ class ReachTaskDispatchDaoIntegrationTest extends AbstractIntegrationTest {
         assertThat(claimed).extracting(ClaimedTask::taskId).containsExactlyInAnyOrder(pendingNullRetry, retryDue);
         assertThat(claimed).allSatisfy(t -> {
             assertThat(t.channel()).isEqualTo(Channel.EMAIL);
-            assertThat(t.templateRef()).isEqualTo("welcome"); // reach_plan_snapshot::text join + extractor
+            assertThat(t.templateRef()).isEqualTo("welcome"); // reach_plan_snapshot->>'templateRef'
         });
 
         for (UUID id : List.of(pendingNullRetry, retryDue)) {
@@ -197,9 +194,9 @@ class ReachTaskDispatchDaoIntegrationTest extends AbstractIntegrationTest {
         dao.claimBatch(WORKER_ID, List.of(Channel.EMAIL), 10, LEASE, now); // → PROCESSING
 
         String providerMessageId = "provider-msg-" + taskId;
-        dao.markSent(taskId, providerMessageId, now);
+        dao.markSent(taskId, WORKER_ID, providerMessageId, now);
         // Redelivery with the SAME provider message id must not create a second send_result row.
-        dao.markSent(taskId, providerMessageId, now.plus(Duration.ofSeconds(1)));
+        dao.markSent(taskId, WORKER_ID, providerMessageId, now.plus(Duration.ofSeconds(1)));
 
         Map<String, Object> row = taskRow(taskId);
         assertThat(row.get("status")).isEqualTo("SENT");
@@ -218,6 +215,26 @@ class ReachTaskDispatchDaoIntegrationTest extends AbstractIntegrationTest {
         assertThat(sendResult.get("occurred_at")).isNotNull();
     }
 
+    /** A stale worker must not write a successful result after another worker has claimed the task. */
+    @Test
+    void markSentWithWrongWorkerLeavesTaskAndSendResultUntouched() {
+        UUID requestId = seedRequest();
+        Instant now = Instant.now();
+        UUID taskId = seedTask(requestId, "PENDING", Channel.EMAIL, null);
+
+        ReachTaskDispatchDao dao = dao();
+        dao.claimBatch(WORKER_ID, List.of(Channel.EMAIL), 10, LEASE, now); // → PROCESSING
+
+        dao.markSent(taskId, "other-worker", "provider-msg-" + taskId, now);
+
+        Map<String, Object> row = taskRow(taskId);
+        assertThat(row.get("status")).isEqualTo("PROCESSING");
+        assertThat(row.get("locked_by")).isEqualTo(WORKER_ID);
+        Integer sendResultCount = jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM send_result WHERE reach_task_id = ?", Integer.class, taskId);
+        assertThat(sendResultCount).isZero();
+    }
+
     /**
      * Assertion 4 — scheduleRetry. Transitions PROCESSING→RETRY_SCHEDULED, increments retry_count, sets
      * next_retry_at to the backoff target, and clears the lease.
@@ -232,7 +249,7 @@ class ReachTaskDispatchDaoIntegrationTest extends AbstractIntegrationTest {
         dao.claimBatch(WORKER_ID, List.of(Channel.EMAIL), 10, LEASE, now); // → PROCESSING
 
         Instant nextRetryAt = now.plus(Duration.ofMinutes(1));
-        dao.scheduleRetry(taskId, nextRetryAt, "transient-provider-error", now);
+        dao.scheduleRetry(taskId, WORKER_ID, nextRetryAt, "transient-provider-error", now);
 
         Map<String, Object> row = taskRow(taskId);
         assertThat(row.get("status")).isEqualTo("RETRY_SCHEDULED");
@@ -251,7 +268,7 @@ class ReachTaskDispatchDaoIntegrationTest extends AbstractIntegrationTest {
         ReachTaskDispatchDao dao = dao();
         dao.claimBatch(WORKER_ID, List.of(Channel.EMAIL), 10, LEASE, now); // → PROCESSING
 
-        dao.markFailed(taskId, "suppressed:UNSUBSCRIBE", now);
+        dao.markFailed(taskId, WORKER_ID, "suppressed:UNSUBSCRIBE", now);
 
         Map<String, Object> row = taskRow(taskId);
         assertThat(row.get("status")).isEqualTo("FAILED");
@@ -274,7 +291,7 @@ class ReachTaskDispatchDaoIntegrationTest extends AbstractIntegrationTest {
         ReachTaskDispatchDao dao = dao();
         dao.claimBatch(WORKER_ID, List.of(Channel.EMAIL), 10, LEASE, now); // → PROCESSING
 
-        dao.markDeadLettered(taskId, "retries-exhausted:provider timeout", now);
+        dao.markDeadLettered(taskId, WORKER_ID, "retries-exhausted:provider timeout", now);
 
         Map<String, Object> row = taskRow(taskId);
         assertThat(row.get("status")).isEqualTo("DLQ");
@@ -293,9 +310,32 @@ class ReachTaskDispatchDaoIntegrationTest extends AbstractIntegrationTest {
         Instant now = Instant.now();
         UUID taskId = seedTask(requestId, "PENDING", Channel.EMAIL, null); // never claimed → stays PENDING
 
-        dao().markDeadLettered(taskId, "retries-exhausted:x", now);
+        dao().markDeadLettered(taskId, WORKER_ID, "retries-exhausted:x", now);
 
         assertThat(taskRow(taskId).get("status")).isEqualTo("PENDING");
+    }
+
+    /** Stale worker fencing applies to every stage-two terminal/retry write-back. */
+    @Test
+    void stageTwoWriteBacksWithWrongWorkerLeaveProcessingRowUntouched() {
+        UUID requestId = seedRequest();
+        Instant now = Instant.now();
+        UUID retryTask = seedTask(requestId, "PENDING", Channel.EMAIL, null);
+        UUID failedTask = seedTask(requestId, "PENDING", Channel.EMAIL, null);
+        UUID dlqTask = seedTask(requestId, "PENDING", Channel.EMAIL, null);
+
+        ReachTaskDispatchDao dao = dao();
+        dao.claimBatch(WORKER_ID, List.of(Channel.EMAIL), 10, LEASE, now); // → PROCESSING
+
+        dao.scheduleRetry(retryTask, "other-worker", now.plus(Duration.ofMinutes(1)), "transient", now);
+        dao.markFailed(failedTask, "other-worker", "suppressed:UNSUBSCRIBE", now);
+        dao.markDeadLettered(dlqTask, "other-worker", "retries-exhausted:timeout", now);
+
+        for (UUID taskId : List.of(retryTask, failedTask, dlqTask)) {
+            Map<String, Object> row = taskRow(taskId);
+            assertThat(row.get("status")).isEqualTo("PROCESSING");
+            assertThat(row.get("locked_by")).isEqualTo(WORKER_ID);
+        }
     }
 
     /**

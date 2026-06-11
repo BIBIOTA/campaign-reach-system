@@ -62,7 +62,8 @@ public class ReachTaskDispatchDao {
             FROM claimed
             WHERE u.id = claimed.id
             RETURNING u.id, u.campaign_id, u.user_id, u.channel, u.send_cycle_key,
-                (SELECT r.reach_plan_snapshot::text FROM reach_request r WHERE r.id = u.reach_request_id) AS reach_plan,
+                (SELECT r.reach_plan_snapshot->>'templateRef' FROM reach_request r WHERE r.id = u.reach_request_id)
+                    AS template_ref,
                 COALESCE(u.retry_count, 0) AS retry_count
             """; // __CHANNELS__ is replaced with the channel IN-list placeholders (each cast ?::channel)
 
@@ -75,7 +76,7 @@ public class ReachTaskDispatchDao {
                 locked_by = NULL,
                 locked_until = NULL,
                 last_error = NULL
-            WHERE id = ? AND status = 'PROCESSING'::reach_task_status
+            WHERE id = ? AND locked_by = ? AND status = 'PROCESSING'::reach_task_status
             """;
 
     private static final String INSERT_SEND_RESULT_SQL =
@@ -95,7 +96,7 @@ public class ReachTaskDispatchDao {
                 last_error = ?,
                 locked_by = NULL,
                 locked_until = NULL
-            WHERE id = ? AND status = 'PROCESSING'::reach_task_status
+            WHERE id = ? AND locked_by = ? AND status = 'PROCESSING'::reach_task_status
             """;
 
     private static final String MARK_FAILED_SQL =
@@ -107,7 +108,7 @@ public class ReachTaskDispatchDao {
                 next_retry_at = NULL,
                 locked_by = NULL,
                 locked_until = NULL
-            WHERE id = ? AND status = 'PROCESSING'::reach_task_status
+            WHERE id = ? AND locked_by = ? AND status = 'PROCESSING'::reach_task_status
             """;
 
     private static final String MARK_DEAD_LETTERED_SQL =
@@ -119,7 +120,7 @@ public class ReachTaskDispatchDao {
                 next_retry_at = NULL,
                 locked_by = NULL,
                 locked_until = NULL
-            WHERE id = ? AND status = 'PROCESSING'::reach_task_status
+            WHERE id = ? AND locked_by = ? AND status = 'PROCESSING'::reach_task_status
             """;
 
     private static final String REAP_EXPIRED_LEASES_SQL =
@@ -134,24 +135,18 @@ public class ReachTaskDispatchDao {
 
     private final JdbcTemplate jdbcTemplate;
     private final TransactionTemplate transactionTemplate;
-    private final ReachPlanTemplateExtractor templateExtractor;
 
     /**
      * @param jdbcTemplate auto-configured template for the claim and write-back SQL
      * @param transactionManager backs the per-stage short transactions
-     * @param templateExtractor reads {@code templateRef} from the joined frozen reach plan
      */
     @SuppressFBWarnings(
             value = "EI_EXPOSE_REP2",
             justification = "Spring injects the singleton JdbcTemplate / transaction manager by reference; "
                     + "storing these framework-managed beans is the intended DI wiring, not a mutable-state leak.")
-    public ReachTaskDispatchDao(
-            JdbcTemplate jdbcTemplate,
-            PlatformTransactionManager transactionManager,
-            ReachPlanTemplateExtractor templateExtractor) {
+    public ReachTaskDispatchDao(JdbcTemplate jdbcTemplate, PlatformTransactionManager transactionManager) {
         this.jdbcTemplate = jdbcTemplate;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
-        this.templateExtractor = templateExtractor;
     }
 
     /**
@@ -195,7 +190,7 @@ public class ReachTaskDispatchDao {
                         rs.getObject("user_id", UUID.class),
                         Channel.valueOf(rs.getString("channel")),
                         rs.getString("send_cycle_key"),
-                        templateExtractor.extract(rs.getString("reach_plan")),
+                        rs.getString("template_ref"),
                         rs.getInt("retry_count"))));
     }
 
@@ -205,14 +200,18 @@ public class ReachTaskDispatchDao {
      * only). The {@code provider_message_id} unique index makes a redelivered duplicate result a no-op.
      *
      * @param taskId the claimed task id
+     * @param workerId the lease owner that claimed the task
      * @param providerMessageId the provider's accepted-send id (PII-minimized dedup handle)
      * @param now the write-back instant
      */
-    public void markSent(UUID taskId, String providerMessageId, Instant now) {
+    public void markSent(UUID taskId, String workerId, String providerMessageId, Instant now) {
         Timestamp nowTs = Timestamp.from(now);
         transactionTemplate.executeWithoutResult(status -> {
-            jdbcTemplate.update(MARK_SENT_SQL, nowTs, nowTs, taskId);
-            jdbcTemplate.update(INSERT_SEND_RESULT_SQL, UUID.randomUUID(), taskId, providerMessageId, "SENT", nowTs);
+            int updated = jdbcTemplate.update(MARK_SENT_SQL, nowTs, nowTs, taskId, workerId);
+            if (updated > 0) {
+                jdbcTemplate.update(
+                        INSERT_SEND_RESULT_SQL, UUID.randomUUID(), taskId, providerMessageId, "SENT", nowTs);
+            }
         });
     }
 
@@ -222,14 +221,15 @@ public class ReachTaskDispatchDao {
      * error, and clears the lease — so the task is never stuck in PROCESSING.
      *
      * @param taskId the claimed task id
+     * @param workerId the lease owner that claimed the task
      * @param nextRetryAt the backed-off time the task becomes eligible again
      * @param error a short error description stored in {@code last_error}
      * @param now the write-back instant
      */
-    public void scheduleRetry(UUID taskId, Instant nextRetryAt, String error, Instant now) {
+    public void scheduleRetry(UUID taskId, String workerId, Instant nextRetryAt, String error, Instant now) {
         Timestamp nowTs = Timestamp.from(now);
-        transactionTemplate.executeWithoutResult(
-                status -> jdbcTemplate.update(SCHEDULE_RETRY_SQL, Timestamp.from(nextRetryAt), nowTs, error, taskId));
+        transactionTemplate.executeWithoutResult(status ->
+                jdbcTemplate.update(SCHEDULE_RETRY_SQL, Timestamp.from(nextRetryAt), nowTs, error, taskId, workerId));
     }
 
     /**
@@ -238,12 +238,14 @@ public class ReachTaskDispatchDao {
      * records the error, and clears the lease.
      *
      * @param taskId the claimed task id
+     * @param workerId the lease owner that claimed the task
      * @param error a short error description stored in {@code last_error}
      * @param now the write-back instant
      */
-    public void markFailed(UUID taskId, String error, Instant now) {
+    public void markFailed(UUID taskId, String workerId, String error, Instant now) {
         Timestamp nowTs = Timestamp.from(now);
-        transactionTemplate.executeWithoutResult(status -> jdbcTemplate.update(MARK_FAILED_SQL, nowTs, error, taskId));
+        transactionTemplate.executeWithoutResult(
+                status -> jdbcTemplate.update(MARK_FAILED_SQL, nowTs, error, taskId, workerId));
     }
 
     /**
@@ -261,13 +263,14 @@ public class ReachTaskDispatchDao {
      * expired lease for the Reaper (task 9.3) — never silently lost.
      *
      * @param taskId the claimed task id
+     * @param workerId the lease owner that claimed the task
      * @param error a short error description stored in {@code last_error}
      * @param now the write-back instant
      */
-    public void markDeadLettered(UUID taskId, String error, Instant now) {
+    public void markDeadLettered(UUID taskId, String workerId, String error, Instant now) {
         Timestamp nowTs = Timestamp.from(now);
         transactionTemplate.executeWithoutResult(
-                status -> jdbcTemplate.update(MARK_DEAD_LETTERED_SQL, nowTs, error, taskId));
+                status -> jdbcTemplate.update(MARK_DEAD_LETTERED_SQL, nowTs, error, taskId, workerId));
     }
 
     /**

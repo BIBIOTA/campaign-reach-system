@@ -117,9 +117,9 @@ class ReachTaskDispatcherTest {
             assertThat(msg.getValue().userId()).isEqualTo(t.userId());
             assertThat(msg.getValue().channel()).isEqualTo(Channel.EMAIL);
             assertThat(msg.getValue().templateRef()).isEqualTo("welcome");
-            verify(dispatchDao).markSent(eq(t.taskId()), eq("prov-123"), any());
-            verify(dispatchDao, never()).scheduleRetry(any(), any(), any(), any());
-            verify(dispatchDao, never()).markFailed(any(), any(), any());
+            verify(dispatchDao).markSent(eq(t.taskId()), eq(dispatcher.workerId()), eq("prov-123"), any());
+            verify(dispatchDao, never()).scheduleRetry(any(), any(), any(), any(), any());
+            verify(dispatchDao, never()).markFailed(any(), any(), any(), any());
         }
 
         @Test
@@ -153,10 +153,11 @@ class ReachTaskDispatcherTest {
             dispatcher.dispatchPoll();
 
             ArgumentCaptor<Instant> nextRetry = ArgumentCaptor.forClass(Instant.class);
-            verify(dispatchDao).scheduleRetry(eq(t.taskId()), nextRetry.capture(), anyString(), any());
+            verify(dispatchDao)
+                    .scheduleRetry(eq(t.taskId()), eq(dispatcher.workerId()), nextRetry.capture(), anyString(), any());
             // First retry uses the 1m delay.
             assertThat(nextRetry.getValue()).isAfterOrEqualTo(before.plus(Duration.ofMinutes(1)));
-            verify(dispatchDao, never()).markSent(any(), any(), any());
+            verify(dispatchDao, never()).markSent(any(), any(), any(), any());
         }
 
         @Test
@@ -174,7 +175,7 @@ class ReachTaskDispatcherTest {
             dispatcher.dispatchPoll();
 
             ArgumentCaptor<Instant> nextRetry = ArgumentCaptor.forClass(Instant.class);
-            verify(dispatchDao, times(2)).scheduleRetry(any(), nextRetry.capture(), anyString(), any());
+            verify(dispatchDao, times(2)).scheduleRetry(any(), anyString(), nextRetry.capture(), anyString(), any());
             assertThat(nextRetry.getAllValues().get(0)).isAfterOrEqualTo(before.plus(Duration.ofMinutes(5)));
             assertThat(nextRetry.getAllValues().get(1)).isAfterOrEqualTo(before.plus(Duration.ofMinutes(30)));
         }
@@ -190,9 +191,9 @@ class ReachTaskDispatcherTest {
             dispatcher.dispatchPoll();
 
             verify(dlqPublisher).publish(any(ReachTaskDeadLettered.class));
-            verify(dispatchDao).markDeadLettered(eq(exhausted.taskId()), anyString(), any());
-            verify(dispatchDao, never()).scheduleRetry(any(), any(), any(), any());
-            verify(dispatchDao, never()).markFailed(any(), any(), any());
+            verify(dispatchDao).markDeadLettered(eq(exhausted.taskId()), eq(dispatcher.workerId()), anyString(), any());
+            verify(dispatchDao, never()).scheduleRetry(any(), any(), any(), any(), any());
+            verify(dispatchDao, never()).markFailed(any(), any(), any(), any());
         }
     }
 
@@ -212,7 +213,8 @@ class ReachTaskDispatcherTest {
 
             InOrder order = inOrder(dlqPublisher, dispatchDao);
             order.verify(dlqPublisher).publish(any(ReachTaskDeadLettered.class));
-            order.verify(dispatchDao).markDeadLettered(eq(exhausted.taskId()), anyString(), any());
+            order.verify(dispatchDao)
+                    .markDeadLettered(eq(exhausted.taskId()), eq(dispatcher.workerId()), anyString(), any());
         }
 
         @Test
@@ -250,8 +252,8 @@ class ReachTaskDispatcherTest {
             dispatcher.dispatchPoll();
 
             verify(dlqPublisher).publish(any(ReachTaskDeadLettered.class));
-            verify(dispatchDao, never()).markDeadLettered(any(), any(), any());
-            verify(dispatchDao, never()).markFailed(any(), any(), any());
+            verify(dispatchDao, never()).markDeadLettered(any(), any(), any(), any());
+            verify(dispatchDao, never()).markFailed(any(), any(), any(), any());
         }
     }
 
@@ -270,8 +272,8 @@ class ReachTaskDispatcherTest {
             dispatcher.dispatchPoll();
 
             verify(emailAdapter, never()).send(any());
-            verify(dispatchDao).markFailed(eq(t.taskId()), anyString(), any());
-            verify(dispatchDao, never()).scheduleRetry(any(), any(), any(), any());
+            verify(dispatchDao).markFailed(eq(t.taskId()), eq(dispatcher.workerId()), anyString(), any());
+            verify(dispatchDao, never()).scheduleRetry(any(), any(), any(), any(), any());
         }
 
         @Test
@@ -284,10 +286,10 @@ class ReachTaskDispatcherTest {
 
             dispatcher.dispatchPoll();
 
-            verify(dispatchDao).markFailed(eq(t.taskId()), anyString(), any());
+            verify(dispatchDao).markFailed(eq(t.taskId()), eq(dispatcher.workerId()), anyString(), any());
             // No retry burned and no dead-lettering: a permanent failure terminates straight to FAILED.
-            verify(dispatchDao, never()).scheduleRetry(any(), any(), any(), any());
-            verify(dispatchDao, never()).markDeadLettered(any(), any(), any());
+            verify(dispatchDao, never()).scheduleRetry(any(), any(), any(), any(), any());
+            verify(dispatchDao, never()).markDeadLettered(any(), any(), any(), any());
             verifyNoInteractions(dlqPublisher);
         }
     }
@@ -324,8 +326,8 @@ class ReachTaskDispatcherTest {
 
             dispatcher.dispatchPoll();
 
-            verify(dispatchDao).scheduleRetry(eq(t.taskId()), any(), anyString(), any());
-            verify(dispatchDao, never()).markSent(any(), any(), any());
+            verify(dispatchDao).scheduleRetry(eq(t.taskId()), eq(dispatcher.workerId()), any(), anyString(), any());
+            verify(dispatchDao, never()).markSent(any(), any(), any(), any());
         }
     }
 }
