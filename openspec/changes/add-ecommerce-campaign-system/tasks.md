@@ -167,18 +167,18 @@
 
 ## 8. Reach channel — Adapter 與抑制名單
 
-- [ ] 8.1 實作 ChannelAdapter 介面與 EmailAdapter（含 circuit breaker）
+- [x] 8.1 實作 ChannelAdapter 介面與 EmailAdapter（含 circuit breaker）
   - Acceptance: WHEN dispatcher 依 reachPlan 選用通道 THEN 透過 ChannelAdapter.send(ReachMessage) 發送，EmailAdapter 介接 SendGrid/SES 並包一層（§4，FR-009）
   - Acceptance: WHEN 新增通道 THEN 僅新增 Adapter 並註冊，orchestrator/dispatcher 依 reachPlan 選用，不改既有（§4，FR-009）
   - Acceptance: WHEN Email provider 中斷 THEN circuit breaker（Resilience4j）開啟使系統穩定降級、恢復後續送，不造成連鎖故障（§6，NFR-004）
   - Depends on: 2.1
   - Independence: parallel-safe
-  - status: in_progress
-- [ ] 8.2 實作抑制名單（suppression）查表與發送前過濾
+  - status: passing
+- [x] 8.2 實作抑制名單（suppression）查表與發送前過濾
   - Acceptance: WHEN 發送前 THEN 檢查 suppression(user_id/channel/reason)，命中（退訂/硬退信/投訴）者該 task 標 FAILED（不可重試），不送出（§10，NFR-005/FR-015）
   - Depends on: 3.1
   - Independence: parallel-safe
-  - status: not_started
+  - status: passing
 
 ## 9. Reach dispatcher — 兩階段事務發送、重試、DLQ
 

@@ -379,3 +379,31 @@
 - Task: 8.1 實作 ChannelAdapter 介面與 EmailAdapter（含 circuit breaker）
 - Transition: not_started → in_progress
 - Next action: 派發 implementer subagent，於 reach/channel 實作 ChannelAdapter 介面（channel():Channel + send(ReachMessage):SendResult，對齊 03-class）、EmailAdapter（介接 SendGrid/SES 包一層、由 ChannelAdapter registry 依 reachPlan channel 選用、OCP 新增通道不改既有），並以 Resilience4j circuit breaker 包覆 EmailAdapter（滑動窗口/失敗率門檻/冷卻/half-open 探測皆可設定，對齊 spec「外部通道中斷的穩定降級」5 scenario 與 04-component），完成後接 spec-reviewer 與 code-quality-reviewer。
+
+## Session 45 — 2026-06-11 17:45
+- Stage: SDD
+- Task: 8.1 實作 ChannelAdapter 介面與 EmailAdapter（含 circuit breaker）
+- Transition: in_progress → passing
+- Evidence:
+  - Commits: 737ee9b feat(reach): add ChannelAdapter + EmailAdapter with Resilience4j circuit breaker (task 8.1); 96768ad fix(reach): make EmailAdapter conditional on provider + expose breaker registry (task 8.1 review)
+  - Tests: EmailAdapterCircuitBreakerTest 8 + EmailChannelPropertiesTest 3 + EmailChannelContextLoadTest 2 = 13 fast 單元測試 green（breaker 驅動真實 Resilience4j 狀態機 CLOSED→OPEN→HALF_OPEN→CLOSED/OPEN、五項參數可設定且預設 window20/min20/≥50%/30s/5 可覆寫、dispatcher seam 以 isAvailable() 非消耗讀 OPEN-state + RetryableSendException.isBreakerOpen() 區分 breaker 短路 vs 真實失敗、ApplicationContextRunner 證無 provider bean 時 context 啟動且 EmailAdapter 缺席、有 provider 時啟用）。完整 `./gradlew check` BUILD SUCCESSFUL（reach spotless/checkstyle/spotbugs/test + app ArchUnit + JaCoCo 全綠；Docker-gated 整合測試本沙箱 skip）。
+  - Spec-reviewer: ✅ Spec compliant（5/5；ChannelAdapter 簽章 channel():Channel+send(ReachMessage):SendResult 對齊 03-class、EmailAdapter 包外部 EmailProviderClient(SendGrid/SES) 對齊 04-component、reuse shared.event.Channel、五項 breaker 參數可設定且測試驅動真實狀態轉換非僅斷言設定值、兩個 dispatcher-side scenario 以 adapter seam 滿足未越界建 dispatcher、無 retry/DLQ/suppression/send_result 外洩、reach↛campaign 守住）
+  - Code-quality-reviewer: ✅ Approved（再審；首審 1 Important：EmailAdapter 為無條件 @Component 但 EmailProviderClient 無任何 bean → Spring context 啟動失敗（CI @SpringBootTest 會破、本地 Docker-gate 遮蔽）→ 已於 96768ad 改 @ConditionalOnBean(EmailProviderClient.class) + 新增非 Docker-gated EmailChannelContextLoadTest 守 context 啟動回歸；Minor #2 丟棄的 CircuitBreakerRegistry → 改 managed @Bean(@ConditionalOnMissingBean) 使 breaker 可被 Micrometer/actuator 觀測；Minor #3 inline FQN → 改 import；fail-clear 無 silent no-op、PII 最小化 ReachMessage 僅 userId、broad catch(RuntimeException) 為 CLAUDE.md 認可隔離模式且有註解）
+- Next action: dispatch implementer subagent for task 8.2（抑制名單 suppression 查表與發送前過濾：suppression(user_id/channel/reason) 表 + 發送前命中標 FAILED 不可重試、不送出），依賴 3.1。
+
+## Session 46 — 2026-06-11 18:00
+- Stage: SDD
+- Task: 8.2 實作抑制名單（suppression）查表與發送前過濾
+- Transition: not_started → in_progress
+- Next action: 派發 implementer subagent，新增 V7 suppression migration（user_id/channel/reason，design.md §10 MVP 單表，ER 05-er 未繪此表但 §10 與 spec「收件人 PII 最小化與抑制名單」明訂）+ SuppressionRepository 查表 + 發送前抑制守衛（命中退訂/硬退信/投訴者回報「該 task 應標 FAILED 不可重試且不送出」之結果，供 Section 9 dispatcher 於發送前呼叫），不建 dispatcher 本體，完成後接 spec-reviewer 與 code-quality-reviewer。
+
+## Session 47 — 2026-06-11 18:45
+- Stage: SDD
+- Task: 8.2 實作抑制名單（suppression）查表與發送前過濾
+- Transition: in_progress → passing
+- Evidence:
+  - Commits: bc377a1 feat(reach): add suppression-list lookup + pre-send guard (task 8.2)
+  - Tests: SuppressionGuardTest 6 fast 單元測試 green（@Nested「發送前抑制名單過濾 (FR-015)」：退訂/硬退信/投訴三種命中各回 suppressed→failedStatus()==ReachTaskStatus.FAILED+reason 帶出、不送出；miss→proceed；@Nested「抑制名單為通道限定」：SMS 抑制不擋 EMAIL、EMAIL 抑制不擋 SMS 雙向驗證，mock repository 驅動 guard 行為）。完整 `./gradlew check` BUILD SUCCESSFUL（reach spotless/checkstyle/spotbugs/test + app ArchUnit + JaCoCo 全綠；Docker-gated 整合測試本沙箱 skip）。
+  - Spec-reviewer: ✅ Spec compliant（5/5；V7__suppression.sql user_id/channel/reason 對齊 design.md §10、reuse V6 channel pg enum、PII 最小化僅 user_id 無 email、composite PK(user_id,channel) channel-scoped 查表且雙向測試、SuppressionVerdict.failedStatus() 重用 ReachTaskStatus.FAILED 不增 ad-hoc 狀態、guard 僅回 verdict 不寫 reach_task 為 Section-9 dispatcher seam、無 dispatcher/retry/DLQ/retention/退訂入口外洩、reach↛campaign 守住；ER 未繪 suppression 但 §10+spec 明訂故非 scope creep）
+  - Code-quality-reviewer: ✅ Approved（無 Critical/Important；@IdClass + NAMED_ENUM 映射與 AudienceListMember/ReachRequest 慣例一致、PII 最小化、SuppressionVerdict record 不變式對稱(suppressed⇔reason)+NOT_SUPPRESSED singleton、evaluate 信任邊界 null 守衛適度、測試驅動真實 guard 僅 mock repository 且 channel-scoping 雙向、檔案切分 Entry/Id/Repository/Reason/Verdict/Guard 內聚；composite PK 一通道一 reason 為 consume-only MVP 可接受權衡已記；2 Minor：test inline Mockito.mock FQN、suppressed_at 存而未讀皆比照 AudienceListMember.added_at 之 audit provenance 非投機，不阻擋）
+- Next action: Section 8（8.1–8.2）全數 passing；執行 final pass（`./gradlew check` + `openspec validate add-ecommerce-campaign-system --strict`）後 invoke spec-driven-dev:verification-before-completion。
