@@ -24,11 +24,13 @@ import org.hibernate.type.SqlTypes;
  * the snake_case {@code send_cycle_key} column — same value, different naming style.
  *
  * <p><strong>Scope.</strong> Task 7.1 lands the batch in {@link ReachRequestStatus#PENDING} with frozen
- * snapshots. The {@code total_count}/{@code pending_count}/{@code sent_count}/{@code failed_count}
- * counters and the {@code started_at}/{@code finished_at} expansion timestamps exist in the
- * {@code reach_request} table (created by the V4 migration per the ER contract) but are written by
- * audience fan-out (task 7.3); they are deliberately not mapped on this entity yet to keep 7.1 minimal.
- * Snapshots are stored as raw JSONB ({@link String}), mirroring the Campaign aggregate.
+ * snapshots. The {@code total_count} counter and {@code started_at}/{@code finished_at} expansion
+ * timestamps exist in the {@code reach_request} table (created by the V4 migration per the ER
+ * contract) but are written by audience fan-out (task 7.3). The {@code pending_count}/{@code
+ * sent_count}/{@code failed_count} report counters are maintained by {@link
+ * ReachRequestCountAggregator} (task 10.2), not by per-task dispatcher write-backs. These fields are
+ * deliberately not mapped on this entity yet to keep the JPA aggregate minimal. Snapshots are stored as
+ * raw JSONB ({@link String}), mirroring the Campaign aggregate.
  */
 @Entity
 @Table(name = "reach_request")

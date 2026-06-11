@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.campaignreach.reach.dispatcher.ClaimedTask;
 import com.example.campaignreach.reach.dispatcher.ReachTaskDispatchDao;
+import com.example.campaignreach.reach.orchestrator.ReachRequestCountAggregator;
 import com.example.campaignreach.shared.event.Channel;
 import java.sql.Timestamp;
 import java.time.Duration;
@@ -56,6 +57,10 @@ class ReachTaskDispatchDaoIntegrationTest extends AbstractIntegrationTest {
         return new ReachTaskDispatchDao(jdbcTemplate, transactionManager);
     }
 
+    private ReachRequestCountAggregator countAggregator() {
+        return new ReachRequestCountAggregator(jdbcTemplate, transactionManager);
+    }
+
     @AfterEach
     void cleanUp() {
         jdbcTemplate.update("DELETE FROM send_result");
@@ -94,17 +99,23 @@ class ReachTaskDispatchDaoIntegrationTest extends AbstractIntegrationTest {
 
     /** Seeds one reach_request for a specific campaign. */
     private UUID seedRequest(UUID campaignId) {
+        return seedRequest(campaignId, "DISPATCHING");
+    }
+
+    /** Seeds one reach_request for a specific campaign and batch status. */
+    private UUID seedRequest(UUID campaignId, String status) {
         UUID requestId = UUID.randomUUID();
         jdbcTemplate.update(
                 """
                 INSERT INTO reach_request
                     (id, campaign_id, trigger_type, send_cycle_key, reach_plan_snapshot, status, created_at)
-                VALUES (?, ?, 'SCHEDULED_BATCH'::trigger_type, ?, ?::jsonb, 'DISPATCHING'::reach_request_status, ?)
+                VALUES (?, ?, 'SCHEDULED_BATCH'::trigger_type, ?, ?::jsonb, ?::reach_request_status, ?)
                 """,
                 requestId,
                 campaignId,
                 "cycle-" + requestId,
                 REACH_PLAN,
+                status,
                 Timestamp.from(Instant.now()));
         return requestId;
     }
@@ -139,6 +150,11 @@ class ReachTaskDispatchDaoIntegrationTest extends AbstractIntegrationTest {
                 "SELECT status::text AS status, locked_by, locked_until, processing_started_at,"
                         + " retry_count, next_retry_at, sent_at FROM reach_task WHERE id = ?",
                 taskId);
+    }
+
+    private Map<String, Object> requestCounts(UUID requestId) {
+        return jdbcTemplate.queryForMap(
+                "SELECT pending_count, sent_count, failed_count FROM reach_request WHERE id = ?", requestId);
     }
 
     /**
@@ -521,5 +537,70 @@ class ReachTaskDispatchDaoIntegrationTest extends AbstractIntegrationTest {
 
         assertThat(cancelled).isZero();
         assertThat(taskRow(taskId).get("status")).isEqualTo("SENT");
+    }
+
+    /** Metrics assertion 1 — a background aggregation tick folds current task statuses into batch counts. */
+    @Test
+    void aggregateCountsBackfillsReachRequestCountersFromTaskStatuses() {
+        UUID requestId = seedRequest();
+        Instant now = Instant.now();
+        seedTask(requestId, "PENDING", Channel.EMAIL, null);
+        seedTask(requestId, "PROCESSING", Channel.EMAIL, null);
+        seedTask(requestId, "RETRY_SCHEDULED", Channel.EMAIL, now.minus(Duration.ofMinutes(1)));
+        seedTask(requestId, "SENT", Channel.EMAIL, null);
+        seedTask(requestId, "FAILED", Channel.EMAIL, null);
+        seedTask(requestId, "DLQ", Channel.EMAIL, null);
+        seedTask(requestId, "CANCELLED", Channel.EMAIL, null);
+
+        int updated = countAggregator().aggregateCounts();
+
+        assertThat(updated).isEqualTo(1);
+        Map<String, Object> counts = requestCounts(requestId);
+        assertThat(counts.get("pending_count")).isEqualTo(3);
+        assertThat(counts.get("sent_count")).isEqualTo(1);
+        assertThat(counts.get("failed_count")).isEqualTo(2);
+    }
+
+    /** Metrics assertion 2 — historical completed batches are outside the periodic aggregation scan. */
+    @Test
+    void aggregateCountsSkipsCompletedReachRequests() {
+        UUID campaignId = seedCampaign("RUNNING");
+        UUID requestId = seedRequest(campaignId, "DONE");
+        seedTask(requestId, "SENT", Channel.EMAIL, null);
+
+        int updated = countAggregator().aggregateCounts();
+
+        assertThat(updated).isZero();
+        Map<String, Object> counts = requestCounts(requestId);
+        assertThat(counts.get("pending_count")).isNull();
+        assertThat(counts.get("sent_count")).isNull();
+        assertThat(counts.get("failed_count")).isNull();
+    }
+
+    /**
+     * Metrics assertion 3 — stage-two per-task write-back leaves the batch counters stale until the
+     * background aggregation runs, avoiding a per-task update against the same reach_request row.
+     */
+    @Test
+    void markSentDoesNotSynchronouslyUpdateReachRequestCounts() {
+        UUID requestId = seedRequest();
+        Instant now = Instant.now();
+        UUID taskId = seedTask(requestId, "PENDING", Channel.EMAIL, null);
+        ReachTaskDispatchDao dao = dao();
+        dao.claimBatch(WORKER_ID, List.of(Channel.EMAIL), 10, LEASE, now);
+
+        dao.markSent(taskId, WORKER_ID, "provider-msg-" + taskId, now);
+
+        Map<String, Object> staleCounts = requestCounts(requestId);
+        assertThat(staleCounts.get("pending_count")).isNull();
+        assertThat(staleCounts.get("sent_count")).isNull();
+        assertThat(staleCounts.get("failed_count")).isNull();
+
+        countAggregator().aggregateCounts();
+
+        Map<String, Object> refreshedCounts = requestCounts(requestId);
+        assertThat(refreshedCounts.get("pending_count")).isEqualTo(0);
+        assertThat(refreshedCounts.get("sent_count")).isEqualTo(1);
+        assertThat(refreshedCounts.get("failed_count")).isEqualTo(0);
     }
 }
