@@ -133,20 +133,49 @@ class BehaviorEventReachTriggerTest {
     }
 
     @Test
-    @DisplayName("觸發判定例外隔離: one campaign's publish failure does not stop emission for another matching one")
-    void perCampaignIsolationOnPublishFailure() {
+    @DisplayName("觸發判定例外隔離: one campaign's DETERMINATION failure is isolated; another matching campaign "
+            + "still emits and handle() does not throw")
+    void determinationFailureIsIsolated() {
+        // A mocked registry lets us force a determination throw for the first campaign; the registry
+        // normally turns this into SKIPPED itself, so the broad catch in decideEmission is the safety net.
+        ReachTriggerEvaluatorRegistry mockRegistry = org.mockito.Mockito.mock(ReachTriggerEvaluatorRegistry.class);
+        BehaviorEventReachTrigger isolatingTrigger =
+                new BehaviorEventReachTrigger(campaignRepository, mockRegistry, publisher);
         Campaign bad = running(CampaignType.GIFT_ADDON);
         Campaign good = running(CampaignType.GIFT_ADDON);
         when(campaignRepository.findByStatus(CampaignStatus.RUNNING)).thenReturn(List.of(bad, good));
-        doThrow(new RuntimeException("kafka down"))
+        when(mockRegistry.evaluate(any()))
+                .thenThrow(new RuntimeException("evaluator blew up"))
+                .thenReturn(com.example.campaignreach.campaign.evaluation.TriggerDecision.of(true));
+
+        isolatingTrigger.handle(event(CART_ABANDONED));
+
+        // good still emitted despite bad's determination throwing; no exception escaped handle().
+        verify(publisher)
+                .publish(org.mockito.ArgumentMatchers.argThat(
+                        e -> e != null && e.campaignId().equals(good.getId())));
+    }
+
+    @Test
+    @DisplayName("at-least-once: a PUBLISH failure propagates out of handle() (so the consumer skips the ack "
+            + "and Kafka re-delivers) — it is NOT swallowed")
+    void publishFailurePropagates() {
+        Campaign bad = running(CampaignType.GIFT_ADDON);
+        Campaign good = running(CampaignType.GIFT_ADDON);
+        when(campaignRepository.findByStatus(CampaignStatus.RUNNING)).thenReturn(List.of(bad, good));
+        doThrow(new IllegalStateException("kafka down"))
                 .when(publisher)
                 .publish(org.mockito.ArgumentMatchers.argThat(
                         e -> e != null && e.campaignId().equals(bad.getId())));
 
-        trigger.handle(event(CART_ABANDONED));
+        DomainBehaviorEvent evt = event(CART_ABANDONED);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> trigger.handle(evt))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("kafka down");
 
-        // good still emitted despite bad throwing.
-        verify(publisher)
+        // The failed publish aborts the batch and propagates; the later campaign is not emitted on this
+        // attempt (re-delivery reprocesses the whole event, deduped downstream by reach's unique key).
+        verify(publisher, never())
                 .publish(org.mockito.ArgumentMatchers.argThat(
                         e -> e != null && e.campaignId().equals(good.getId())));
     }

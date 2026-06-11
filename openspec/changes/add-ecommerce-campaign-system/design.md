@@ -378,12 +378,14 @@ worker 友善欄位：`next_retry_at`、`processing_started_at`、`last_attempt_
 | topic | producer | consumer group | 用途 | 訊息層級 |
 |---|---|---|---|---|
 | `domain.events` | 電商主站 | `campaign-trigger` | 行為事件（CartAbandoned, OrderPlaced…） | 使用者層級 |
+| `domain.events.DLT` | campaign（error handler） | 人工 / 重放工具 | campaign-trigger 消費端無法處理（反序列化失敗 / publish 重試耗盡）的行為事件，避免毒丸卡 partition | 使用者層級 |
 | `reach.requested` | campaign（scheduler + consumer） | `reach-orchestrator` | 觸發觸達請求 | 活動層級 |
 | `reach.dlq` | reach.dispatcher | 人工 / 重放工具 | 重試耗盡的 task | 使用者層級 |
 
 **分區鍵（partition key）**
 
 - `domain.events`：以 `user_id` 分區。保證同一使用者的行為事件有序，且自然分散，避免熱分區。
+- `domain.events.DLT`：沿用來源訊息的 partition，重放時保有 per-user 原序。
 - `reach.requested`：**以 `reach_request_id`（或 `campaign_id + send_cycle_key` 的雜湊）分區，而非單純 `campaign_id`**。理由：單純以 `campaign_id` 分區會使單一大型活動的所有請求集中到一個 partition，形成熱分區並拖累其他活動（違反 NFR-002「活動間互不影響」）。本系統 `reach.requested` 為活動層級、量少（每 cycle 一筆），分散後即可避免集中。
 - `reach.dlq`：沿用來源 task 的鍵即可，重放時保有原序。
 
@@ -396,6 +398,7 @@ worker 友善欄位：`next_retry_at`、`processing_started_at`、`last_attempt_
 
 - 所有 consumer 採 at-least-once；冪等由消費端的 DB unique constraint 達成（reach_request 批次鍵、reach_task 四欄鍵），不依賴 broker exactly-once。
 - consumer offset 在「處理已落庫（含 reach_request upsert / task 寫入）」後才 commit，確保重投可安全續跑。
+- `campaign-trigger` 消費端（路徑2）本身不落 DB，「處理完成」即「命中活動的 `ReachRequested` 已同步發布成功」。publish 失敗（broker 拒絕 / 逾時）會向上拋、不 ack，事件由 Kafka 重投；重投造成的重複發布由下游 reach 的 `unique(campaign_id, send_cycle_key, trigger_type)` 收斂為 effectively-once。反序列化失敗或重試耗盡的毒丸訊息經 error handler 進 `domain.events.DLT`，避免無限重投卡住 partition。
 
 ## 10. PII、安全與資料保留
 

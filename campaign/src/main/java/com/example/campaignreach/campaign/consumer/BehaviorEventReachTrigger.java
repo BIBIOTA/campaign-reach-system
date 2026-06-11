@@ -35,11 +35,25 @@ import org.springframework.stereotype.Component;
  * {@code send_cycle_key}. Different event ids do not dedup against each other; cross-event duplicate
  * handling is frequency-capping in reach, out of scope here.
  *
- * <p><strong>Exception isolation (spec §6 觸發判定例外隔離).</strong> The registry already isolates an
- * evaluator throw as a {@code SKIPPED} decision (recorded with a reason, never propagated), so a
- * single campaign's failed determination does not stop the others. The publish per campaign is
- * additionally guarded by a scoped broad catch (per the {@code IllegalCatch} convention in CLAUDE.md)
- * so one campaign's publish failure never aborts emission for the rest of the batch.
+ * <p><strong>Exception isolation vs. publish propagation (spec §6 觸發判定例外隔離 + at-least-once §9).</strong>
+ * The two failure classes are handled deliberately differently:
+ *
+ * <ul>
+ *   <li><em>Trigger-determination failure</em> (a campaign's evaluator throwing) is isolated: the
+ *       registry already turns an evaluator throw into a {@code SKIPPED} decision, and the scoped
+ *       broad catch in {@link #decideEmission} is a belt-and-braces net, so one campaign's failed
+ *       determination never stops the others. This is the "判定例外隔離" the spec requires.
+ *   <li><em>Publish failure</em> (the broker rejecting / timing out a {@link ReachRequested}) is
+ *       <strong>NOT</strong> swallowed: it propagates out of {@link #handle}. The {@link DomainEventConsumer}
+ *       therefore does not acknowledge, the offset is not advanced, and the behavior event is
+ *       re-delivered (at-least-once, design.md §9). Swallowing it would silently lose the matched
+ *       reach and degrade the contract to at-most-once.
+ * </ul>
+ *
+ * <p>On re-delivery a campaign whose publish already succeeded before another's failed is re-emitted,
+ * so a single domain event can produce duplicate {@link ReachRequested}s. That is the intended
+ * effectively-once behavior: the reach side dedups on {@code unique(campaign_id, send_cycle_key,
+ * trigger_type)} (design.md §9), so duplicates collapse to one batch downstream.
  *
  * <p>This class is deliberately Kafka-free so it can be unit-tested without a broker; the
  * {@link DomainEventConsumer} is the thin {@code @KafkaListener} adapter that calls it then acks.
@@ -69,10 +83,13 @@ public class BehaviorEventReachTrigger {
 
     /**
      * Matches one behavior event against all {@code RUNNING} campaigns and emits a {@link ReachRequested}
-     * for each that triggers. Safe to call without Kafka; throws nothing for per-campaign failures
-     * (registry isolates evaluator throws, the scoped catch isolates publish failures).
+     * for each that triggers. Per-campaign <em>determination</em> failures are isolated and skipped; a
+     * <em>publish</em> failure propagates so the caller can decline to ack and trigger re-delivery
+     * (at-least-once, design.md §9).
      *
      * @param event the deserialized inbound behavior event
+     * @throws RuntimeException if publishing a matched {@link ReachRequested} fails (so the offset is not
+     *     committed and the event is re-delivered)
      */
     public void handle(DomainBehaviorEvent event) {
         if (event == null) {
@@ -81,44 +98,51 @@ public class BehaviorEventReachTrigger {
         }
         List<Campaign> running = campaignRepository.findByStatus(CampaignStatus.RUNNING);
         for (Campaign campaign : running) {
-            evaluateAndEmit(campaign, event);
-        }
-    }
-
-    /**
-     * Derives this campaign's trigger decision for the event and, on {@code TRIGGER}, publishes the
-     * activity-level {@link ReachRequested}. Guarded so a single campaign's publish failure does not
-     * abort the rest of the batch (the registry isolates evaluator throws; this isolates publish failures).
-     */
-    @SuppressWarnings("checkstyle:IllegalCatch") // deliberate broad catch: per-campaign exception isolation
-    private void evaluateAndEmit(Campaign campaign, DomainBehaviorEvent event) {
-        try {
-            TriggerDecision decision =
-                    triggerRegistry.evaluate(TriggerContext.event(campaign.getType(), event.eventType()));
-            if (!decision.isTriggered()) {
-                return;
+            ReachRequested toEmit = decideEmission(campaign, event);
+            if (toEmit == null) {
+                continue;
             }
-            String sendCycle = sendCycleKey(event.eventId());
-            ReachRequested reachRequested = new ReachRequested(
-                    campaign.getId(),
-                    campaign.getTargetSpec(),
-                    campaign.getReachPlan(),
-                    TriggerType.EVENT,
-                    sendCycle,
-                    event.eventId());
-            publisher.publish(reachRequested);
+            // Publish OUTSIDE the isolation catch: a broker failure must propagate so DomainEventConsumer
+            // skips the ack and the event is re-delivered. Swallowing it would silently drop the reach.
+            publisher.publish(toEmit);
             LOG.info(
                     "Emitted ReachRequested for campaign {} on event {} sendCycle={}",
                     campaign.getId(),
                     event.eventId(),
-                    sendCycle);
+                    toEmit.sendCycle());
+        }
+    }
+
+    /**
+     * Derives this campaign's trigger decision for the event and, on {@code TRIGGER}, builds the
+     * activity-level {@link ReachRequested} to emit (or {@code null} if it does not trigger). A failed
+     * <em>determination</em> for one campaign is isolated here (logged, returns {@code null}) so it does
+     * not stop the rest of the batch — this is the "判定例外隔離" the spec requires. Publishing is the
+     * caller's responsibility and is deliberately left outside this catch.
+     */
+    @SuppressWarnings("checkstyle:IllegalCatch") // deliberate broad catch: per-campaign determination isolation
+    private ReachRequested decideEmission(Campaign campaign, DomainBehaviorEvent event) {
+        try {
+            TriggerDecision decision =
+                    triggerRegistry.evaluate(TriggerContext.event(campaign.getType(), event.eventType()));
+            if (!decision.isTriggered()) {
+                return null;
+            }
+            return new ReachRequested(
+                    campaign.getId(),
+                    campaign.getTargetSpec(),
+                    campaign.getReachPlan(),
+                    TriggerType.EVENT,
+                    sendCycleKey(event.eventId()),
+                    event.eventId());
         } catch (RuntimeException ex) {
             LOG.warn(
-                    "Behavior-trigger emit failed for campaign {} on event {}: {}",
+                    "Behavior-trigger determination failed for campaign {} on event {}: {}",
                     campaign.getId(),
                     event.eventId(),
                     ex.getMessage(),
                     ex);
+            return null;
         }
     }
 

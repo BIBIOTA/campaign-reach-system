@@ -17,9 +17,13 @@ import org.springframework.stereotype.Component;
  * <p><strong>At-least-once (design.md §9).</strong> The listener uses the shared kernel's gated
  * {@code atLeastOnceKafkaListenerContainerFactory} (manual ack, broker auto-commit disabled) and only
  * calls {@link Acknowledgment#acknowledge()} <em>after</em> handling returns — i.e. after every matched
- * campaign's {@link com.example.campaignreach.shared.event.ReachRequested} has been handed off to the
- * publisher. If processing throws before the ack, the offset is not advanced and the event is
- * re-delivered. Cross-event idempotency is a reach concern (frequency-capping), out of scope here.
+ * campaign's {@link com.example.campaignreach.shared.event.ReachRequested} has been successfully handed
+ * off to the publisher (the publish is synchronous and propagates its failure, never fire-and-forget).
+ * If a publish fails, {@link BehaviorEventReachTrigger#handle} throws before the ack, so the offset is
+ * not advanced and the event is re-delivered. A record that keeps failing is, after the error handler's
+ * finite retries, dead-lettered to {@code domain.events.DLT} (see {@link DomainEventErrorHandlingConfig})
+ * so it cannot block the partition. Cross-event idempotency is a reach concern (frequency-capping), out
+ * of scope here.
  *
  * <p>All trigger logic lives in {@link BehaviorEventReachTrigger} (Kafka-free, unit-testable); this
  * class stays a thin adapter that delegates then acks.

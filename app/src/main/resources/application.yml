@@ -40,11 +40,15 @@ spring:
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
     # Consumer side (task 6.3, path 2): the campaign-trigger group consumes behavior events
     # from domain.events. String key + JSON value deserialized to the inbound DomainBehaviorEvent.
-    # The trusted-packages allowlist restricts JSON deserialization to the campaign consumer package.
+    # The JSON deserializer is wrapped in ErrorHandlingDeserializer so a malformed payload becomes a
+    # recoverable failed record (routed to domain.events.DLT by the error handler) instead of blocking
+    # the partition in an infinite deserialization loop. The trusted-packages allowlist restricts JSON
+    # deserialization to the campaign consumer package.
     consumer:
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
       properties:
+        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
         spring.json.value.default.type: com.example.campaignreach.campaign.consumer.DomainBehaviorEvent
         spring.json.trusted.packages: com.example.campaignreach.campaign.consumer
 
@@ -56,6 +60,10 @@ campaignreach:
   kafka:
     at-least-once:
       enabled: true
+    # Bounded wait for the broker ack when publishing ReachRequested (task 6.2/6.3). Caps how long a
+    # slow broker can block the scan/consumer thread; on timeout the send fails and propagates so the
+    # event path declines the ack and Kafka re-delivers (at-least-once).
+    publish-timeout: 10s
 
   email-provider:
     api-key: ${EMAIL_PROVIDER_API_KEY:}

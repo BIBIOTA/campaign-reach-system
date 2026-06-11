@@ -138,7 +138,8 @@
   - Depends on: 6.1, 5.2, 2.2
   - Independence: serial
   - status: passing
-  - follow-up: 單一活動 publish 失敗目前 swallow-then-ack（per-campaign 丟棄而非整事件重投），僅以 WARN log 呈現；待加 metric/counter 觀測靜默丟棄。真實 domain.events→reach.requested 端到端測試待有 Docker 的 CI 以 Testcontainers 覆蓋
+  - resolved（code review）: publish 失敗原為 swallow-then-ack（at-most-once，靜默丟事件，違反 §9）。已修正為——判定（evaluation）例外仍 per-campaign 隔離，但 publish 例外向上拋出，`DomainEventConsumer` 不 ack → Kafka 重投（at-least-once）；`ReachRequestPublisher` 改為同步、有界等待（`campaignreach.kafka.publish-timeout`，預設 10s）。新增 `DefaultErrorHandler` + `DeadLetterPublishingRecoverer`（有限重試後進 `domain.events.DLT`）+ `ErrorHandlingDeserializer` 防毒丸卡 partition。對應單元測試：`BehaviorEventReachTriggerTest`（判定隔離 vs publish 傳播）、`ReachRequestPublisherTest`（成功/失敗/逾時）、`KafkaConsumerConfigTest`（error handler 接線）
+  - follow-up: ShedLock 真實雙實例去重 + domain.events→reach.requested 端到端（含 publish 失敗重投、毒丸進 DLT）待有 Docker 的 CI 以 Testcontainers 覆蓋
 
 ## 7. Reach orchestrator — 批次落庫、受眾展開、頻控
 
