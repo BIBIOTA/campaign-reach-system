@@ -1,6 +1,8 @@
 package com.example.campaignreach.campaign.consumer;
 
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -36,5 +38,16 @@ class DomainEventConsumerTest {
         InOrder order = inOrder(reachTrigger, acknowledgment);
         order.verify(reachTrigger).handle(event);
         order.verify(acknowledgment).acknowledge();
+    }
+
+    @Test
+    @DisplayName("tombstone safety: null payload is acknowledged immediately without calling the handler")
+    void nullPayloadIsSafelyAcknowledged() {
+        DomainEventConsumer consumer = new DomainEventConsumer(reachTrigger);
+
+        consumer.onDomainEvent(null, acknowledgment);
+
+        verify(acknowledgment).acknowledge();
+        verify(reachTrigger, never()).handle(null);
     }
 }

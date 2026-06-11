@@ -39,6 +39,8 @@ public class ReachRequestPublisher {
      *     no recipient list); must not be {@code null}
      */
     public void publish(ReachRequested event) {
-        kafkaTemplate.send(KafkaTopics.REACH_REQUESTED, PartitionKeys.forReachRequested(event), event);
+        kafkaTemplate
+                .send(KafkaTopics.REACH_REQUESTED, PartitionKeys.forReachRequested(event), event)
+                .join();
     }
 }

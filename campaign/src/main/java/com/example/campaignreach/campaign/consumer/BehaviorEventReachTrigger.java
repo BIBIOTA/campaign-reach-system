@@ -75,6 +75,10 @@ public class BehaviorEventReachTrigger {
      * @param event the deserialized inbound behavior event
      */
     public void handle(DomainBehaviorEvent event) {
+        if (event == null) {
+            LOG.warn("Cannot handle null behavior event");
+            return;
+        }
         List<Campaign> running = campaignRepository.findByStatus(CampaignStatus.RUNNING);
         for (Campaign campaign : running) {
             evaluateAndEmit(campaign, event);

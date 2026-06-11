@@ -5,6 +5,7 @@ import com.example.campaignreach.campaign.domain.CampaignRepository;
 import com.example.campaignreach.campaign.domain.CampaignStatus;
 import java.time.Instant;
 import java.util.List;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -58,6 +59,7 @@ public class CampaignLifecycleScheduler {
      * optimistic-lock loss is isolated and the sweep continues.
      */
     @Scheduled(fixedDelayString = "${campaignreach.scheduler.lifecycle.fixed-delay-ms:60000}")
+    @SchedulerLock(name = "campaign-lifecycle-advance", lockAtMostFor = "PT9M", lockAtLeastFor = "PT1S")
     public void advanceLifecycle() {
         Instant now = Instant.now();
         autoStart(now);

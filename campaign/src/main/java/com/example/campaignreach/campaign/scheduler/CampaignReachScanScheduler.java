@@ -9,6 +9,7 @@ import com.example.campaignreach.campaign.evaluation.TriggerDecision;
 import com.example.campaignreach.campaign.publish.ReachRequestPublisher;
 import com.example.campaignreach.shared.event.ReachRequested;
 import com.example.campaignreach.shared.event.TriggerType;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -69,11 +70,18 @@ public class CampaignReachScanScheduler {
      * @param publisher emits the activity-level {@link ReachRequested}
      * @param cycleDuration the schedule-cycle unit {@code now} is floored to for the deterministic key
      */
+    @SuppressFBWarnings(
+            value = "CT_CONSTRUCTOR_THROW",
+            justification = "Spring @Component singleton; no finalizer defined, so the finalizer-attack "
+                    + "vector does not apply. The throw is an intentional fail-fast config guard.")
     public CampaignReachScanScheduler(
             CampaignRepository campaignRepository,
             ReachTriggerEvaluatorRegistry triggerRegistry,
             ReachRequestPublisher publisher,
             @Value("${campaignreach.scheduler.reach-scan.cycle-duration:PT1H}") Duration cycleDuration) {
+        if (cycleDuration == null || cycleDuration.isNegative() || cycleDuration.isZero()) {
+            throw new IllegalArgumentException("cycleDuration must be a positive non-zero duration");
+        }
         this.campaignRepository = campaignRepository;
         this.triggerRegistry = triggerRegistry;
         this.publisher = publisher;

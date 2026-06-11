@@ -1,6 +1,7 @@
 package com.example.campaignreach.campaign.scheduler;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
@@ -196,6 +197,24 @@ class CampaignReachScanSchedulerTest {
         verify(publisher)
                 .publish(org.mockito.ArgumentMatchers.argThat(
                         e -> e != null && e.campaignId().equals(good.getId())));
+    }
+
+    @Test
+    @DisplayName("fail-fast: zero cycleDuration throws IllegalArgumentException at construction time")
+    void zeroCycleDurationIsRejected() {
+        assertThatThrownBy(() ->
+                        new CampaignReachScanScheduler(campaignRepository, triggerRegistry, publisher, Duration.ZERO))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("cycleDuration");
+    }
+
+    @Test
+    @DisplayName("fail-fast: negative cycleDuration throws IllegalArgumentException at construction time")
+    void negativeCycleDurationIsRejected() {
+        assertThatThrownBy(() -> new CampaignReachScanScheduler(
+                        campaignRepository, triggerRegistry, publisher, Duration.ofSeconds(-1)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("cycleDuration");
     }
 
     @Test

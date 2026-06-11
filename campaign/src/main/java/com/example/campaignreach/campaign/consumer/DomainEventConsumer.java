@@ -50,6 +50,11 @@ public class DomainEventConsumer {
             groupId = ConsumerGroups.CAMPAIGN_TRIGGER,
             containerFactory = "atLeastOnceKafkaListenerContainerFactory")
     public void onDomainEvent(DomainBehaviorEvent event, Acknowledgment acknowledgment) {
+        if (event == null) {
+            LOG.warn("Received null domain event payload (tombstone). Acknowledging and skipping.");
+            acknowledgment.acknowledge();
+            return;
+        }
         LOG.debug("Consuming domain event {} type={}", event.eventId(), event.eventType());
         reachTrigger.handle(event);
         acknowledgment.acknowledge();
