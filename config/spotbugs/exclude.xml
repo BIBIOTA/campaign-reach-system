@@ -18,9 +18,16 @@
 
     <!-- JPA entities use protected no-arg constructors for Hibernate proxies and do not
          override finalize(), so the finalizer-attack vector in CT_CONSTRUCTOR_THROW does
-         not apply. Constructor-level null checks are intentional domain invariants. -->
+         not apply. Constructor-level null checks are intentional domain invariants. The
+         campaign aggregates live under `.domain.`; the reach orchestrator's activity-level
+         reach_request entity (task 7.1) is a JPA entity in `reach.orchestrator` (reach has no
+         `.domain.` package per its module layout), so it is matched explicitly here. -->
     <Match>
         <Class name="~.*\.domain\..*"/>
+        <Bug pattern="CT_CONSTRUCTOR_THROW"/>
+    </Match>
+    <Match>
+        <Class name="com.example.campaignreach.reach.orchestrator.ReachRequest"/>
         <Bug pattern="CT_CONSTRUCTOR_THROW"/>
     </Match>
 </FindBugsFilter>
