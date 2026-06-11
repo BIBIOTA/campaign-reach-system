@@ -124,7 +124,7 @@
   - Acceptance: WHEN 到達 startAt THEN 活動自動進入 RUNNING；WHEN 到達 endAt THEN 自動 ENDED（FR-012，US-002）
   - Depends on: 4.2
   - Independence: serial
-  - status: not_started
+  - status: in_progress
 - [ ] 6.2 實作排程批次掃描並發出 ReachRequested（ShedLock 防重）
   - Acceptance: WHEN scheduler 每 N 分鐘掃描 status=RUNNING 活動 AND ReachTriggerEvaluator 判定到達發送時機 THEN 發出 `ReachRequested(...,triggerType=SCHEDULED_BATCH, sendCycle)` 至 `reach.requested`（路徑1，FR-008/US-004）
   - Acceptance: WHEN 多實例部署或 scheduler 重啟補掃 THEN 以 ShedLock + 確定性 `sched:{campaignId}:{cycleStart}`（truncate 後 ISO-8601）使同一活動同一週期只推導出相同 key、只跑一次，不遺漏不重複（§5，US-004）

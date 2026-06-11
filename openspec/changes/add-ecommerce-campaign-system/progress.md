@@ -272,3 +272,8 @@
 
 
 
+## Session 32 — 2026-06-11 10:00
+- Stage: SDD
+- Task: 6.1 實作活動生命週期排程（自動進入 RUNNING / ENDED）
+- Transition: not_started → in_progress
+- Next action: 於新分支 feat/section-6-campaign-triggers 派發 implementer subagent 實作活動生命週期排程（@Scheduled 掃描：SCHEDULED 且 startAt<=now → RUNNING；RUNNING/PAUSED 且 endAt<=now → ENDED，全程經 Campaign.transitionTo 合法邊守衛），完成後接 spec-reviewer 與 code-quality-reviewer。
