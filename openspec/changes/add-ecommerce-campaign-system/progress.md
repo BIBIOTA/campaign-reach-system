@@ -526,3 +526,9 @@
   - Spec-reviewer: ✅ Spec compliant（5/5；四場景皆 name-mapped 測試斷言 THEN——不落 PII（V6/V8 + catalog 斷言）、suppression hit→FAILED 不送（既有 8.2 SuppressionGuard/dispatcher 覆蓋）、保留參數存在且 null→fail-fast 非永久、屆期 FK 有序刪除且僅 terminal；ER 05 schema 契約符合僅引用既有欄位、無新增 PII 欄位；無 over-engineering、無 ShedLock 合理）
   - Code-quality-reviewer: ✅ Approved（無 Critical/Important；忠實沿用 ReachRequestCountAggregator/ReachTaskReaper/DispatcherProperties 既有模式、FK 有序刪除與 cutoff 單次計算正確、SQL 全參數化 enum cast 對齊、validation 落在 config 綁定信任邊界、單元測試以 ArgumentCaptor 驗 cutoff/SQL 順序/status 述詞非 tautological mock；3 Minor：inline java.sql.Timestamp FQN 已修為 import、status 清單於兩 DELETE 重複屬 house-style 可接受、returnsZero 測試粒度 Minor 皆不阻擋）
 - Next action: 對 add-ecommerce-campaign-system 跑 final pass（cross-task 整合測試 + `openspec validate {change-id} --strict`），剩餘 not_started 僅 12.1（10 萬筆壓測），非本次「Task 11」範圍；隨後可 invoke spec-driven-dev:verification-before-completion。
+
+## Session 62 — 2026-06-11 23:59
+- Stage: SDD
+- Task: 12.1 以 10 萬筆級壓測驗證全鏈路並產出報告
+- Transition: not_started → in_progress
+- Next action: 於新分支 `feat/task-12-load-test-reliability` 派發 implementer subagent 實作 @RequiresDocker 大量觸達可靠性壓測——以 10 萬筆級受眾驅動 reach_request 落庫 → PagedAudienceExpander fan-out → ReachTaskDispatcher 兩階段發送全鏈路，斷言各 ReachTask 狀態正確收斂，並產出處理速率/各狀態分布/資源使用報告（作為演進至百萬筆級基準）；驗證大量發送不拖垮其他活動/設定。完成後接 spec-reviewer 與 code-quality-reviewer。

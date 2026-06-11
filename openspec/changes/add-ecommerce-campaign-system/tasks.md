@@ -241,7 +241,7 @@
   - Acceptance: WHEN 壓測完成 THEN 產出處理速率/各狀態分布/資源使用報告，作為演進至百萬筆級基準（US-008，Metrics §8）
   - Depends on: 9.2, 9.3, 10.1, 10.3
   - Independence: serial
-  - status: not_started
+  - status: in_progress
 
 ## Optional artifacts
 - [ ] PlantUML diagrams (spec-driven-dev:writing-uml) — 已存在於 diagrams/（sequence/state/class/component/ER），本次不重跑
