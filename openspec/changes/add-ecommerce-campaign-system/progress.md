@@ -509,3 +509,20 @@
   - Spec-reviewer: ✅ Spec compliant（6/6；兩 in-scope 場景三層測試 name-mapped、deliveredRate/failedRate/全狀態分布齊備且零分母守衛、單筆查詢多 cycle/channel 集合 + 非收件人空集 200、PII 最小化無 email/content、05-ER 欄位/enum/索引契約符合、未動 10.2 aggregator/dispatcher、reach↛campaign 守住 campaignId 為純 UUID）
   - Code-quality-reviewer: ✅ Approved（無 Critical/Important；controller→service→DAO 分層恰當、rate math 集中且測試覆蓋、SQL 全參數化 enum cast 對齊既有 DAO、defensive copy + null guard、PII 行為層斷言、@RequiresDocker IT 真 DB 行為涵蓋負向案例、spring-boot-starter-web 於單一 :app web context 不引入第二 component-scan；1 Minor：package-info stale javadoc 已 amend 修正；slice 鏡像 security chain 因 ArchUnit 邊界為合理做法非 smell）
 - Next action: Section 10（10.1–10.3）全數 passing；剩餘 not_started 任務為 11.1（PII/資料保留）與 12.1（10 萬筆壓測），非本次「Task 10」範圍——對 add-ecommerce-campaign-system 跑 final pass（`openspec validate --strict`）後可視需要 invoke spec-driven-dev:verification-before-completion。
+
+## Session 60 — 2026-06-11 23:30
+- Stage: SDD
+- Task: 11.1 落實收件人 PII 最小化與資料保留策略
+- Transition: not_started → in_progress
+- Next action: 於新分支 `feat/task-11-pii-retention` 派發 implementer subagent 實作可設定的資料保留策略——新增 `RetentionProperties`（`campaignreach.reach.retention.*`，保留期限參數必須存在、不得預設永久保留，缺漏即 fail-fast）與背景 purge 排程（依保留期限刪除/歸檔屆期 reach_task/send_result，遵循既有 @Scheduled DAO 短事務慣例）；PII 最小化（reach_task 只存 user_id、send_result 只存 provider_message_id+outcome、發送前 suppression 過濾）已於 7.3/8/9 落地，本任務以測試斷言覆蓋。完成後接 spec-reviewer 與 code-quality-reviewer。
+
+## Session 61 — 2026-06-11 23:55
+- Stage: SDD
+- Task: 11.1 落實收件人 PII 最小化與資料保留策略
+- Transition: in_progress → passing
+- Evidence:
+  - Commits: 87d4c0a feat: add reach PII minimization assertions + configurable data retention purge (task 11.1)
+  - Tests: `RetentionPropertiesTest`（configured period 採用、null→fail-fast 不預設永久、zero/negative 拒絕）、`ReachAuditTrailPurgerTest`（cutoff=now−period、FK 先刪 send_result 後刪 reach_task、僅 terminal status SENT/FAILED/DLQ/CANCELLED、排除 PENDING/PROCESSING）、`ReachAuditRetentionIntegrationTest`（@RequiresDocker 真 Postgres：catalog 層斷言 reach_task 僅 user_id、send_result 僅 provider_message_id+outcome 無 PII 欄位；aged-terminal+child 被刪、aged-in-flight 與 fresh 保留）。新增 `V10__reach_task_retention_index.sql`（(status, created_at) 支援 purge 掃描）。`./gradlew check` BUILD SUCCESSFUL（spotless/checkstyle/spotbugsMain/test/ArchUnit reach↛campaign/JaCoCo 全綠；Docker-gated IT 本沙箱 auto-skip）。
+  - Spec-reviewer: ✅ Spec compliant（5/5；四場景皆 name-mapped 測試斷言 THEN——不落 PII（V6/V8 + catalog 斷言）、suppression hit→FAILED 不送（既有 8.2 SuppressionGuard/dispatcher 覆蓋）、保留參數存在且 null→fail-fast 非永久、屆期 FK 有序刪除且僅 terminal；ER 05 schema 契約符合僅引用既有欄位、無新增 PII 欄位；無 over-engineering、無 ShedLock 合理）
+  - Code-quality-reviewer: ✅ Approved（無 Critical/Important；忠實沿用 ReachRequestCountAggregator/ReachTaskReaper/DispatcherProperties 既有模式、FK 有序刪除與 cutoff 單次計算正確、SQL 全參數化 enum cast 對齊、validation 落在 config 綁定信任邊界、單元測試以 ArgumentCaptor 驗 cutoff/SQL 順序/status 述詞非 tautological mock；3 Minor：inline java.sql.Timestamp FQN 已修為 import、status 清單於兩 DELETE 重複屬 house-style 可接受、returnsZero 測試粒度 Minor 皆不阻擋）
+- Next action: 對 add-ecommerce-campaign-system 跑 final pass（cross-task 整合測試 + `openspec validate {change-id} --strict`），剩餘 not_started 僅 12.1（10 萬筆壓測），非本次「Task 11」範圍；隨後可 invoke spec-driven-dev:verification-before-completion。

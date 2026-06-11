@@ -88,6 +88,26 @@ campaignreach:
       # this window — over-reach guard, separate from the same-cycle unique-constraint idempotency.
       window: PT24H
 
+    # Reach audit-trail data retention (task 11.1, NFR-005). reach_task / send_result carry only
+    # minimized audit data (user_id + provider_message_id + outcome — no recipient email/content), and
+    # this policy bounds how long even that audit trail is kept before the purge job deletes it.
+    #
+    # `period` MUST be present and configurable and MUST NOT silently mean "keep forever": if it is
+    # unset, RetentionProperties fails application startup (fail loud, never silently degrade) rather
+    # than defaulting to permanent retention. The value below is a NON-PERMANENT placeholder — the
+    # exact retention duration is an Open Question pending legal/compliance confirmation (see
+    # proposal.md ## Open Questions); P395D (≈13 months as days) is a conservative placeholder, NOT
+    # the final legally-confirmed figure. Uses days (not months) because Duration cannot represent
+    # calendar months; P13M would fail Spring Boot's Duration binder at startup.
+    retention:
+      period: P395D
+      # Purge sweep cadence (ms). Retention is slow housekeeping, so an hourly default is ample.
+      fixed-delay-ms: 3600000
+      # Max reach_task rows deleted per purge transaction. The sweep loops in batches of this size so a
+      # single pass never holds a long lock / bloats the WAL over the whole expired set at scale (100k+
+      # rows); each batch commits independently. Unset would default to 1000 (RetentionProperties).
+      purge-batch-size: 1000
+
     # Email channel circuit breaker (task 8.1, §6 NFR-004). Wraps the external Email provider so an
     # outage degrades stably and recovers via half-open probing instead of cascading. All knobs are
     # overridable; the values below are the spec defaults, shown explicitly for visibility.

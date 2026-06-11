@@ -224,14 +224,14 @@
 
 ## 11. PII / 安全 / 資料保留
 
-- [ ] 11.1 落實收件人 PII 最小化與資料保留策略
+- [x] 11.1 落實收件人 PII 最小化與資料保留策略
   - Acceptance: WHEN 落庫 reach_task THEN 只存 user_id，不落收件 email；實際 email 於 dispatcher 發送當下以 user_id 即時解析、發送後不持久化（§10）
   - Acceptance: WHEN 落庫 send_result THEN 僅存 provider_message_id 與 outcome，不存信件內容與收件地址（§10）
   - Acceptance: WHEN 初始化保留設定 THEN 保留期限參數必須存在且可設定、不得預設永久保留（NFR-005）
   - Acceptance: WHEN reach_task/send_result 屆保留期 THEN 依保留策略歸檔或刪除（具體月數為 open question 待法遵確認，見 proposal.md ## Open Questions）（§10，NFR-005）
   - Depends on: 7.3, 9.1
   - Independence: serial
-  - status: not_started
+  - status: passing
 
 ## 12. 大量觸達可靠性驗證（壓測）
 
