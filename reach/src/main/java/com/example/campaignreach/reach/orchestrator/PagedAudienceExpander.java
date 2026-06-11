@@ -5,6 +5,7 @@ import com.example.campaignreach.reach.audience.Recipient;
 import com.example.campaignreach.reach.audience.TargetSpec;
 import com.example.campaignreach.reach.audience.TargetSpecParser;
 import com.example.campaignreach.shared.event.Channel;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -38,7 +39,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  * created_at >= now() - :window}). The {@code send_cycle_key <> :currentCycle} clause is the crux of
  * the 頻控/冪等 separation: the current cycle is deliberately excluded so a resume freely re-inserts the
  * current cycle's rows (that dedup is the unique constraint's job), while the cap only suppresses
- * over-reach from <em>other</em> events firing at the same user in a short window.
+ * over-reach from <em>other</em> events firing at the same user in a short window. The cap is
+ * intentionally <em>cross-campaign</em> (no {@code campaign_id} filter): any recent reach to the user
+ * from a different cycle — including other campaigns — counts toward the over-reach guard.
  *
  * <p><strong>Crash-resume boundary.</strong> The 100k fan-out is never wrapped in one transaction.
  * Each page runs in its own {@link TransactionTemplate} transaction (mirroring the per-item isolation
@@ -89,6 +92,10 @@ public class PagedAudienceExpander implements AudienceExpander {
      * @param transactionManager backs the per-page (and per-status-update) short transactions
      * @param properties page size + frequency-cap window tunables
      */
+    @SuppressFBWarnings(
+            value = "EI_EXPOSE_REP2",
+            justification = "Spring injects the singleton JdbcTemplate / transaction manager by reference; "
+                    + "storing these framework-managed beans is the intended DI wiring, not a mutable-state leak.")
     public PagedAudienceExpander(
             TargetSpecParser targetSpecParser,
             ReachPlanChannelExtractor reachPlanChannelExtractor,
