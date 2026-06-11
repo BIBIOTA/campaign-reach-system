@@ -20,6 +20,17 @@ dependencies {
     implementation(libs.spring.boot.starter.web)
     implementation(libs.spring.boot.starter.security)
 
+    // Kafka producer side (task 6.2): the scan scheduler publishes activity-level
+    // ReachRequested events to reach.requested. The at-least-once CONSUMER policy in
+    // :shared is gated/separate; campaign is on the PRODUCER side here.
+    implementation(libs.spring.kafka)
+
+    // Distributed scheduler lock (task 6.2): @SchedulerLock + a JdbcTemplateLockProvider
+    // over the app DataSource (spring-jdbc comes transitively via spring-boot-starter-data-jpa)
+    // make the same logical cycle run only once across instances / restart back-scans (§5, US-004).
+    implementation(libs.shedlock.spring)
+    implementation(libs.shedlock.provider.jdbc.template)
+
     // campaign may only talk to reach through the shared kernel (event/config).
     // It must NOT depend on :reach — enforced by the ArchUnit guard in :app.
     implementation(project(":shared"))

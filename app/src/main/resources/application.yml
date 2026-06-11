@@ -33,6 +33,11 @@ spring:
   # consumer groups are defined by later tasks (2.x), not here.
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:}
+    # Producer side (task 6.2): the campaign reach-scan publishes activity-level
+    # ReachRequested events. String partition key + JSON value payload.
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
 
 # Email provider secret — supplied from environment / vault, never committed.
 campaignreach:

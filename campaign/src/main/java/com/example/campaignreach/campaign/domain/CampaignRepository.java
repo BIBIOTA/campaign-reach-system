@@ -27,4 +27,10 @@ public interface CampaignRepository extends JpaRepository<Campaign, UUID> {
      * candidates the lifecycle scheduler auto-advances to {@code ENDED} (task 6.1, FR-012).
      */
     List<Campaign> findByStatusInAndEndAtLessThanEqual(Collection<CampaignStatus> statuses, Instant now);
+
+    /**
+     * All campaigns in the given status — the {@code RUNNING} candidates the reach-scan scheduler
+     * sweeps each tick to derive trigger decisions and emit {@code ReachRequested} (task 6.2, FR-008).
+     */
+    List<Campaign> findByStatus(CampaignStatus status);
 }
