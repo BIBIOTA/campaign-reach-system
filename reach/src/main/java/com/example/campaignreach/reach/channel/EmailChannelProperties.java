@@ -1,5 +1,6 @@
 package com.example.campaignreach.reach.channel;
 
+import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import java.time.Duration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -24,14 +25,13 @@ public record EmailChannelProperties(CircuitBreaker circuitBreaker) {
     }
 
     /**
-     * @return a Resilience4j {@link io.github.resilience4j.circuitbreaker.CircuitBreakerConfig} built
-     *     from these tunables, using a count-based sliding window so the window size is "last N
-     *     calls" exactly as the spec describes.
+     * @return a Resilience4j {@link CircuitBreakerConfig} built from these tunables, using a
+     *     count-based sliding window so the window size is "last N calls" exactly as the spec
+     *     describes.
      */
-    public io.github.resilience4j.circuitbreaker.CircuitBreakerConfig toCircuitBreakerConfig() {
-        return io.github.resilience4j.circuitbreaker.CircuitBreakerConfig.custom()
-                .slidingWindowType(
-                        io.github.resilience4j.circuitbreaker.CircuitBreakerConfig.SlidingWindowType.COUNT_BASED)
+    public CircuitBreakerConfig toCircuitBreakerConfig() {
+        return CircuitBreakerConfig.custom()
+                .slidingWindowType(CircuitBreakerConfig.SlidingWindowType.COUNT_BASED)
                 .slidingWindowSize(circuitBreaker.slidingWindowSize())
                 .minimumNumberOfCalls(circuitBreaker.minimumNumberOfCalls())
                 .failureRateThreshold(circuitBreaker.failureRateThreshold())

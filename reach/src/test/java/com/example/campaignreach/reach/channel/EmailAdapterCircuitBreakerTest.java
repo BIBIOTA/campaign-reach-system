@@ -2,11 +2,13 @@ package com.example.campaignreach.reach.channel;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 import com.example.campaignreach.shared.event.Channel;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import java.time.Duration;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -41,8 +43,7 @@ class EmailAdapterCircuitBreakerTest {
     private static CircuitBreaker breaker(int window, float threshold, Duration coolDown, int halfOpenProbes) {
         EmailChannelProperties props = new EmailChannelProperties(
                 new EmailChannelProperties.CircuitBreaker(window, window, threshold, coolDown, halfOpenProbes));
-        return io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry.ofDefaults()
-                .circuitBreaker("test", props.toCircuitBreakerConfig());
+        return CircuitBreakerRegistry.ofDefaults().circuitBreaker("test", props.toCircuitBreakerConfig());
     }
 
     private SendResult okResult() {
@@ -219,9 +220,7 @@ class EmailAdapterCircuitBreakerTest {
         void rejectsNonEmailMessage() {
             CircuitBreaker cb = breaker(8, 50f, Duration.ofSeconds(30), 2);
             EmailAdapter adapter = new EmailAdapter(providerClient, cb);
-            lenient()
-                    .when(providerClient.deliver(org.mockito.ArgumentMatchers.any()))
-                    .thenReturn(okResult());
+            lenient().when(providerClient.deliver(any())).thenReturn(okResult());
             ReachMessage smsMessage = new ReachMessage(UUID.randomUUID(), Channel.SMS, "welcome");
 
             assertThatThrownBy(() -> adapter.send(smsMessage)).isInstanceOf(IllegalArgumentException.class);

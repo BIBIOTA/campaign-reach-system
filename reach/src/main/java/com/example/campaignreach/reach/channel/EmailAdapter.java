@@ -3,6 +3,7 @@ package com.example.campaignreach.reach.channel;
 import com.example.campaignreach.shared.event.Channel;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.stereotype.Component;
 
 /**
@@ -14,6 +15,16 @@ import org.springframework.stereotype.Component;
  * NFR-004 recovery contract: it OPENs on a configurable failure-rate threshold over a sliding
  * window, stays open for a configurable cool-down, then HALF-OPENs to admit a configurable number
  * of probes, returning to CLOSED only if every probe succeeds.
+ *
+ * <p><strong>Registration is conditional on an {@link EmailProviderClient} bean being present.</strong>
+ * Task 8.1 intentionally ships only the adapter + breaker seam; the concrete SendGrid/SES {@code
+ * EmailProviderClient} binding (and its {@code EMAIL_PROVIDER_API_KEY} wiring) lands in a later
+ * section. Until that provider bean exists, this adapter does <em>not</em> register, so the Spring
+ * context starts cleanly instead of failing on an unsatisfiable dependency — and, crucially, no
+ * silent no-op "send" can happen in production: there is simply no EMAIL adapter until a real
+ * provider is wired in. {@code @ConditionalOnBean} is honoured because this is a component-scanned
+ * bean evaluated after the (future) provider configuration; the real binding must register its
+ * {@code EmailProviderClient} bean to activate this adapter.
  *
  * <p>Failure translation is the dispatcher seam (Section 9 does the write-back):
  *
@@ -28,6 +39,7 @@ import org.springframework.stereotype.Component;
  * </ul>
  */
 @Component
+@ConditionalOnBean(EmailProviderClient.class)
 public class EmailAdapter implements ChannelAdapter {
 
     private final EmailProviderClient providerClient;
