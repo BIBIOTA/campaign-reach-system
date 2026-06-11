@@ -78,6 +78,22 @@ campaignreach:
       # this window — over-reach guard, separate from the same-cycle unique-constraint idempotency.
       window: PT24H
 
+    # Email channel circuit breaker (task 8.1, §6 NFR-004). Wraps the external Email provider so an
+    # outage degrades stably and recovers via half-open probing instead of cascading. All knobs are
+    # overridable; the values below are the spec defaults, shown explicitly for visibility.
+    email:
+      circuit-breaker:
+        # Count-based: failure rate is computed over the last N calls.
+        sliding-window-size: 20
+        # Minimum recorded calls before the failure rate is evaluated (no premature tripping).
+        minimum-number-of-calls: 20
+        # Failure-rate percentage that trips the breaker to OPEN.
+        failure-rate-threshold: 50
+        # Cool-down spent in OPEN before half-open probing.
+        wait-duration-in-open-state: 30s
+        # Probes admitted in HALF_OPEN; all must succeed to return to CLOSED.
+        permitted-number-of-calls-in-half-open-state: 5
+
   email-provider:
     api-key: ${EMAIL_PROVIDER_API_KEY:}
 

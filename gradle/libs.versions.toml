@@ -31,6 +31,11 @@ postgresql = "42.7.4"
 # instances / restarts via a DB lock. 5.x is compatible with Spring Boot 3.4.
 shedlock = "5.16.0"
 
+# Circuit breaker (NFR-004): wraps the EmailAdapter so an unavailable Email provider
+# degrades stably (open on a configurable failure-rate threshold, cool-down, half-open
+# probing) instead of cascading. Resilience4j 2.x is the Spring Boot 3 line.
+resilience4j = "2.3.0"
+
 # Test
 junit = "5.11.4"
 # Integration testing with real Kafka + PostgreSQL containers (design.md §7)
@@ -63,6 +68,11 @@ postgresql = { module = "org.postgresql:postgresql", version.ref = "postgresql" 
 # flyway-database-postgresql module in addition to flyway-core.
 flyway-core = { module = "org.flywaydb:flyway-core" }
 flyway-database-postgresql = { module = "org.flywaydb:flyway-database-postgresql" }
+
+# Resilience4j Spring Boot 3 starter (NFR-004): auto-configures circuit breakers from
+# resilience4j.circuitbreaker.* config and exposes the CircuitBreakerRegistry. Wraps the
+# EmailAdapter so an unavailable Email provider degrades stably without cascading failure.
+resilience4j-spring-boot3 = { module = "io.github.resilience4j:resilience4j-spring-boot3", version.ref = "resilience4j" }
 
 # ArchUnit (JUnit 5 integration)
 archunit-junit5 = { module = "com.tngtech.archunit:archunit-junit5", version.ref = "archunit" }

@@ -18,6 +18,12 @@ dependencies {
     // ReachRequested payload (spring-kafka exposes jackson-core types on that API surface).
     implementation(libs.jackson.databind)
 
+    // Circuit breaker (task 8.1, NFR-004): wraps the EmailAdapter so an unavailable Email
+    // provider degrades stably (open on failure-rate threshold, cool-down, half-open probing)
+    // instead of cascading. The Spring Boot 3 starter auto-configures the CircuitBreakerRegistry
+    // and is tuned via EmailChannelProperties / programmatic CircuitBreakerConfig.
+    implementation(libs.resilience4j.spring.boot3)
+
     // reach may only talk to campaign through the shared kernel (event/config).
     // It must NOT depend on :campaign — enforced by the ArchUnit guard in :app.
     implementation(project(":shared"))
