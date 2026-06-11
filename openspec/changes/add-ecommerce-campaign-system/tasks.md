@@ -173,7 +173,7 @@
   - Acceptance: WHEN Email provider 中斷 THEN circuit breaker（Resilience4j）開啟使系統穩定降級、恢復後續送，不造成連鎖故障（§6，NFR-004）
   - Depends on: 2.1
   - Independence: parallel-safe
-  - status: not_started
+  - status: in_progress
 - [ ] 8.2 實作抑制名單（suppression）查表與發送前過濾
   - Acceptance: WHEN 發送前 THEN 檢查 suppression(user_id/channel/reason)，命中（退訂/硬退信/投訴）者該 task 標 FAILED（不可重試），不送出（§10，NFR-005/FR-015）
   - Depends on: 3.1

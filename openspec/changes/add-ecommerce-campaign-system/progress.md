@@ -373,3 +373,9 @@
   - Spec-reviewer: ✅ Spec compliant（5/5；V6__reach_task.sql 16 欄+四欄 unique+FK+channel/reach_task_status enum+3 ER 建議索引對齊 05-er、展開呼叫順序對齊 01-sequence、NoOpAudienceExpander 已刪僅 PagedAudienceExpander 一個 bean、頻控 send_cycle_key<>currentCycle 與冪等分離正確、無 section 8/9 dispatcher/retry/DLQ/suppression 外洩、reach↛campaign 守住）
   - Code-quality-reviewer: ✅ Approved（再審；首審 1 Important：EI_EXPOSE_REP2 用 whole-class exclude.xml 應比照 ReachRequestPublisher 改 inline @SuppressFBWarnings → 已於 7b94e97 改為建構子 inline 註解並移除 exclude block、spotbugs 移除 entry 後仍綠證明真有抑制；crash-resume 每頁獨立交易 + 狀態轉換各自短交易、SQL 全參數綁定無注入、ON CONFLICT 收斂、測試行為導向皆獲肯定；Minor：freq-cap 跨活動範圍已補 Javadoc、PagedAudienceExpander 216 行未來可抽 ReachTaskDao 為非阻擋 note）
 - Next action: Section 7（7.1–7.3）全數 passing；執行 final pass（`./gradlew check` + `openspec validate add-ecommerce-campaign-system --strict`）後 invoke spec-driven-dev:verification-before-completion。
+
+## Session 44 — 2026-06-11 17:00
+- Stage: SDD
+- Task: 8.1 實作 ChannelAdapter 介面與 EmailAdapter（含 circuit breaker）
+- Transition: not_started → in_progress
+- Next action: 派發 implementer subagent，於 reach/channel 實作 ChannelAdapter 介面（channel():Channel + send(ReachMessage):SendResult，對齊 03-class）、EmailAdapter（介接 SendGrid/SES 包一層、由 ChannelAdapter registry 依 reachPlan channel 選用、OCP 新增通道不改既有），並以 Resilience4j circuit breaker 包覆 EmailAdapter（滑動窗口/失敗率門檻/冷卻/half-open 探測皆可設定，對齊 spec「外部通道中斷的穩定降級」5 scenario 與 04-component），完成後接 spec-reviewer 與 code-quality-reviewer。
