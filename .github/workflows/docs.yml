@@ -1,0 +1,112 @@
+name: API Docs (GitHub Pages)
+
+# Publishes the繁體中文 OpenAPI documentation to GitHub Pages. This workflow is
+# DELIBERATELY SEPARATE from ci.yml (the quality gate): a docs build/deploy never
+# blocks merges, and the gate is unaffected by Pages.
+#
+# Pipeline: boot the app on a real Postgres (Testcontainers) via OpenApiSpecExportTest,
+# which writes app/build/openapi/openapi.{yaml,json}; convert that spec to a Postman
+# collection; assemble a self-contained Swagger UI static site (pinned swagger-ui-dist,
+# no CDN) and the landing page; then deploy to Pages.
+#
+# ONE-TIME MANUAL SETUP (cannot be done from code): in the GitHub repo,
+# Settings → Pages → Build and deployment → Source = "GitHub Actions".
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow only one concurrent deployment; let in-progress runs finish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  # Pinned Swagger UI distribution (no CDN — the site is self-contained).
+  SWAGGER_UI_VERSION: 5.18.2
+
+jobs:
+  build:
+    name: Build docs site
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle (with build cache)
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Export OpenAPI spec
+        # GitHub-hosted runners provide Docker, so the @RequiresDocker export test runs
+        # for real and writes app/build/openapi/openapi.{yaml,json}.
+        run: ./gradlew :app:test --tests "*OpenApiSpecExportTest" --no-daemon --stacktrace
+
+      - name: Assemble site
+        run: |
+          set -euo pipefail
+          SITE="site"
+          mkdir -p "$SITE/swagger-ui" "$SITE/postman"
+
+          # 1) Spec files (single source of truth).
+          cp app/build/openapi/openapi.yaml "$SITE/openapi.yaml"
+          cp app/build/openapi/openapi.json "$SITE/openapi.json"
+
+          # 2) Postman collection generated from the spec.
+          npx -y openapi-to-postmanv2 \
+            -s "$SITE/openapi.yaml" \
+            -o "$SITE/postman/campaign-reach.postman_collection.json" \
+            -p
+
+          # 3) Self-contained Swagger UI (pinned dist, fetched from npm — not a runtime CDN link).
+          npm pack "swagger-ui-dist@${SWAGGER_UI_VERSION}" >/dev/null
+          tar -xzf "swagger-ui-dist-${SWAGGER_UI_VERSION}.tgz"
+          cp package/swagger-ui.css package/swagger-ui-bundle.js \
+             package/swagger-ui-standalone-preset.js package/index.css \
+             package/favicon-32x32.png package/favicon-16x16.png \
+             "$SITE/swagger-ui/"
+          cp package/index.html "$SITE/swagger-ui/index.html"
+          # Point Swagger UI at our exported spec instead of the bundled petstore demo.
+          cat > "$SITE/swagger-ui/swagger-initializer.js" <<'JS'
+          window.onload = function () {
+            window.ui = SwaggerUIBundle({
+              url: "../openapi.yaml",
+              dom_id: "#swagger-ui",
+              deepLinking: true,
+              presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
+              layout: "StandaloneLayout",
+            });
+          };
+          JS
+
+          # 4) Landing page.
+          cp docs/index.html "$SITE/index.html"
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
