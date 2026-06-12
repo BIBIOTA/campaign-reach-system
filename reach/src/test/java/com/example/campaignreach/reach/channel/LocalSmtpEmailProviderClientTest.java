@@ -9,6 +9,8 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.example.campaignreach.shared.event.Channel;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import java.lang.reflect.RecordComponent;
 import java.time.Clock;
 import java.time.Duration;
@@ -94,6 +96,37 @@ class LocalSmtpEmailProviderClientTest {
         assertThatThrownBy(() -> client.deliver(message))
                 .isInstanceOf(MailException.class)
                 .isNotInstanceOf(NonRetryableSendException.class);
+    }
+
+    @Test
+    @DisplayName("SMTP transport failure follows retryable provider path (through real EmailAdapter)")
+    void localProviderTransientFailureSurfacesAsRetryableThroughEmailAdapter() {
+        // Wire the REAL local provider (only the JavaMailSender is mocked) into a REAL EmailAdapter with a
+        // fresh CLOSED breaker, proving the transient SMTP failure travels the existing retryable provider
+        // path end-to-end for the local provider — not just generically (EmailAdapterCircuitBreakerTest).
+        JavaMailSender mailSender = Mockito.mock(JavaMailSender.class);
+        LocalSmtpEmailProviderClient provider = new LocalSmtpEmailProviderClient(
+                mailSender, renderer, properties, fixedClock, () -> "local-smtp-fixed");
+        doThrow(new MailSendException("simulated SMTP transport failure"))
+                .when(mailSender)
+                .send(Mockito.any(SimpleMailMessage.class));
+
+        EmailAdapter adapter = new EmailAdapter(provider, freshClosedBreaker());
+        ReachMessage message = new ReachMessage(USER_ID, Channel.EMAIL, TEMPLATE_REF);
+
+        // The MailException raised by the local provider is translated into a retryable providerFailure
+        // (NOT a breaker short-circuit), exactly as the existing EmailAdapter retryable path prescribes.
+        assertThatThrownBy(() -> adapter.send(message))
+                .isInstanceOf(RetryableSendException.class)
+                .matches(ex -> !((RetryableSendException) ex).isBreakerOpen(), "providerFailure (breaker not open)");
+    }
+
+    /** A fresh, CLOSED real circuit breaker mirroring EmailAdapterCircuitBreakerTest's construction. */
+    private static CircuitBreaker freshClosedBreaker() {
+        EmailChannelProperties props = new EmailChannelProperties(
+                new EmailChannelProperties.CircuitBreaker(8, 8, 50f, Duration.ofSeconds(30), 2));
+        return CircuitBreakerRegistry.ofDefaults()
+                .circuitBreaker("local-retryable-path", props.toCircuitBreakerConfig());
     }
 
     @Test
