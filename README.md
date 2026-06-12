@@ -191,6 +191,74 @@ curl -u "$OPERATOR_USERNAME:$OPERATOR_PASSWORD" -H 'Content-Type: application/js
 
 > 線上版 API 文件（GitHub Pages）：<https://bibiota.github.io/campaign-reach-system/>
 
+### 4. 本機寄信 smoke test（Mailpit）
+
+走完整 EMAIL 觸達鏈路（建立活動 → 推進為進行中 → 排程掃描發出 `reach.requested` → orchestrator 展開 →
+dispatcher 認領 → EmailAdapter → 本機 SMTP provider → Mailpit），最後在 Mailpit UI 看到攔截下來的信。
+
+`docker-compose.yml` 已內含 **Mailpit**（本機 SMTP 收信槽）；`.env.example` 也已備妥本機寄信所需變數。
+
+> **本機寄信的限制（務必知道）**：Mailpit 只在本機**攔截**所有信件，**永不轉發給任何真實收件人**，
+> 可安心反覆測試而不會打擾任何人。此外，本機模式下每封 EMAIL 觸達都固定寄到
+> `LOCAL_SMTP_RECIPIENT`（預設 `local-inbox@local.test`）這一個 smoke-test 信箱，
+> **不論活動實際圈到誰**——這是刻意的本機開發簡化，**非正式環境行為**。
+
+**1. 啟動 compose（含 Mailpit）並載入 `.env`**
+
+依本節 [步驟 1](#1-啟動本機基礎設施postgresql--kafka)／[步驟 2](#2-設定環境變數) 起好基礎設施並載入環境變數；
+`docker compose up -d` 會一併起 Mailpit。`.env.example` 已預設 `SPRING_PROFILES_ACTIVE=local` 與
+`EMAIL_PROVIDER_MODE=smtp-local`，並把 `LOCAL_SMTP_*` 指向 Mailpit（`localhost:1025`）——
+本機 SMTP provider 唯有在 `local` profile **且** mode=`smtp-local` 同時成立時才會接線，故其他環境永不漏信。
+
+```bash
+docker compose up -d            # 起 PostgreSQL + Kafka + Mailpit
+set -a; source .env; set +a     # 載入本機寄信所需變數（含 local profile / smtp-local）
+```
+
+**2. 以本機 SMTP 模式啟動應用**
+
+```bash
+./gradlew :app:bootRun          # 沿用已載入的 local profile + smtp-local
+```
+
+**3. 觸發一筆 EMAIL 觸達**
+
+EMAIL 觸達由「排程掃描」驅動：reach-scan 掃描器每分鐘掃一次 **RUNNING** 活動，當下時間落在活動
+`[startAt, endAt)` 窗內就發出一筆 `reach.requested`。因此需建立一個 **reachPlan 通道為 EMAIL、且時間窗涵蓋當下**的活動，
+再把它推進到 RUNNING。下列 curl 用 `OPERATOR` 帳號（HTTP Basic，見 `.env` 的 `OPERATOR_USERNAME`/`OPERATOR_PASSWORD`），
+也可改用 Postman collection（`docs/postman/campaign-reach.postman_collection.json`）的「建立活動」與「活動狀態轉換」請求。
+
+```bash
+# 建立活動（DRAFT）；起訖時間需涵蓋當下，回 201 並帶新活動 id
+CAMPAIGN_ID=$(curl -s -u "$OPERATOR_USERNAME:$OPERATOR_PASSWORD" -H 'Content-Type: application/json' \
+  -d '{"name":"本機寄信 smoke test","type":"DISCOUNT","startAt":"2026-01-01T00:00:00Z","endAt":"2030-12-31T23:59:59Z","ruleConfig":{"ruleType":"DISCOUNT","schema_version":2,"kind":"PERCENTAGE","percentage":10,"thresholdMode":"NONE"},"targetSpec":{"kind":"CONDITION","conditions":{"memberTier":"GOLD"}},"reachPlan":{"channel":"EMAIL","templateRef":"summer-sale-email","timing":"SCHEDULED"}}' \
+  http://localhost:8080/internal/campaigns | sed -E 's/.*"id":"([^"]+)".*/\1/')
+
+# 推進 DRAFT → SCHEDULED（version 為上一步讀到的版本，初始為 0）
+curl -u "$OPERATOR_USERNAME:$OPERATOR_PASSWORD" -H 'Content-Type: application/json' \
+  -d '{"targetStatus":"SCHEDULED","version":0}' \
+  http://localhost:8080/internal/campaigns/$CAMPAIGN_ID/status
+
+# 推進 SCHEDULED → RUNNING（version 隨上一步 +1 為 1）
+curl -u "$OPERATOR_USERNAME:$OPERATOR_PASSWORD" -H 'Content-Type: application/json' \
+  -d '{"targetStatus":"RUNNING","version":1}' \
+  http://localhost:8080/internal/campaigns/$CAMPAIGN_ID/status
+```
+
+活動進入 RUNNING 後，**觸達是非同步的**（reach-scan 掃描 → Kafka → orchestrator → dispatcher），
+信件會在下一次掃描（預設每分鐘一次）後**稍候才**送進 Mailpit，並非即時。可輪詢成效彙總端點確認觸達已落地：
+
+```bash
+# 活動維度成效彙總；SENT 數出現即代表信已送進 Mailpit
+curl -u "$OPERATOR_USERNAME:$OPERATOR_PASSWORD" \
+  http://localhost:8080/internal/reach/campaigns/$CAMPAIGN_ID/metrics
+```
+
+**4. 在 Mailpit 檢視攔截到的信**
+
+打開 <http://localhost:8025>（Mailpit UI，port 由 `.env` 的 `MAILPIT_UI_PORT` 決定，預設 8025），
+即可看到剛剛這封寄到 `local-inbox@local.test` 的 EMAIL 觸達內容；若還沒出現，稍等一個掃描週期再重新整理。
+
 ---
 
 ## 6. 測試方式
