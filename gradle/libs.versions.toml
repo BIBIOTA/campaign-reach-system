@@ -64,6 +64,9 @@ spring-security-test = { module = "org.springframework.security:spring-security-
 spring-kafka = { module = "org.springframework.kafka:spring-kafka" }
 # JSR-380 bean validation for fail-fast @ConfigurationProperties binding
 spring-boot-starter-validation = { module = "org.springframework.boot:spring-boot-starter-validation" }
+# Spring Mail (JavaMailSender) — backs the local SMTP email provider used for local
+# smoke tests (task 1.x). Version is managed by the Spring Boot 3.4 BOM.
+spring-boot-starter-mail = { module = "org.springframework.boot:spring-boot-starter-mail" }
 # ShedLock: @SchedulerLock support (spring) + JdbcTemplate-backed LockProvider (jdbc-template).
 # Keeps the same logical cycle from running twice across instances / restart back-scans (US-004, §5).
 shedlock-spring = { module = "net.javacrumbs.shedlock:shedlock-spring", version.ref = "shedlock" }

@@ -6,7 +6,7 @@
   - Acceptance: WHEN host、from、recipient 缺漏，或 port/timeout 超出合法範圍 THEN Spring context 在設定綁定階段 fail fast
   - Depends on: -
   - Independence: independent
-  - status: not_started
+  - status: in_progress
 - [ ] 1.2 加入本機 provider 啟用條件
   - Acceptance: WHEN 沒有啟用 `local` profile THEN 本機 `EmailProviderClient` 不會註冊
   - Acceptance: WHEN 啟用 `local` profile 但 `campaignreach.email-provider.mode` 不是 `smtp-local` THEN 本機 `EmailProviderClient` 不會註冊

@@ -35,6 +35,11 @@ dependencies {
     // lives on :app; this third-party annotation artifact introduces no reach→campaign coupling.
     implementation(libs.swagger.annotations.jakarta)
 
+    // Spring Mail (task 1.x): brings JavaMailSender onto the classpath so a local SMTP
+    // email provider can be constructed for local smoke tests. Activation/registration of the
+    // provider is a separate task; this only supplies the mail capability + bound settings.
+    implementation(libs.spring.boot.starter.mail)
+
     // reach may only talk to campaign through the shared kernel (event/config).
     // It must NOT depend on :campaign — enforced by the ArchUnit guard in :app.
     implementation(project(":shared"))
