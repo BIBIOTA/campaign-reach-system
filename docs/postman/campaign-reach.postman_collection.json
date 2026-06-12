@@ -1,0 +1,1720 @@
+{
+    "item": [
+        {
+            "name": "internal",
+            "description": "",
+            "item": [
+                {
+                    "name": "campaigns",
+                    "description": "",
+                    "item": [
+                        {
+                            "id": "08ad5e15-c197-4e44-9032-c48d7ce05c74",
+                            "name": "建立活動",
+                            "request": {
+                                "name": "建立活動",
+                                "description": {
+                                    "content": "以合法欄位建立行銷活動，活動一律落為 DRAFT 草稿狀態；回傳新活動 id 供後續操作。",
+                                    "type": "text/plain"
+                                },
+                                "url": {
+                                    "path": [
+                                        "internal",
+                                        "campaigns"
+                                    ],
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "query": [],
+                                    "variable": []
+                                },
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept",
+                                        "value": "*/*"
+                                    }
+                                ],
+                                "method": "POST",
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"endAt\": \"<dateTime>\",\n  \"name\": \"<string>\",\n  \"reachPlan\": {\n    \"channel\": \"PUSH\",\n    \"templateRef\": \"<string>\",\n    \"timing\": \"SCHEDULED\"\n  },\n  \"ruleConfig\": {\n    \"kind\": \"PERCENTAGE\",\n    \"ruleType\": \"<string>\",\n    \"thresholdMode\": \"NONE\",\n    \"schema_version\": \"<integer>\",\n    \"amount\": \"<number>\",\n    \"percentage\": \"<number>\",\n    \"minSpend\": \"<number>\"\n  },\n  \"startAt\": \"<dateTime>\",\n  \"targetSpec\": {\n    \"kind\": \"CONDITION\",\n    \"listId\": \"<uuid>\",\n    \"conditions\": {\n      \"key_0\": {}\n    }\n  },\n  \"type\": \"FLASH_SALE\"\n}",
+                                    "options": {
+                                        "raw": {
+                                            "headerFamily": "json",
+                                            "language": "json"
+                                        }
+                                    }
+                                },
+                                "auth": null
+                            },
+                            "response": [
+                                {
+                                    "id": "c7504a22-054f-4a5b-ba48-99310465536e",
+                                    "name": "建立成功，回傳新活動 id 與初始版本",
+                                    "originalRequest": {
+                                        "url": {
+                                            "path": [
+                                                "internal",
+                                                "campaigns"
+                                            ],
+                                            "host": [
+                                                "{{baseUrl}}"
+                                            ],
+                                            "query": [],
+                                            "variable": []
+                                        },
+                                        "header": [
+                                            {
+                                                "key": "Content-Type",
+                                                "value": "application/json"
+                                            },
+                                            {
+                                                "key": "Accept",
+                                                "value": "*/*"
+                                            },
+                                            {
+                                                "description": {
+                                                    "content": "Added as a part of security scheme: basic",
+                                                    "type": "text/plain"
+                                                },
+                                                "key": "Authorization",
+                                                "value": "Basic <credentials>"
+                                            }
+                                        ],
+                                        "method": "POST",
+                                        "body": {
+                                            "mode": "raw",
+                                            "raw": "{\n  \"endAt\": \"<dateTime>\",\n  \"name\": \"<string>\",\n  \"reachPlan\": {\n    \"channel\": \"PUSH\",\n    \"templateRef\": \"<string>\",\n    \"timing\": \"SCHEDULED\"\n  },\n  \"ruleConfig\": {\n    \"kind\": \"PERCENTAGE\",\n    \"ruleType\": \"<string>\",\n    \"thresholdMode\": \"NONE\",\n    \"schema_version\": \"<integer>\",\n    \"amount\": \"<number>\",\n    \"percentage\": \"<number>\",\n    \"minSpend\": \"<number>\"\n  },\n  \"startAt\": \"<dateTime>\",\n  \"targetSpec\": {\n    \"kind\": \"CONDITION\",\n    \"listId\": \"<uuid>\",\n    \"conditions\": {\n      \"key_0\": {}\n    }\n  },\n  \"type\": \"FLASH_SALE\"\n}",
+                                            "options": {
+                                                "raw": {
+                                                    "headerFamily": "json",
+                                                    "language": "json"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "status": "Created",
+                                    "code": 201,
+                                    "header": [
+                                        {
+                                            "key": "Content-Type",
+                                            "value": "*/*"
+                                        }
+                                    ],
+                                    "body": "{\n  \"id\": \"<uuid>\",\n  \"version\": \"<integer>\",\n  \"status\": \"ENDED\"\n}",
+                                    "cookie": [],
+                                    "_postman_previewlanguage": "text"
+                                },
+                                {
+                                    "id": "2aa4f104-6943-407f-b591-3011651d5f2a",
+                                    "name": "請求欄位驗證失敗（如名稱空白、規則設定不合法）",
+                                    "originalRequest": {
+                                        "url": {
+                                            "path": [
+                                                "internal",
+                                                "campaigns"
+                                            ],
+                                            "host": [
+                                                "{{baseUrl}}"
+                                            ],
+                                            "query": [],
+                                            "variable": []
+                                        },
+                                        "header": [
+                                            {
+                                                "key": "Content-Type",
+                                                "value": "application/json"
+                                            },
+                                            {
+                                                "key": "Accept",
+                                                "value": "*/*"
+                                            },
+                                            {
+                                                "description": {
+                                                    "content": "Added as a part of security scheme: basic",
+                                                    "type": "text/plain"
+                                                },
+                                                "key": "Authorization",
+                                                "value": "Basic <credentials>"
+                                            }
+                                        ],
+                                        "method": "POST",
+                                        "body": {
+                                            "mode": "raw",
+                                            "raw": "{\n  \"endAt\": \"<dateTime>\",\n  \"name\": \"<string>\",\n  \"reachPlan\": {\n    \"channel\": \"PUSH\",\n    \"templateRef\": \"<string>\",\n    \"timing\": \"SCHEDULED\"\n  },\n  \"ruleConfig\": {\n    \"kind\": \"PERCENTAGE\",\n    \"ruleType\": \"<string>\",\n    \"thresholdMode\": \"NONE\",\n    \"schema_version\": \"<integer>\",\n    \"amount\": \"<number>\",\n    \"percentage\": \"<number>\",\n    \"minSpend\": \"<number>\"\n  },\n  \"startAt\": \"<dateTime>\",\n  \"targetSpec\": {\n    \"kind\": \"CONDITION\",\n    \"listId\": \"<uuid>\",\n    \"conditions\": {\n      \"key_0\": {}\n    }\n  },\n  \"type\": \"FLASH_SALE\"\n}",
+                                            "options": {
+                                                "raw": {
+                                                    "headerFamily": "json",
+                                                    "language": "json"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "status": "Bad Request",
+                                    "code": 400,
+                                    "header": [
+                                        {
+                                            "key": "Content-Type",
+                                            "value": "*/*"
+                                        }
+                                    ],
+                                    "body": "{\n  \"id\": \"<uuid>\",\n  \"version\": \"<integer>\",\n  \"status\": \"ENDED\"\n}",
+                                    "cookie": [],
+                                    "_postman_previewlanguage": "text"
+                                },
+                                {
+                                    "id": "b81eee10-60c2-413f-af64-8ea0f7869cc1",
+                                    "name": "未通過後台 OPERATOR 認證",
+                                    "originalRequest": {
+                                        "url": {
+                                            "path": [
+                                                "internal",
+                                                "campaigns"
+                                            ],
+                                            "host": [
+                                                "{{baseUrl}}"
+                                            ],
+                                            "query": [],
+                                            "variable": []
+                                        },
+                                        "header": [
+                                            {
+                                                "key": "Content-Type",
+                                                "value": "application/json"
+                                            },
+                                            {
+                                                "key": "Accept",
+                                                "value": "*/*"
+                                            },
+                                            {
+                                                "description": {
+                                                    "content": "Added as a part of security scheme: basic",
+                                                    "type": "text/plain"
+                                                },
+                                                "key": "Authorization",
+                                                "value": "Basic <credentials>"
+                                            }
+                                        ],
+                                        "method": "POST",
+                                        "body": {
+                                            "mode": "raw",
+                                            "raw": "{\n  \"endAt\": \"<dateTime>\",\n  \"name\": \"<string>\",\n  \"reachPlan\": {\n    \"channel\": \"PUSH\",\n    \"templateRef\": \"<string>\",\n    \"timing\": \"SCHEDULED\"\n  },\n  \"ruleConfig\": {\n    \"kind\": \"PERCENTAGE\",\n    \"ruleType\": \"<string>\",\n    \"thresholdMode\": \"NONE\",\n    \"schema_version\": \"<integer>\",\n    \"amount\": \"<number>\",\n    \"percentage\": \"<number>\",\n    \"minSpend\": \"<number>\"\n  },\n  \"startAt\": \"<dateTime>\",\n  \"targetSpec\": {\n    \"kind\": \"CONDITION\",\n    \"listId\": \"<uuid>\",\n    \"conditions\": {\n      \"key_0\": {}\n    }\n  },\n  \"type\": \"FLASH_SALE\"\n}",
+                                            "options": {
+                                                "raw": {
+                                                    "headerFamily": "json",
+                                                    "language": "json"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "status": "Unauthorized",
+                                    "code": 401,
+                                    "header": [
+                                        {
+                                            "key": "Content-Type",
+                                            "value": "*/*"
+                                        }
+                                    ],
+                                    "body": "{\n  \"id\": \"<uuid>\",\n  \"version\": \"<integer>\",\n  \"status\": \"ENDED\"\n}",
+                                    "cookie": [],
+                                    "_postman_previewlanguage": "text"
+                                }
+                            ],
+                            "event": [],
+                            "protocolProfileBehavior": {
+                                "disableBodyPruning": true
+                            }
+                        },
+                        {
+                            "name": "{id}",
+                            "description": "",
+                            "item": [
+                                {
+                                    "name": "status",
+                                    "description": "",
+                                    "item": [
+                                        {
+                                            "id": "d88e0d82-e2a3-4a51-87d6-0e628a42a1cb",
+                                            "name": "活動狀態轉換",
+                                            "request": {
+                                                "name": "活動狀態轉換",
+                                                "description": {
+                                                    "content": "由 OPERATOR 觸發生命週期狀態轉換（如 DRAFT→SCHEDULED）。不合法的轉換邊回傳 422，版本過期回傳 409。",
+                                                    "type": "text/plain"
+                                                },
+                                                "url": {
+                                                    "path": [
+                                                        "internal",
+                                                        "campaigns",
+                                                        ":id",
+                                                        "status"
+                                                    ],
+                                                    "host": [
+                                                        "{{baseUrl}}"
+                                                    ],
+                                                    "query": [],
+                                                    "variable": [
+                                                        {
+                                                            "type": "any",
+                                                            "value": "<uuid>",
+                                                            "key": "id",
+                                                            "disabled": false,
+                                                            "description": {
+                                                                "content": "(Required) ",
+                                                                "type": "text/plain"
+                                                            }
+                                                        }
+                                                    ]
+                                                },
+                                                "header": [
+                                                    {
+                                                        "key": "Content-Type",
+                                                        "value": "application/json"
+                                                    },
+                                                    {
+                                                        "key": "Accept",
+                                                        "value": "*/*"
+                                                    }
+                                                ],
+                                                "method": "POST",
+                                                "body": {
+                                                    "mode": "raw",
+                                                    "raw": "{\n  \"targetStatus\": \"RUNNING\",\n  \"version\": \"<integer>\"\n}",
+                                                    "options": {
+                                                        "raw": {
+                                                            "headerFamily": "json",
+                                                            "language": "json"
+                                                        }
+                                                    }
+                                                },
+                                                "auth": null
+                                            },
+                                            "response": [
+                                                {
+                                                    "id": "dc5f8393-f2df-4961-aa53-bb40995b55a6",
+                                                    "name": "轉換成功，回傳更新後的活動內容",
+                                                    "originalRequest": {
+                                                        "url": {
+                                                            "path": [
+                                                                "internal",
+                                                                "campaigns",
+                                                                ":id",
+                                                                "status"
+                                                            ],
+                                                            "host": [
+                                                                "{{baseUrl}}"
+                                                            ],
+                                                            "query": [],
+                                                            "variable": [
+                                                                {
+                                                                    "disabled": false,
+                                                                    "description": {
+                                                                        "content": "(Required) ",
+                                                                        "type": "text/plain"
+                                                                    },
+                                                                    "type": "any",
+                                                                    "value": "<uuid>",
+                                                                    "key": "id"
+                                                                }
+                                                            ]
+                                                        },
+                                                        "header": [
+                                                            {
+                                                                "key": "Content-Type",
+                                                                "value": "application/json"
+                                                            },
+                                                            {
+                                                                "key": "Accept",
+                                                                "value": "*/*"
+                                                            },
+                                                            {
+                                                                "description": {
+                                                                    "content": "Added as a part of security scheme: basic",
+                                                                    "type": "text/plain"
+                                                                },
+                                                                "key": "Authorization",
+                                                                "value": "Basic <credentials>"
+                                                            }
+                                                        ],
+                                                        "method": "POST",
+                                                        "body": {
+                                                            "mode": "raw",
+                                                            "raw": "{\n  \"targetStatus\": \"RUNNING\",\n  \"version\": \"<integer>\"\n}",
+                                                            "options": {
+                                                                "raw": {
+                                                                    "headerFamily": "json",
+                                                                    "language": "json"
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    "status": "OK",
+                                                    "code": 200,
+                                                    "header": [
+                                                        {
+                                                            "key": "Content-Type",
+                                                            "value": "*/*"
+                                                        }
+                                                    ],
+                                                    "body": "{\n  \"id\": \"<uuid>\",\n  \"name\": \"<string>\",\n  \"type\": \"FLASH_SALE\",\n  \"status\": \"SCHEDULED\",\n  \"startAt\": \"<dateTime>\",\n  \"endAt\": \"<dateTime>\",\n  \"ruleConfig\": {\n    \"kind\": \"AMOUNT\",\n    \"ruleType\": \"<string>\",\n    \"thresholdMode\": \"MIN_SPEND\",\n    \"schema_version\": \"<integer>\",\n    \"amount\": \"<number>\",\n    \"percentage\": \"<number>\",\n    \"minSpend\": \"<number>\"\n  },\n  \"targetSpec\": {\n    \"kind\": \"CONDITION\",\n    \"listId\": \"<uuid>\",\n    \"conditions\": {\n      \"key_0\": {}\n    }\n  },\n  \"reachPlan\": {\n    \"channel\": \"SMS\",\n    \"templateRef\": \"<string>\",\n    \"timing\": \"SCHEDULED\"\n  },\n  \"version\": \"<integer>\",\n  \"createdBy\": \"<uuid>\",\n  \"updatedBy\": \"<uuid>\",\n  \"createdAt\": \"<dateTime>\",\n  \"updatedAt\": \"<dateTime>\"\n}",
+                                                    "cookie": [],
+                                                    "_postman_previewlanguage": "text"
+                                                },
+                                                {
+                                                    "id": "c643f645-b5ae-4a41-9bae-7cd9fb53dca0",
+                                                    "name": "未通過後台 OPERATOR 認證",
+                                                    "originalRequest": {
+                                                        "url": {
+                                                            "path": [
+                                                                "internal",
+                                                                "campaigns",
+                                                                ":id",
+                                                                "status"
+                                                            ],
+                                                            "host": [
+                                                                "{{baseUrl}}"
+                                                            ],
+                                                            "query": [],
+                                                            "variable": [
+                                                                {
+                                                                    "disabled": false,
+                                                                    "description": {
+                                                                        "content": "(Required) ",
+                                                                        "type": "text/plain"
+                                                                    },
+                                                                    "type": "any",
+                                                                    "value": "<uuid>",
+                                                                    "key": "id"
+                                                                }
+                                                            ]
+                                                        },
+                                                        "header": [
+                                                            {
+                                                                "key": "Content-Type",
+                                                                "value": "application/json"
+                                                            },
+                                                            {
+                                                                "key": "Accept",
+                                                                "value": "*/*"
+                                                            },
+                                                            {
+                                                                "description": {
+                                                                    "content": "Added as a part of security scheme: basic",
+                                                                    "type": "text/plain"
+                                                                },
+                                                                "key": "Authorization",
+                                                                "value": "Basic <credentials>"
+                                                            }
+                                                        ],
+                                                        "method": "POST",
+                                                        "body": {
+                                                            "mode": "raw",
+                                                            "raw": "{\n  \"targetStatus\": \"RUNNING\",\n  \"version\": \"<integer>\"\n}",
+                                                            "options": {
+                                                                "raw": {
+                                                                    "headerFamily": "json",
+                                                                    "language": "json"
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    "status": "Unauthorized",
+                                                    "code": 401,
+                                                    "header": [
+                                                        {
+                                                            "key": "Content-Type",
+                                                            "value": "*/*"
+                                                        }
+                                                    ],
+                                                    "body": "{\n  \"id\": \"<uuid>\",\n  \"name\": \"<string>\",\n  \"type\": \"FLASH_SALE\",\n  \"status\": \"SCHEDULED\",\n  \"startAt\": \"<dateTime>\",\n  \"endAt\": \"<dateTime>\",\n  \"ruleConfig\": {\n    \"kind\": \"AMOUNT\",\n    \"ruleType\": \"<string>\",\n    \"thresholdMode\": \"MIN_SPEND\",\n    \"schema_version\": \"<integer>\",\n    \"amount\": \"<number>\",\n    \"percentage\": \"<number>\",\n    \"minSpend\": \"<number>\"\n  },\n  \"targetSpec\": {\n    \"kind\": \"CONDITION\",\n    \"listId\": \"<uuid>\",\n    \"conditions\": {\n      \"key_0\": {}\n    }\n  },\n  \"reachPlan\": {\n    \"channel\": \"SMS\",\n    \"templateRef\": \"<string>\",\n    \"timing\": \"SCHEDULED\"\n  },\n  \"version\": \"<integer>\",\n  \"createdBy\": \"<uuid>\",\n  \"updatedBy\": \"<uuid>\",\n  \"createdAt\": \"<dateTime>\",\n  \"updatedAt\": \"<dateTime>\"\n}",
+                                                    "cookie": [],
+                                                    "_postman_previewlanguage": "text"
+                                                },
+                                                {
+                                                    "id": "d389da31-620b-443f-9c97-426c56585a18",
+                                                    "name": "查無此活動",
+                                                    "originalRequest": {
+                                                        "url": {
+                                                            "path": [
+                                                                "internal",
+                                                                "campaigns",
+                                                                ":id",
+                                                                "status"
+                                                            ],
+                                                            "host": [
+                                                                "{{baseUrl}}"
+                                                            ],
+                                                            "query": [],
+                                                            "variable": [
+                                                                {
+                                                                    "disabled": false,
+                                                                    "description": {
+                                                                        "content": "(Required) ",
+                                                                        "type": "text/plain"
+                                                                    },
+                                                                    "type": "any",
+                                                                    "value": "<uuid>",
+                                                                    "key": "id"
+                                                                }
+                                                            ]
+                                                        },
+                                                        "header": [
+                                                            {
+                                                                "key": "Content-Type",
+                                                                "value": "application/json"
+                                                            },
+                                                            {
+                                                                "key": "Accept",
+                                                                "value": "*/*"
+                                                            },
+                                                            {
+                                                                "description": {
+                                                                    "content": "Added as a part of security scheme: basic",
+                                                                    "type": "text/plain"
+                                                                },
+                                                                "key": "Authorization",
+                                                                "value": "Basic <credentials>"
+                                                            }
+                                                        ],
+                                                        "method": "POST",
+                                                        "body": {
+                                                            "mode": "raw",
+                                                            "raw": "{\n  \"targetStatus\": \"RUNNING\",\n  \"version\": \"<integer>\"\n}",
+                                                            "options": {
+                                                                "raw": {
+                                                                    "headerFamily": "json",
+                                                                    "language": "json"
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    "status": "Not Found",
+                                                    "code": 404,
+                                                    "header": [
+                                                        {
+                                                            "key": "Content-Type",
+                                                            "value": "*/*"
+                                                        }
+                                                    ],
+                                                    "body": "{\n  \"id\": \"<uuid>\",\n  \"name\": \"<string>\",\n  \"type\": \"FLASH_SALE\",\n  \"status\": \"SCHEDULED\",\n  \"startAt\": \"<dateTime>\",\n  \"endAt\": \"<dateTime>\",\n  \"ruleConfig\": {\n    \"kind\": \"AMOUNT\",\n    \"ruleType\": \"<string>\",\n    \"thresholdMode\": \"MIN_SPEND\",\n    \"schema_version\": \"<integer>\",\n    \"amount\": \"<number>\",\n    \"percentage\": \"<number>\",\n    \"minSpend\": \"<number>\"\n  },\n  \"targetSpec\": {\n    \"kind\": \"CONDITION\",\n    \"listId\": \"<uuid>\",\n    \"conditions\": {\n      \"key_0\": {}\n    }\n  },\n  \"reachPlan\": {\n    \"channel\": \"SMS\",\n    \"templateRef\": \"<string>\",\n    \"timing\": \"SCHEDULED\"\n  },\n  \"version\": \"<integer>\",\n  \"createdBy\": \"<uuid>\",\n  \"updatedBy\": \"<uuid>\",\n  \"createdAt\": \"<dateTime>\",\n  \"updatedAt\": \"<dateTime>\"\n}",
+                                                    "cookie": [],
+                                                    "_postman_previewlanguage": "text"
+                                                },
+                                                {
+                                                    "id": "ed30e56f-cf6c-4b1b-b55a-a3a29c55358b",
+                                                    "name": "樂觀鎖版本過期（與其他並行修改衝突）",
+                                                    "originalRequest": {
+                                                        "url": {
+                                                            "path": [
+                                                                "internal",
+                                                                "campaigns",
+                                                                ":id",
+                                                                "status"
+                                                            ],
+                                                            "host": [
+                                                                "{{baseUrl}}"
+                                                            ],
+                                                            "query": [],
+                                                            "variable": [
+                                                                {
+                                                                    "disabled": false,
+                                                                    "description": {
+                                                                        "content": "(Required) ",
+                                                                        "type": "text/plain"
+                                                                    },
+                                                                    "type": "any",
+                                                                    "value": "<uuid>",
+                                                                    "key": "id"
+                                                                }
+                                                            ]
+                                                        },
+                                                        "header": [
+                                                            {
+                                                                "key": "Content-Type",
+                                                                "value": "application/json"
+                                                            },
+                                                            {
+                                                                "key": "Accept",
+                                                                "value": "*/*"
+                                                            },
+                                                            {
+                                                                "description": {
+                                                                    "content": "Added as a part of security scheme: basic",
+                                                                    "type": "text/plain"
+                                                                },
+                                                                "key": "Authorization",
+                                                                "value": "Basic <credentials>"
+                                                            }
+                                                        ],
+                                                        "method": "POST",
+                                                        "body": {
+                                                            "mode": "raw",
+                                                            "raw": "{\n  \"targetStatus\": \"RUNNING\",\n  \"version\": \"<integer>\"\n}",
+                                                            "options": {
+                                                                "raw": {
+                                                                    "headerFamily": "json",
+                                                                    "language": "json"
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    "status": "Conflict",
+                                                    "code": 409,
+                                                    "header": [
+                                                        {
+                                                            "key": "Content-Type",
+                                                            "value": "*/*"
+                                                        }
+                                                    ],
+                                                    "body": "{\n  \"id\": \"<uuid>\",\n  \"name\": \"<string>\",\n  \"type\": \"FLASH_SALE\",\n  \"status\": \"SCHEDULED\",\n  \"startAt\": \"<dateTime>\",\n  \"endAt\": \"<dateTime>\",\n  \"ruleConfig\": {\n    \"kind\": \"AMOUNT\",\n    \"ruleType\": \"<string>\",\n    \"thresholdMode\": \"MIN_SPEND\",\n    \"schema_version\": \"<integer>\",\n    \"amount\": \"<number>\",\n    \"percentage\": \"<number>\",\n    \"minSpend\": \"<number>\"\n  },\n  \"targetSpec\": {\n    \"kind\": \"CONDITION\",\n    \"listId\": \"<uuid>\",\n    \"conditions\": {\n      \"key_0\": {}\n    }\n  },\n  \"reachPlan\": {\n    \"channel\": \"SMS\",\n    \"templateRef\": \"<string>\",\n    \"timing\": \"SCHEDULED\"\n  },\n  \"version\": \"<integer>\",\n  \"createdBy\": \"<uuid>\",\n  \"updatedBy\": \"<uuid>\",\n  \"createdAt\": \"<dateTime>\",\n  \"updatedAt\": \"<dateTime>\"\n}",
+                                                    "cookie": [],
+                                                    "_postman_previewlanguage": "text"
+                                                },
+                                                {
+                                                    "id": "93ca7db6-5c03-4dcc-9906-ab2ce36fad3f",
+                                                    "name": "不合法的狀態轉換邊",
+                                                    "originalRequest": {
+                                                        "url": {
+                                                            "path": [
+                                                                "internal",
+                                                                "campaigns",
+                                                                ":id",
+                                                                "status"
+                                                            ],
+                                                            "host": [
+                                                                "{{baseUrl}}"
+                                                            ],
+                                                            "query": [],
+                                                            "variable": [
+                                                                {
+                                                                    "disabled": false,
+                                                                    "description": {
+                                                                        "content": "(Required) ",
+                                                                        "type": "text/plain"
+                                                                    },
+                                                                    "type": "any",
+                                                                    "value": "<uuid>",
+                                                                    "key": "id"
+                                                                }
+                                                            ]
+                                                        },
+                                                        "header": [
+                                                            {
+                                                                "key": "Content-Type",
+                                                                "value": "application/json"
+                                                            },
+                                                            {
+                                                                "key": "Accept",
+                                                                "value": "*/*"
+                                                            },
+                                                            {
+                                                                "description": {
+                                                                    "content": "Added as a part of security scheme: basic",
+                                                                    "type": "text/plain"
+                                                                },
+                                                                "key": "Authorization",
+                                                                "value": "Basic <credentials>"
+                                                            }
+                                                        ],
+                                                        "method": "POST",
+                                                        "body": {
+                                                            "mode": "raw",
+                                                            "raw": "{\n  \"targetStatus\": \"RUNNING\",\n  \"version\": \"<integer>\"\n}",
+                                                            "options": {
+                                                                "raw": {
+                                                                    "headerFamily": "json",
+                                                                    "language": "json"
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    "status": "Unprocessable Entity (WebDAV) (RFC 4918)",
+                                                    "code": 422,
+                                                    "header": [
+                                                        {
+                                                            "key": "Content-Type",
+                                                            "value": "*/*"
+                                                        }
+                                                    ],
+                                                    "body": "{\n  \"id\": \"<uuid>\",\n  \"name\": \"<string>\",\n  \"type\": \"FLASH_SALE\",\n  \"status\": \"SCHEDULED\",\n  \"startAt\": \"<dateTime>\",\n  \"endAt\": \"<dateTime>\",\n  \"ruleConfig\": {\n    \"kind\": \"AMOUNT\",\n    \"ruleType\": \"<string>\",\n    \"thresholdMode\": \"MIN_SPEND\",\n    \"schema_version\": \"<integer>\",\n    \"amount\": \"<number>\",\n    \"percentage\": \"<number>\",\n    \"minSpend\": \"<number>\"\n  },\n  \"targetSpec\": {\n    \"kind\": \"CONDITION\",\n    \"listId\": \"<uuid>\",\n    \"conditions\": {\n      \"key_0\": {}\n    }\n  },\n  \"reachPlan\": {\n    \"channel\": \"SMS\",\n    \"templateRef\": \"<string>\",\n    \"timing\": \"SCHEDULED\"\n  },\n  \"version\": \"<integer>\",\n  \"createdBy\": \"<uuid>\",\n  \"updatedBy\": \"<uuid>\",\n  \"createdAt\": \"<dateTime>\",\n  \"updatedAt\": \"<dateTime>\"\n}",
+                                                    "cookie": [],
+                                                    "_postman_previewlanguage": "text"
+                                                }
+                                            ],
+                                            "event": [],
+                                            "protocolProfileBehavior": {
+                                                "disableBodyPruning": true
+                                            }
+                                        }
+                                    ]
+                                },
+                                {
+                                    "id": "524dc8f6-77dc-41e8-9aef-0088d94f2c47",
+                                    "name": "查詢單一活動",
+                                    "request": {
+                                        "name": "查詢單一活動",
+                                        "description": {
+                                            "content": "依活動 id 讀取活動完整內容；活動不存在時回傳 404。",
+                                            "type": "text/plain"
+                                        },
+                                        "url": {
+                                            "path": [
+                                                "internal",
+                                                "campaigns",
+                                                ":id"
+                                            ],
+                                            "host": [
+                                                "{{baseUrl}}"
+                                            ],
+                                            "query": [],
+                                            "variable": [
+                                                {
+                                                    "type": "any",
+                                                    "value": "<uuid>",
+                                                    "key": "id",
+                                                    "disabled": false,
+                                                    "description": {
+                                                        "content": "(Required) ",
+                                                        "type": "text/plain"
+                                                    }
+                                                }
+                                            ]
+                                        },
+                                        "header": [
+                                            {
+                                                "key": "Accept",
+                                                "value": "*/*"
+                                            }
+                                        ],
+                                        "method": "GET",
+                                        "body": {},
+                                        "auth": null
+                                    },
+                                    "response": [
+                                        {
+                                            "id": "db6dbca7-c113-45cb-8559-518e1d43e666",
+                                            "name": "查詢成功，回傳活動內容",
+                                            "originalRequest": {
+                                                "url": {
+                                                    "path": [
+                                                        "internal",
+                                                        "campaigns",
+                                                        ":id"
+                                                    ],
+                                                    "host": [
+                                                        "{{baseUrl}}"
+                                                    ],
+                                                    "query": [],
+                                                    "variable": [
+                                                        {
+                                                            "disabled": false,
+                                                            "description": {
+                                                                "content": "(Required) ",
+                                                                "type": "text/plain"
+                                                            },
+                                                            "type": "any",
+                                                            "value": "<uuid>",
+                                                            "key": "id"
+                                                        }
+                                                    ]
+                                                },
+                                                "header": [
+                                                    {
+                                                        "key": "Accept",
+                                                        "value": "*/*"
+                                                    },
+                                                    {
+                                                        "description": {
+                                                            "content": "Added as a part of security scheme: basic",
+                                                            "type": "text/plain"
+                                                        },
+                                                        "key": "Authorization",
+                                                        "value": "Basic <credentials>"
+                                                    }
+                                                ],
+                                                "method": "GET",
+                                                "body": {}
+                                            },
+                                            "status": "OK",
+                                            "code": 200,
+                                            "header": [
+                                                {
+                                                    "key": "Content-Type",
+                                                    "value": "*/*"
+                                                }
+                                            ],
+                                            "body": "{\n  \"id\": \"<uuid>\",\n  \"name\": \"<string>\",\n  \"type\": \"FLASH_SALE\",\n  \"status\": \"SCHEDULED\",\n  \"startAt\": \"<dateTime>\",\n  \"endAt\": \"<dateTime>\",\n  \"ruleConfig\": {\n    \"kind\": \"AMOUNT\",\n    \"ruleType\": \"<string>\",\n    \"thresholdMode\": \"MIN_SPEND\",\n    \"schema_version\": \"<integer>\",\n    \"amount\": \"<number>\",\n    \"percentage\": \"<number>\",\n    \"minSpend\": \"<number>\"\n  },\n  \"targetSpec\": {\n    \"kind\": \"CONDITION\",\n    \"listId\": \"<uuid>\",\n    \"conditions\": {\n      \"key_0\": {}\n    }\n  },\n  \"reachPlan\": {\n    \"channel\": \"SMS\",\n    \"templateRef\": \"<string>\",\n    \"timing\": \"SCHEDULED\"\n  },\n  \"version\": \"<integer>\",\n  \"createdBy\": \"<uuid>\",\n  \"updatedBy\": \"<uuid>\",\n  \"createdAt\": \"<dateTime>\",\n  \"updatedAt\": \"<dateTime>\"\n}",
+                                            "cookie": [],
+                                            "_postman_previewlanguage": "text"
+                                        },
+                                        {
+                                            "id": "925ed826-d424-4f4a-8f24-fb1e8a296cf7",
+                                            "name": "未通過後台 OPERATOR 認證",
+                                            "originalRequest": {
+                                                "url": {
+                                                    "path": [
+                                                        "internal",
+                                                        "campaigns",
+                                                        ":id"
+                                                    ],
+                                                    "host": [
+                                                        "{{baseUrl}}"
+                                                    ],
+                                                    "query": [],
+                                                    "variable": [
+                                                        {
+                                                            "disabled": false,
+                                                            "description": {
+                                                                "content": "(Required) ",
+                                                                "type": "text/plain"
+                                                            },
+                                                            "type": "any",
+                                                            "value": "<uuid>",
+                                                            "key": "id"
+                                                        }
+                                                    ]
+                                                },
+                                                "header": [
+                                                    {
+                                                        "key": "Accept",
+                                                        "value": "*/*"
+                                                    },
+                                                    {
+                                                        "description": {
+                                                            "content": "Added as a part of security scheme: basic",
+                                                            "type": "text/plain"
+                                                        },
+                                                        "key": "Authorization",
+                                                        "value": "Basic <credentials>"
+                                                    }
+                                                ],
+                                                "method": "GET",
+                                                "body": {}
+                                            },
+                                            "status": "Unauthorized",
+                                            "code": 401,
+                                            "header": [
+                                                {
+                                                    "key": "Content-Type",
+                                                    "value": "*/*"
+                                                }
+                                            ],
+                                            "body": "{\n  \"id\": \"<uuid>\",\n  \"name\": \"<string>\",\n  \"type\": \"FLASH_SALE\",\n  \"status\": \"SCHEDULED\",\n  \"startAt\": \"<dateTime>\",\n  \"endAt\": \"<dateTime>\",\n  \"ruleConfig\": {\n    \"kind\": \"AMOUNT\",\n    \"ruleType\": \"<string>\",\n    \"thresholdMode\": \"MIN_SPEND\",\n    \"schema_version\": \"<integer>\",\n    \"amount\": \"<number>\",\n    \"percentage\": \"<number>\",\n    \"minSpend\": \"<number>\"\n  },\n  \"targetSpec\": {\n    \"kind\": \"CONDITION\",\n    \"listId\": \"<uuid>\",\n    \"conditions\": {\n      \"key_0\": {}\n    }\n  },\n  \"reachPlan\": {\n    \"channel\": \"SMS\",\n    \"templateRef\": \"<string>\",\n    \"timing\": \"SCHEDULED\"\n  },\n  \"version\": \"<integer>\",\n  \"createdBy\": \"<uuid>\",\n  \"updatedBy\": \"<uuid>\",\n  \"createdAt\": \"<dateTime>\",\n  \"updatedAt\": \"<dateTime>\"\n}",
+                                            "cookie": [],
+                                            "_postman_previewlanguage": "text"
+                                        },
+                                        {
+                                            "id": "231c8918-b077-4300-afed-594a81bd159f",
+                                            "name": "查無此活動",
+                                            "originalRequest": {
+                                                "url": {
+                                                    "path": [
+                                                        "internal",
+                                                        "campaigns",
+                                                        ":id"
+                                                    ],
+                                                    "host": [
+                                                        "{{baseUrl}}"
+                                                    ],
+                                                    "query": [],
+                                                    "variable": [
+                                                        {
+                                                            "disabled": false,
+                                                            "description": {
+                                                                "content": "(Required) ",
+                                                                "type": "text/plain"
+                                                            },
+                                                            "type": "any",
+                                                            "value": "<uuid>",
+                                                            "key": "id"
+                                                        }
+                                                    ]
+                                                },
+                                                "header": [
+                                                    {
+                                                        "key": "Accept",
+                                                        "value": "*/*"
+                                                    },
+                                                    {
+                                                        "description": {
+                                                            "content": "Added as a part of security scheme: basic",
+                                                            "type": "text/plain"
+                                                        },
+                                                        "key": "Authorization",
+                                                        "value": "Basic <credentials>"
+                                                    }
+                                                ],
+                                                "method": "GET",
+                                                "body": {}
+                                            },
+                                            "status": "Not Found",
+                                            "code": 404,
+                                            "header": [
+                                                {
+                                                    "key": "Content-Type",
+                                                    "value": "*/*"
+                                                }
+                                            ],
+                                            "body": "{\n  \"id\": \"<uuid>\",\n  \"name\": \"<string>\",\n  \"type\": \"FLASH_SALE\",\n  \"status\": \"SCHEDULED\",\n  \"startAt\": \"<dateTime>\",\n  \"endAt\": \"<dateTime>\",\n  \"ruleConfig\": {\n    \"kind\": \"AMOUNT\",\n    \"ruleType\": \"<string>\",\n    \"thresholdMode\": \"MIN_SPEND\",\n    \"schema_version\": \"<integer>\",\n    \"amount\": \"<number>\",\n    \"percentage\": \"<number>\",\n    \"minSpend\": \"<number>\"\n  },\n  \"targetSpec\": {\n    \"kind\": \"CONDITION\",\n    \"listId\": \"<uuid>\",\n    \"conditions\": {\n      \"key_0\": {}\n    }\n  },\n  \"reachPlan\": {\n    \"channel\": \"SMS\",\n    \"templateRef\": \"<string>\",\n    \"timing\": \"SCHEDULED\"\n  },\n  \"version\": \"<integer>\",\n  \"createdBy\": \"<uuid>\",\n  \"updatedBy\": \"<uuid>\",\n  \"createdAt\": \"<dateTime>\",\n  \"updatedAt\": \"<dateTime>\"\n}",
+                                            "cookie": [],
+                                            "_postman_previewlanguage": "text"
+                                        }
+                                    ],
+                                    "event": [],
+                                    "protocolProfileBehavior": {
+                                        "disableBodyPruning": true
+                                    }
+                                },
+                                {
+                                    "id": "efe6ea9a-d09f-4df1-9cdb-e41a4d3a4e19",
+                                    "name": "修改活動設定",
+                                    "request": {
+                                        "name": "修改活動設定",
+                                        "description": {
+                                            "content": "以 PATCH 部分更新優惠規則與/或觸達發送設定；省略（null）的欄位維持不變。版本過期時回傳 409。",
+                                            "type": "text/plain"
+                                        },
+                                        "url": {
+                                            "path": [
+                                                "internal",
+                                                "campaigns",
+                                                ":id"
+                                            ],
+                                            "host": [
+                                                "{{baseUrl}}"
+                                            ],
+                                            "query": [],
+                                            "variable": [
+                                                {
+                                                    "type": "any",
+                                                    "value": "<uuid>",
+                                                    "key": "id",
+                                                    "disabled": false,
+                                                    "description": {
+                                                        "content": "(Required) ",
+                                                        "type": "text/plain"
+                                                    }
+                                                }
+                                            ]
+                                        },
+                                        "header": [
+                                            {
+                                                "key": "Content-Type",
+                                                "value": "application/json"
+                                            },
+                                            {
+                                                "key": "Accept",
+                                                "value": "*/*"
+                                            }
+                                        ],
+                                        "method": "PATCH",
+                                        "body": {
+                                            "mode": "raw",
+                                            "raw": "{\n  \"version\": \"<integer>\",\n  \"name\": \"<string>\",\n  \"startAt\": \"<dateTime>\",\n  \"endAt\": \"<dateTime>\",\n  \"ruleConfig\": {\n    \"kind\": \"PERCENTAGE\",\n    \"ruleType\": \"<string>\",\n    \"thresholdMode\": \"NONE\",\n    \"schema_version\": \"<integer>\",\n    \"amount\": \"<number>\",\n    \"percentage\": \"<number>\",\n    \"minSpend\": \"<number>\"\n  },\n  \"targetSpec\": {\n    \"kind\": \"STATIC_LIST\",\n    \"listId\": \"<uuid>\",\n    \"conditions\": {\n      \"key_0\": {},\n      \"key_1\": {},\n      \"key_2\": {}\n    }\n  },\n  \"reachPlan\": {\n    \"channel\": \"PUSH\",\n    \"templateRef\": \"<string>\",\n    \"timing\": \"SCHEDULED\"\n  }\n}",
+                                            "options": {
+                                                "raw": {
+                                                    "headerFamily": "json",
+                                                    "language": "json"
+                                                }
+                                            }
+                                        },
+                                        "auth": null
+                                    },
+                                    "response": [
+                                        {
+                                            "id": "54de1c83-fb39-4fe1-8134-2ffd083e1376",
+                                            "name": "修改成功，回傳更新後的活動內容",
+                                            "originalRequest": {
+                                                "url": {
+                                                    "path": [
+                                                        "internal",
+                                                        "campaigns",
+                                                        ":id"
+                                                    ],
+                                                    "host": [
+                                                        "{{baseUrl}}"
+                                                    ],
+                                                    "query": [],
+                                                    "variable": [
+                                                        {
+                                                            "disabled": false,
+                                                            "description": {
+                                                                "content": "(Required) ",
+                                                                "type": "text/plain"
+                                                            },
+                                                            "type": "any",
+                                                            "value": "<uuid>",
+                                                            "key": "id"
+                                                        }
+                                                    ]
+                                                },
+                                                "header": [
+                                                    {
+                                                        "key": "Content-Type",
+                                                        "value": "application/json"
+                                                    },
+                                                    {
+                                                        "key": "Accept",
+                                                        "value": "*/*"
+                                                    },
+                                                    {
+                                                        "description": {
+                                                            "content": "Added as a part of security scheme: basic",
+                                                            "type": "text/plain"
+                                                        },
+                                                        "key": "Authorization",
+                                                        "value": "Basic <credentials>"
+                                                    }
+                                                ],
+                                                "method": "PATCH",
+                                                "body": {
+                                                    "mode": "raw",
+                                                    "raw": "{\n  \"version\": \"<integer>\",\n  \"name\": \"<string>\",\n  \"startAt\": \"<dateTime>\",\n  \"endAt\": \"<dateTime>\",\n  \"ruleConfig\": {\n    \"kind\": \"PERCENTAGE\",\n    \"ruleType\": \"<string>\",\n    \"thresholdMode\": \"NONE\",\n    \"schema_version\": \"<integer>\",\n    \"amount\": \"<number>\",\n    \"percentage\": \"<number>\",\n    \"minSpend\": \"<number>\"\n  },\n  \"targetSpec\": {\n    \"kind\": \"STATIC_LIST\",\n    \"listId\": \"<uuid>\",\n    \"conditions\": {\n      \"key_0\": {},\n      \"key_1\": {},\n      \"key_2\": {}\n    }\n  },\n  \"reachPlan\": {\n    \"channel\": \"PUSH\",\n    \"templateRef\": \"<string>\",\n    \"timing\": \"SCHEDULED\"\n  }\n}",
+                                                    "options": {
+                                                        "raw": {
+                                                            "headerFamily": "json",
+                                                            "language": "json"
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "status": "OK",
+                                            "code": 200,
+                                            "header": [
+                                                {
+                                                    "key": "Content-Type",
+                                                    "value": "*/*"
+                                                }
+                                            ],
+                                            "body": "{\n  \"id\": \"<uuid>\",\n  \"name\": \"<string>\",\n  \"type\": \"FLASH_SALE\",\n  \"status\": \"SCHEDULED\",\n  \"startAt\": \"<dateTime>\",\n  \"endAt\": \"<dateTime>\",\n  \"ruleConfig\": {\n    \"kind\": \"AMOUNT\",\n    \"ruleType\": \"<string>\",\n    \"thresholdMode\": \"MIN_SPEND\",\n    \"schema_version\": \"<integer>\",\n    \"amount\": \"<number>\",\n    \"percentage\": \"<number>\",\n    \"minSpend\": \"<number>\"\n  },\n  \"targetSpec\": {\n    \"kind\": \"CONDITION\",\n    \"listId\": \"<uuid>\",\n    \"conditions\": {\n      \"key_0\": {}\n    }\n  },\n  \"reachPlan\": {\n    \"channel\": \"SMS\",\n    \"templateRef\": \"<string>\",\n    \"timing\": \"SCHEDULED\"\n  },\n  \"version\": \"<integer>\",\n  \"createdBy\": \"<uuid>\",\n  \"updatedBy\": \"<uuid>\",\n  \"createdAt\": \"<dateTime>\",\n  \"updatedAt\": \"<dateTime>\"\n}",
+                                            "cookie": [],
+                                            "_postman_previewlanguage": "text"
+                                        },
+                                        {
+                                            "id": "f98c309c-4087-4e60-b808-0443023f6058",
+                                            "name": "請求欄位驗證失敗",
+                                            "originalRequest": {
+                                                "url": {
+                                                    "path": [
+                                                        "internal",
+                                                        "campaigns",
+                                                        ":id"
+                                                    ],
+                                                    "host": [
+                                                        "{{baseUrl}}"
+                                                    ],
+                                                    "query": [],
+                                                    "variable": [
+                                                        {
+                                                            "disabled": false,
+                                                            "description": {
+                                                                "content": "(Required) ",
+                                                                "type": "text/plain"
+                                                            },
+                                                            "type": "any",
+                                                            "value": "<uuid>",
+                                                            "key": "id"
+                                                        }
+                                                    ]
+                                                },
+                                                "header": [
+                                                    {
+                                                        "key": "Content-Type",
+                                                        "value": "application/json"
+                                                    },
+                                                    {
+                                                        "key": "Accept",
+                                                        "value": "*/*"
+                                                    },
+                                                    {
+                                                        "description": {
+                                                            "content": "Added as a part of security scheme: basic",
+                                                            "type": "text/plain"
+                                                        },
+                                                        "key": "Authorization",
+                                                        "value": "Basic <credentials>"
+                                                    }
+                                                ],
+                                                "method": "PATCH",
+                                                "body": {
+                                                    "mode": "raw",
+                                                    "raw": "{\n  \"version\": \"<integer>\",\n  \"name\": \"<string>\",\n  \"startAt\": \"<dateTime>\",\n  \"endAt\": \"<dateTime>\",\n  \"ruleConfig\": {\n    \"kind\": \"PERCENTAGE\",\n    \"ruleType\": \"<string>\",\n    \"thresholdMode\": \"NONE\",\n    \"schema_version\": \"<integer>\",\n    \"amount\": \"<number>\",\n    \"percentage\": \"<number>\",\n    \"minSpend\": \"<number>\"\n  },\n  \"targetSpec\": {\n    \"kind\": \"STATIC_LIST\",\n    \"listId\": \"<uuid>\",\n    \"conditions\": {\n      \"key_0\": {},\n      \"key_1\": {},\n      \"key_2\": {}\n    }\n  },\n  \"reachPlan\": {\n    \"channel\": \"PUSH\",\n    \"templateRef\": \"<string>\",\n    \"timing\": \"SCHEDULED\"\n  }\n}",
+                                                    "options": {
+                                                        "raw": {
+                                                            "headerFamily": "json",
+                                                            "language": "json"
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "status": "Bad Request",
+                                            "code": 400,
+                                            "header": [
+                                                {
+                                                    "key": "Content-Type",
+                                                    "value": "*/*"
+                                                }
+                                            ],
+                                            "body": "{\n  \"id\": \"<uuid>\",\n  \"name\": \"<string>\",\n  \"type\": \"FLASH_SALE\",\n  \"status\": \"SCHEDULED\",\n  \"startAt\": \"<dateTime>\",\n  \"endAt\": \"<dateTime>\",\n  \"ruleConfig\": {\n    \"kind\": \"AMOUNT\",\n    \"ruleType\": \"<string>\",\n    \"thresholdMode\": \"MIN_SPEND\",\n    \"schema_version\": \"<integer>\",\n    \"amount\": \"<number>\",\n    \"percentage\": \"<number>\",\n    \"minSpend\": \"<number>\"\n  },\n  \"targetSpec\": {\n    \"kind\": \"CONDITION\",\n    \"listId\": \"<uuid>\",\n    \"conditions\": {\n      \"key_0\": {}\n    }\n  },\n  \"reachPlan\": {\n    \"channel\": \"SMS\",\n    \"templateRef\": \"<string>\",\n    \"timing\": \"SCHEDULED\"\n  },\n  \"version\": \"<integer>\",\n  \"createdBy\": \"<uuid>\",\n  \"updatedBy\": \"<uuid>\",\n  \"createdAt\": \"<dateTime>\",\n  \"updatedAt\": \"<dateTime>\"\n}",
+                                            "cookie": [],
+                                            "_postman_previewlanguage": "text"
+                                        },
+                                        {
+                                            "id": "10c19bd6-5147-461d-b987-84fa9afb10d5",
+                                            "name": "未通過後台 OPERATOR 認證",
+                                            "originalRequest": {
+                                                "url": {
+                                                    "path": [
+                                                        "internal",
+                                                        "campaigns",
+                                                        ":id"
+                                                    ],
+                                                    "host": [
+                                                        "{{baseUrl}}"
+                                                    ],
+                                                    "query": [],
+                                                    "variable": [
+                                                        {
+                                                            "disabled": false,
+                                                            "description": {
+                                                                "content": "(Required) ",
+                                                                "type": "text/plain"
+                                                            },
+                                                            "type": "any",
+                                                            "value": "<uuid>",
+                                                            "key": "id"
+                                                        }
+                                                    ]
+                                                },
+                                                "header": [
+                                                    {
+                                                        "key": "Content-Type",
+                                                        "value": "application/json"
+                                                    },
+                                                    {
+                                                        "key": "Accept",
+                                                        "value": "*/*"
+                                                    },
+                                                    {
+                                                        "description": {
+                                                            "content": "Added as a part of security scheme: basic",
+                                                            "type": "text/plain"
+                                                        },
+                                                        "key": "Authorization",
+                                                        "value": "Basic <credentials>"
+                                                    }
+                                                ],
+                                                "method": "PATCH",
+                                                "body": {
+                                                    "mode": "raw",
+                                                    "raw": "{\n  \"version\": \"<integer>\",\n  \"name\": \"<string>\",\n  \"startAt\": \"<dateTime>\",\n  \"endAt\": \"<dateTime>\",\n  \"ruleConfig\": {\n    \"kind\": \"PERCENTAGE\",\n    \"ruleType\": \"<string>\",\n    \"thresholdMode\": \"NONE\",\n    \"schema_version\": \"<integer>\",\n    \"amount\": \"<number>\",\n    \"percentage\": \"<number>\",\n    \"minSpend\": \"<number>\"\n  },\n  \"targetSpec\": {\n    \"kind\": \"STATIC_LIST\",\n    \"listId\": \"<uuid>\",\n    \"conditions\": {\n      \"key_0\": {},\n      \"key_1\": {},\n      \"key_2\": {}\n    }\n  },\n  \"reachPlan\": {\n    \"channel\": \"PUSH\",\n    \"templateRef\": \"<string>\",\n    \"timing\": \"SCHEDULED\"\n  }\n}",
+                                                    "options": {
+                                                        "raw": {
+                                                            "headerFamily": "json",
+                                                            "language": "json"
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "status": "Unauthorized",
+                                            "code": 401,
+                                            "header": [
+                                                {
+                                                    "key": "Content-Type",
+                                                    "value": "*/*"
+                                                }
+                                            ],
+                                            "body": "{\n  \"id\": \"<uuid>\",\n  \"name\": \"<string>\",\n  \"type\": \"FLASH_SALE\",\n  \"status\": \"SCHEDULED\",\n  \"startAt\": \"<dateTime>\",\n  \"endAt\": \"<dateTime>\",\n  \"ruleConfig\": {\n    \"kind\": \"AMOUNT\",\n    \"ruleType\": \"<string>\",\n    \"thresholdMode\": \"MIN_SPEND\",\n    \"schema_version\": \"<integer>\",\n    \"amount\": \"<number>\",\n    \"percentage\": \"<number>\",\n    \"minSpend\": \"<number>\"\n  },\n  \"targetSpec\": {\n    \"kind\": \"CONDITION\",\n    \"listId\": \"<uuid>\",\n    \"conditions\": {\n      \"key_0\": {}\n    }\n  },\n  \"reachPlan\": {\n    \"channel\": \"SMS\",\n    \"templateRef\": \"<string>\",\n    \"timing\": \"SCHEDULED\"\n  },\n  \"version\": \"<integer>\",\n  \"createdBy\": \"<uuid>\",\n  \"updatedBy\": \"<uuid>\",\n  \"createdAt\": \"<dateTime>\",\n  \"updatedAt\": \"<dateTime>\"\n}",
+                                            "cookie": [],
+                                            "_postman_previewlanguage": "text"
+                                        },
+                                        {
+                                            "id": "e3d8368b-e3b2-4862-800e-f8514d6cb0ca",
+                                            "name": "查無此活動",
+                                            "originalRequest": {
+                                                "url": {
+                                                    "path": [
+                                                        "internal",
+                                                        "campaigns",
+                                                        ":id"
+                                                    ],
+                                                    "host": [
+                                                        "{{baseUrl}}"
+                                                    ],
+                                                    "query": [],
+                                                    "variable": [
+                                                        {
+                                                            "disabled": false,
+                                                            "description": {
+                                                                "content": "(Required) ",
+                                                                "type": "text/plain"
+                                                            },
+                                                            "type": "any",
+                                                            "value": "<uuid>",
+                                                            "key": "id"
+                                                        }
+                                                    ]
+                                                },
+                                                "header": [
+                                                    {
+                                                        "key": "Content-Type",
+                                                        "value": "application/json"
+                                                    },
+                                                    {
+                                                        "key": "Accept",
+                                                        "value": "*/*"
+                                                    },
+                                                    {
+                                                        "description": {
+                                                            "content": "Added as a part of security scheme: basic",
+                                                            "type": "text/plain"
+                                                        },
+                                                        "key": "Authorization",
+                                                        "value": "Basic <credentials>"
+                                                    }
+                                                ],
+                                                "method": "PATCH",
+                                                "body": {
+                                                    "mode": "raw",
+                                                    "raw": "{\n  \"version\": \"<integer>\",\n  \"name\": \"<string>\",\n  \"startAt\": \"<dateTime>\",\n  \"endAt\": \"<dateTime>\",\n  \"ruleConfig\": {\n    \"kind\": \"PERCENTAGE\",\n    \"ruleType\": \"<string>\",\n    \"thresholdMode\": \"NONE\",\n    \"schema_version\": \"<integer>\",\n    \"amount\": \"<number>\",\n    \"percentage\": \"<number>\",\n    \"minSpend\": \"<number>\"\n  },\n  \"targetSpec\": {\n    \"kind\": \"STATIC_LIST\",\n    \"listId\": \"<uuid>\",\n    \"conditions\": {\n      \"key_0\": {},\n      \"key_1\": {},\n      \"key_2\": {}\n    }\n  },\n  \"reachPlan\": {\n    \"channel\": \"PUSH\",\n    \"templateRef\": \"<string>\",\n    \"timing\": \"SCHEDULED\"\n  }\n}",
+                                                    "options": {
+                                                        "raw": {
+                                                            "headerFamily": "json",
+                                                            "language": "json"
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "status": "Not Found",
+                                            "code": 404,
+                                            "header": [
+                                                {
+                                                    "key": "Content-Type",
+                                                    "value": "*/*"
+                                                }
+                                            ],
+                                            "body": "{\n  \"id\": \"<uuid>\",\n  \"name\": \"<string>\",\n  \"type\": \"FLASH_SALE\",\n  \"status\": \"SCHEDULED\",\n  \"startAt\": \"<dateTime>\",\n  \"endAt\": \"<dateTime>\",\n  \"ruleConfig\": {\n    \"kind\": \"AMOUNT\",\n    \"ruleType\": \"<string>\",\n    \"thresholdMode\": \"MIN_SPEND\",\n    \"schema_version\": \"<integer>\",\n    \"amount\": \"<number>\",\n    \"percentage\": \"<number>\",\n    \"minSpend\": \"<number>\"\n  },\n  \"targetSpec\": {\n    \"kind\": \"CONDITION\",\n    \"listId\": \"<uuid>\",\n    \"conditions\": {\n      \"key_0\": {}\n    }\n  },\n  \"reachPlan\": {\n    \"channel\": \"SMS\",\n    \"templateRef\": \"<string>\",\n    \"timing\": \"SCHEDULED\"\n  },\n  \"version\": \"<integer>\",\n  \"createdBy\": \"<uuid>\",\n  \"updatedBy\": \"<uuid>\",\n  \"createdAt\": \"<dateTime>\",\n  \"updatedAt\": \"<dateTime>\"\n}",
+                                            "cookie": [],
+                                            "_postman_previewlanguage": "text"
+                                        },
+                                        {
+                                            "id": "64fa403e-2690-4000-81a7-1f51f7d9edaf",
+                                            "name": "樂觀鎖版本過期（與其他並行修改衝突）",
+                                            "originalRequest": {
+                                                "url": {
+                                                    "path": [
+                                                        "internal",
+                                                        "campaigns",
+                                                        ":id"
+                                                    ],
+                                                    "host": [
+                                                        "{{baseUrl}}"
+                                                    ],
+                                                    "query": [],
+                                                    "variable": [
+                                                        {
+                                                            "disabled": false,
+                                                            "description": {
+                                                                "content": "(Required) ",
+                                                                "type": "text/plain"
+                                                            },
+                                                            "type": "any",
+                                                            "value": "<uuid>",
+                                                            "key": "id"
+                                                        }
+                                                    ]
+                                                },
+                                                "header": [
+                                                    {
+                                                        "key": "Content-Type",
+                                                        "value": "application/json"
+                                                    },
+                                                    {
+                                                        "key": "Accept",
+                                                        "value": "*/*"
+                                                    },
+                                                    {
+                                                        "description": {
+                                                            "content": "Added as a part of security scheme: basic",
+                                                            "type": "text/plain"
+                                                        },
+                                                        "key": "Authorization",
+                                                        "value": "Basic <credentials>"
+                                                    }
+                                                ],
+                                                "method": "PATCH",
+                                                "body": {
+                                                    "mode": "raw",
+                                                    "raw": "{\n  \"version\": \"<integer>\",\n  \"name\": \"<string>\",\n  \"startAt\": \"<dateTime>\",\n  \"endAt\": \"<dateTime>\",\n  \"ruleConfig\": {\n    \"kind\": \"PERCENTAGE\",\n    \"ruleType\": \"<string>\",\n    \"thresholdMode\": \"NONE\",\n    \"schema_version\": \"<integer>\",\n    \"amount\": \"<number>\",\n    \"percentage\": \"<number>\",\n    \"minSpend\": \"<number>\"\n  },\n  \"targetSpec\": {\n    \"kind\": \"STATIC_LIST\",\n    \"listId\": \"<uuid>\",\n    \"conditions\": {\n      \"key_0\": {},\n      \"key_1\": {},\n      \"key_2\": {}\n    }\n  },\n  \"reachPlan\": {\n    \"channel\": \"PUSH\",\n    \"templateRef\": \"<string>\",\n    \"timing\": \"SCHEDULED\"\n  }\n}",
+                                                    "options": {
+                                                        "raw": {
+                                                            "headerFamily": "json",
+                                                            "language": "json"
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "status": "Conflict",
+                                            "code": 409,
+                                            "header": [
+                                                {
+                                                    "key": "Content-Type",
+                                                    "value": "*/*"
+                                                }
+                                            ],
+                                            "body": "{\n  \"id\": \"<uuid>\",\n  \"name\": \"<string>\",\n  \"type\": \"FLASH_SALE\",\n  \"status\": \"SCHEDULED\",\n  \"startAt\": \"<dateTime>\",\n  \"endAt\": \"<dateTime>\",\n  \"ruleConfig\": {\n    \"kind\": \"AMOUNT\",\n    \"ruleType\": \"<string>\",\n    \"thresholdMode\": \"MIN_SPEND\",\n    \"schema_version\": \"<integer>\",\n    \"amount\": \"<number>\",\n    \"percentage\": \"<number>\",\n    \"minSpend\": \"<number>\"\n  },\n  \"targetSpec\": {\n    \"kind\": \"CONDITION\",\n    \"listId\": \"<uuid>\",\n    \"conditions\": {\n      \"key_0\": {}\n    }\n  },\n  \"reachPlan\": {\n    \"channel\": \"SMS\",\n    \"templateRef\": \"<string>\",\n    \"timing\": \"SCHEDULED\"\n  },\n  \"version\": \"<integer>\",\n  \"createdBy\": \"<uuid>\",\n  \"updatedBy\": \"<uuid>\",\n  \"createdAt\": \"<dateTime>\",\n  \"updatedAt\": \"<dateTime>\"\n}",
+                                            "cookie": [],
+                                            "_postman_previewlanguage": "text"
+                                        }
+                                    ],
+                                    "event": [],
+                                    "protocolProfileBehavior": {
+                                        "disableBodyPruning": true
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "name": "reach",
+                    "description": "",
+                    "item": [
+                        {
+                            "name": "campaigns",
+                            "description": "",
+                            "item": [
+                                {
+                                    "name": "{campaignId}",
+                                    "description": "",
+                                    "item": [
+                                        {
+                                            "name": "recipients",
+                                            "description": "",
+                                            "item": [
+                                                {
+                                                    "name": "{userId}",
+                                                    "description": "",
+                                                    "item": [
+                                                        {
+                                                            "id": "aaf7536a-2a74-41cb-9738-fe8f6a260bbc",
+                                                            "name": "單筆收件人觸達狀態",
+                                                            "request": {
+                                                                "name": "單筆收件人觸達狀態",
+                                                                "description": {
+                                                                    "content": "回傳指定活動下單一收件人的觸達狀態（已最小化個資）。",
+                                                                    "type": "text/plain"
+                                                                },
+                                                                "url": {
+                                                                    "path": [
+                                                                        "internal",
+                                                                        "reach",
+                                                                        "campaigns",
+                                                                        ":campaignId",
+                                                                        "recipients",
+                                                                        ":userId"
+                                                                    ],
+                                                                    "host": [
+                                                                        "{{baseUrl}}"
+                                                                    ],
+                                                                    "query": [],
+                                                                    "variable": [
+                                                                        {
+                                                                            "type": "any",
+                                                                            "value": "<uuid>",
+                                                                            "key": "campaignId",
+                                                                            "disabled": false,
+                                                                            "description": {
+                                                                                "content": "(Required) ",
+                                                                                "type": "text/plain"
+                                                                            }
+                                                                        },
+                                                                        {
+                                                                            "type": "any",
+                                                                            "value": "<uuid>",
+                                                                            "key": "userId",
+                                                                            "disabled": false,
+                                                                            "description": {
+                                                                                "content": "(Required) ",
+                                                                                "type": "text/plain"
+                                                                            }
+                                                                        }
+                                                                    ]
+                                                                },
+                                                                "header": [
+                                                                    {
+                                                                        "key": "Accept",
+                                                                        "value": "*/*"
+                                                                    }
+                                                                ],
+                                                                "method": "GET",
+                                                                "body": {},
+                                                                "auth": null
+                                                            },
+                                                            "response": [
+                                                                {
+                                                                    "id": "eb7fd3f2-028e-43c0-a055-5b2be93b14f3",
+                                                                    "name": "查詢成功，回傳收件人觸達狀態",
+                                                                    "originalRequest": {
+                                                                        "url": {
+                                                                            "path": [
+                                                                                "internal",
+                                                                                "reach",
+                                                                                "campaigns",
+                                                                                ":campaignId",
+                                                                                "recipients",
+                                                                                ":userId"
+                                                                            ],
+                                                                            "host": [
+                                                                                "{{baseUrl}}"
+                                                                            ],
+                                                                            "query": [],
+                                                                            "variable": [
+                                                                                {
+                                                                                    "disabled": false,
+                                                                                    "description": {
+                                                                                        "content": "(Required) ",
+                                                                                        "type": "text/plain"
+                                                                                    },
+                                                                                    "type": "any",
+                                                                                    "value": "<uuid>",
+                                                                                    "key": "campaignId"
+                                                                                },
+                                                                                {
+                                                                                    "disabled": false,
+                                                                                    "description": {
+                                                                                        "content": "(Required) ",
+                                                                                        "type": "text/plain"
+                                                                                    },
+                                                                                    "type": "any",
+                                                                                    "value": "<uuid>",
+                                                                                    "key": "userId"
+                                                                                }
+                                                                            ]
+                                                                        },
+                                                                        "header": [
+                                                                            {
+                                                                                "key": "Accept",
+                                                                                "value": "*/*"
+                                                                            },
+                                                                            {
+                                                                                "description": {
+                                                                                    "content": "Added as a part of security scheme: basic",
+                                                                                    "type": "text/plain"
+                                                                                },
+                                                                                "key": "Authorization",
+                                                                                "value": "Basic <credentials>"
+                                                                            }
+                                                                        ],
+                                                                        "method": "GET",
+                                                                        "body": {}
+                                                                    },
+                                                                    "status": "OK",
+                                                                    "code": 200,
+                                                                    "header": [
+                                                                        {
+                                                                            "key": "Content-Type",
+                                                                            "value": "*/*"
+                                                                        }
+                                                                    ],
+                                                                    "body": "{\n  \"campaignId\": \"<uuid>\",\n  \"userId\": \"<uuid>\",\n  \"statuses\": [\n    {\n      \"campaignId\": \"<uuid>\",\n      \"userId\": \"<uuid>\",\n      \"channel\": \"SMS\",\n      \"sendCycleKey\": \"<string>\",\n      \"status\": \"RETRY_SCHEDULED\"\n    },\n    {\n      \"campaignId\": \"<uuid>\",\n      \"userId\": \"<uuid>\",\n      \"channel\": \"PUSH\",\n      \"sendCycleKey\": \"<string>\",\n      \"status\": \"FAILED\"\n    }\n  ]\n}",
+                                                                    "cookie": [],
+                                                                    "_postman_previewlanguage": "text"
+                                                                },
+                                                                {
+                                                                    "id": "a2f2dcff-44cc-4a6d-a369-a52629d2aab8",
+                                                                    "name": "未通過後台 OPERATOR 認證",
+                                                                    "originalRequest": {
+                                                                        "url": {
+                                                                            "path": [
+                                                                                "internal",
+                                                                                "reach",
+                                                                                "campaigns",
+                                                                                ":campaignId",
+                                                                                "recipients",
+                                                                                ":userId"
+                                                                            ],
+                                                                            "host": [
+                                                                                "{{baseUrl}}"
+                                                                            ],
+                                                                            "query": [],
+                                                                            "variable": [
+                                                                                {
+                                                                                    "disabled": false,
+                                                                                    "description": {
+                                                                                        "content": "(Required) ",
+                                                                                        "type": "text/plain"
+                                                                                    },
+                                                                                    "type": "any",
+                                                                                    "value": "<uuid>",
+                                                                                    "key": "campaignId"
+                                                                                },
+                                                                                {
+                                                                                    "disabled": false,
+                                                                                    "description": {
+                                                                                        "content": "(Required) ",
+                                                                                        "type": "text/plain"
+                                                                                    },
+                                                                                    "type": "any",
+                                                                                    "value": "<uuid>",
+                                                                                    "key": "userId"
+                                                                                }
+                                                                            ]
+                                                                        },
+                                                                        "header": [
+                                                                            {
+                                                                                "key": "Accept",
+                                                                                "value": "*/*"
+                                                                            },
+                                                                            {
+                                                                                "description": {
+                                                                                    "content": "Added as a part of security scheme: basic",
+                                                                                    "type": "text/plain"
+                                                                                },
+                                                                                "key": "Authorization",
+                                                                                "value": "Basic <credentials>"
+                                                                            }
+                                                                        ],
+                                                                        "method": "GET",
+                                                                        "body": {}
+                                                                    },
+                                                                    "status": "Unauthorized",
+                                                                    "code": 401,
+                                                                    "header": [
+                                                                        {
+                                                                            "key": "Content-Type",
+                                                                            "value": "*/*"
+                                                                        }
+                                                                    ],
+                                                                    "body": "{\n  \"campaignId\": \"<uuid>\",\n  \"userId\": \"<uuid>\",\n  \"statuses\": [\n    {\n      \"campaignId\": \"<uuid>\",\n      \"userId\": \"<uuid>\",\n      \"channel\": \"SMS\",\n      \"sendCycleKey\": \"<string>\",\n      \"status\": \"RETRY_SCHEDULED\"\n    },\n    {\n      \"campaignId\": \"<uuid>\",\n      \"userId\": \"<uuid>\",\n      \"channel\": \"PUSH\",\n      \"sendCycleKey\": \"<string>\",\n      \"status\": \"FAILED\"\n    }\n  ]\n}",
+                                                                    "cookie": [],
+                                                                    "_postman_previewlanguage": "text"
+                                                                }
+                                                            ],
+                                                            "event": [],
+                                                            "protocolProfileBehavior": {
+                                                                "disableBodyPruning": true
+                                                            }
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "name": "metrics",
+                                            "description": "",
+                                            "item": [
+                                                {
+                                                    "id": "5f7d4319-13e4-4605-acae-e95eab118699",
+                                                    "name": "活動維度成效彙總",
+                                                    "request": {
+                                                        "name": "活動維度成效彙總",
+                                                        "description": {
+                                                            "content": "回傳指定活動的送達率、失敗率與各狀態的收件人分佈；無任何收件人時各比率為 0.0（不會除以零）。",
+                                                            "type": "text/plain"
+                                                        },
+                                                        "url": {
+                                                            "path": [
+                                                                "internal",
+                                                                "reach",
+                                                                "campaigns",
+                                                                ":campaignId",
+                                                                "metrics"
+                                                            ],
+                                                            "host": [
+                                                                "{{baseUrl}}"
+                                                            ],
+                                                            "query": [],
+                                                            "variable": [
+                                                                {
+                                                                    "type": "any",
+                                                                    "value": "<uuid>",
+                                                                    "key": "campaignId",
+                                                                    "disabled": false,
+                                                                    "description": {
+                                                                        "content": "(Required) ",
+                                                                        "type": "text/plain"
+                                                                    }
+                                                                }
+                                                            ]
+                                                        },
+                                                        "header": [
+                                                            {
+                                                                "key": "Accept",
+                                                                "value": "*/*"
+                                                            }
+                                                        ],
+                                                        "method": "GET",
+                                                        "body": {},
+                                                        "auth": null
+                                                    },
+                                                    "response": [
+                                                        {
+                                                            "id": "7d3307f0-0744-45fd-9f7e-06a70d9c733f",
+                                                            "name": "查詢成功，回傳活動維度彙總",
+                                                            "originalRequest": {
+                                                                "url": {
+                                                                    "path": [
+                                                                        "internal",
+                                                                        "reach",
+                                                                        "campaigns",
+                                                                        ":campaignId",
+                                                                        "metrics"
+                                                                    ],
+                                                                    "host": [
+                                                                        "{{baseUrl}}"
+                                                                    ],
+                                                                    "query": [],
+                                                                    "variable": [
+                                                                        {
+                                                                            "disabled": false,
+                                                                            "description": {
+                                                                                "content": "(Required) ",
+                                                                                "type": "text/plain"
+                                                                            },
+                                                                            "type": "any",
+                                                                            "value": "<uuid>",
+                                                                            "key": "campaignId"
+                                                                        }
+                                                                    ]
+                                                                },
+                                                                "header": [
+                                                                    {
+                                                                        "key": "Accept",
+                                                                        "value": "*/*"
+                                                                    },
+                                                                    {
+                                                                        "description": {
+                                                                            "content": "Added as a part of security scheme: basic",
+                                                                            "type": "text/plain"
+                                                                        },
+                                                                        "key": "Authorization",
+                                                                        "value": "Basic <credentials>"
+                                                                    }
+                                                                ],
+                                                                "method": "GET",
+                                                                "body": {}
+                                                            },
+                                                            "status": "OK",
+                                                            "code": 200,
+                                                            "header": [
+                                                                {
+                                                                    "key": "Content-Type",
+                                                                    "value": "*/*"
+                                                                }
+                                                            ],
+                                                            "body": "{\n  \"campaignId\": \"<uuid>\",\n  \"totalCount\": \"<long>\",\n  \"deliveredRate\": \"<double>\",\n  \"failedRate\": \"<double>\",\n  \"statusDistribution\": {\n    \"key_0\": \"<long>\",\n    \"key_1\": \"<long>\"\n  }\n}",
+                                                            "cookie": [],
+                                                            "_postman_previewlanguage": "text"
+                                                        },
+                                                        {
+                                                            "id": "61d9d0b4-0fde-4b22-916b-9c2219be906a",
+                                                            "name": "未通過後台 OPERATOR 認證",
+                                                            "originalRequest": {
+                                                                "url": {
+                                                                    "path": [
+                                                                        "internal",
+                                                                        "reach",
+                                                                        "campaigns",
+                                                                        ":campaignId",
+                                                                        "metrics"
+                                                                    ],
+                                                                    "host": [
+                                                                        "{{baseUrl}}"
+                                                                    ],
+                                                                    "query": [],
+                                                                    "variable": [
+                                                                        {
+                                                                            "disabled": false,
+                                                                            "description": {
+                                                                                "content": "(Required) ",
+                                                                                "type": "text/plain"
+                                                                            },
+                                                                            "type": "any",
+                                                                            "value": "<uuid>",
+                                                                            "key": "campaignId"
+                                                                        }
+                                                                    ]
+                                                                },
+                                                                "header": [
+                                                                    {
+                                                                        "key": "Accept",
+                                                                        "value": "*/*"
+                                                                    },
+                                                                    {
+                                                                        "description": {
+                                                                            "content": "Added as a part of security scheme: basic",
+                                                                            "type": "text/plain"
+                                                                        },
+                                                                        "key": "Authorization",
+                                                                        "value": "Basic <credentials>"
+                                                                    }
+                                                                ],
+                                                                "method": "GET",
+                                                                "body": {}
+                                                            },
+                                                            "status": "Unauthorized",
+                                                            "code": 401,
+                                                            "header": [
+                                                                {
+                                                                    "key": "Content-Type",
+                                                                    "value": "*/*"
+                                                                }
+                                                            ],
+                                                            "body": "{\n  \"campaignId\": \"<uuid>\",\n  \"totalCount\": \"<long>\",\n  \"deliveredRate\": \"<double>\",\n  \"failedRate\": \"<double>\",\n  \"statusDistribution\": {\n    \"key_0\": \"<long>\",\n    \"key_1\": \"<long>\"\n  }\n}",
+                                                            "cookie": [],
+                                                            "_postman_previewlanguage": "text"
+                                                        }
+                                                    ],
+                                                    "event": [],
+                                                    "protocolProfileBehavior": {
+                                                        "disableBodyPruning": true
+                                                    }
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+    "auth": {
+        "type": "basic",
+        "basic": [
+            {
+                "type": "any",
+                "value": "{{basicAuthUsername}}",
+                "key": "username"
+            },
+            {
+                "type": "any",
+                "value": "{{basicAuthPassword}}",
+                "key": "password"
+            }
+        ]
+    },
+    "event": [],
+    "variable": [
+        {
+            "key": "baseUrl",
+            "value": "http://localhost"
+        }
+    ],
+    "info": {
+        "_postman_id": "e54c19dd-1503-4b19-b735-f5f09853ec48",
+        "name": "活動觸達系統 API",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+        "description": {
+            "content": "campaign-reach-system 內部後台 REST API 文件。涵蓋行銷活動的建立、查詢、修改與生命週期狀態轉換（/internal/campaigns），以及觸達成效查詢（/internal/reach）。所有 /internal 端點皆需後台 OPERATOR 以 HTTP Basic 認證；請於下方 Authorize 填入帳號密碼後再試打。",
+            "type": "text/plain"
+        }
+    }
+}
