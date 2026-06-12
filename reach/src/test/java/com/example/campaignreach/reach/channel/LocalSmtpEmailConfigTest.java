@@ -3,6 +3,8 @@ package com.example.campaignreach.reach.channel;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.resilience4j.springboot3.circuitbreaker.autoconfigure.CircuitBreakerAutoConfiguration;
+import java.util.Arrays;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
@@ -76,5 +78,88 @@ class LocalSmtpEmailConfigTest {
                     // @ConditionalOnBean is evaluated in the auto-config phase.
                     assertThat(context).hasSingleBean(EmailAdapter.class);
                 });
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Context-level fail-fast (task 4.1): the property-level validation of LocalSmtpEmailProperties is
+    // already unit-tested in LocalSmtpEmailPropertiesTest. Here we prove the GAP — that when local mode
+    // is ACTIVE (local profile + mode=smtp-local) but the campaignreach.email-provider.local.* settings
+    // are missing/invalid, the @ConfigurationProperties binding propagates the IllegalArgumentException
+    // and the Spring CONTEXT fails to start (it does not silently register a half-configured provider).
+    // Maps to spec scenario "Invalid local SMTP configuration fails startup".
+    // ---------------------------------------------------------------------------------------------
+
+    /** Local mode active (local profile + mode=smtp-local) with the given local.* settings applied. */
+    private ApplicationContextRunner localModeRunnerWith(String... localSettings) {
+        return runner.withInitializer(ctx -> ctx.getEnvironment().setActiveProfiles("local"))
+                .withPropertyValues("campaignreach.email-provider.mode=smtp-local")
+                .withPropertyValues(localSettings);
+    }
+
+    /** Returns FULL_LOCAL_SETTINGS with any property whose key starts with {@code key} removed. */
+    private static String[] fullLocalSettingsWithout(String key) {
+        return Arrays.stream(FULL_LOCAL_SETTINGS)
+                .filter(setting -> !setting.startsWith(key + "="))
+                .toArray(String[]::new);
+    }
+
+    private static String[] withOverride(String[] base, String override) {
+        return Stream.concat(Arrays.stream(base), Stream.of(override)).toArray(String[]::new);
+    }
+
+    @Test
+    @DisplayName("local 模式啟用但缺 host 時，Spring context 啟動失敗並指名屬性路徑")
+    void contextFailsToStartWhenHostMissing() {
+        localModeRunnerWith(fullLocalSettingsWithout("campaignreach.email-provider.local.host"))
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure())
+                            .rootCause()
+                            .isInstanceOf(IllegalArgumentException.class)
+                            .hasMessageContaining("campaignreach.email-provider.local.host");
+                });
+    }
+
+    @Test
+    @DisplayName("local 模式啟用但缺 recipient 時，Spring context 啟動失敗並指名屬性路徑")
+    void contextFailsToStartWhenRecipientMissing() {
+        localModeRunnerWith(fullLocalSettingsWithout("campaignreach.email-provider.local.recipient"))
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure())
+                            .rootCause()
+                            .isInstanceOf(IllegalArgumentException.class)
+                            .hasMessageContaining("campaignreach.email-provider.local.recipient");
+                });
+    }
+
+    @Test
+    @DisplayName("local 模式啟用但 timeout 非正 (0s) 時，Spring context 啟動失敗並指名屬性路徑")
+    void contextFailsToStartWhenTimeoutNonPositive() {
+        String[] settings = withOverride(
+                fullLocalSettingsWithout("campaignreach.email-provider.local.timeout"),
+                "campaignreach.email-provider.local.timeout=0s");
+        localModeRunnerWith(settings).run(context -> {
+            assertThat(context).hasFailed();
+            assertThat(context.getStartupFailure())
+                    .rootCause()
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("campaignreach.email-provider.local.timeout");
+        });
+    }
+
+    @Test
+    @DisplayName("local 模式啟用但 port 越界 (70000) 時，Spring context 啟動失敗並指名屬性路徑")
+    void contextFailsToStartWhenPortOutOfRange() {
+        String[] settings = withOverride(
+                fullLocalSettingsWithout("campaignreach.email-provider.local.port"),
+                "campaignreach.email-provider.local.port=70000");
+        localModeRunnerWith(settings).run(context -> {
+            assertThat(context).hasFailed();
+            assertThat(context.getStartupFailure())
+                    .rootCause()
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("campaignreach.email-provider.local.port");
+        });
     }
 }
