@@ -108,6 +108,11 @@ proposal + specs/ → 實作（TDD / subagent-driven）→ verification-report �
 
 ## 4. 技術棧
 
+> **元件架構（modular monolith）** — campaign 與 reach 只透過 `shared/event`（Kafka 事件）溝通，
+> 不互相 import 對方 domain；由 ArchUnit `ModuleBoundaryTest` 守門。完整圖見 [§2 UML diagrams](#uml-diagrams)。
+>
+> ![元件架構圖](openspec/changes/archive/2026-06-11-add-ecommerce-campaign-system/diagrams/04-component-architecture.png)
+
 | 面向 | 選型 |
 | --- | --- |
 | 語言 / 執行環境 | **Java 21**（JVM toolchain 鎖定 21） |
@@ -188,15 +193,15 @@ proposal + specs/ → 實作（TDD / subagent-driven）→ verification-report �
 | 指標 | 數值 |
 | --- | --- |
 | 收件人規模（N） | **100,000** |
-| Fan-out 吞吐 | ~37,900 tasks/sec |
-| Dispatch 吞吐 | ~1,130 tasks/sec |
-| Wall time（fan-out + dispatch） | ~91 s |
+| Fan-out 吞吐 | ~35,500 tasks/sec |
+| Dispatch 吞吐 | ~1,080 tasks/sec |
+| Wall time（fan-out + dispatch） | ~95 s |
 | 最終狀態 | **SENT = 100,000**；PENDING/PROCESSING/RETRY/FAILED/DLQ = 0（全收斂） |
-| Used heap（粗略快照） | ~173 MB |
+| Used heap（粗略快照） | ~187 MB |
 
 **隔離性（NFR-002，大量發送不拖垮其他活動）**：DB dispatch 層以 channel-wide FIFO + `SKIP LOCKED`
 非阻塞並發 claim，重活動不會卡住他活動的 claim；request 層則以 `reach.requested` 依 `reach_request_id`
 分區規避 per-campaign 熱分區。由 `heavySendDoesNotStarveOtherCampaigns`（兩 worker 並發 drain）證實。
 
-> 完整報告：[`app/build/reports/load-test/task-12-reach-load-test.md`](app/build/reports/load-test/task-12-reach-load-test.md)（執行壓測後產生）。
+> 完整報告：[`docs/load-test/task-12-reach-load-test.md`](docs/load-test/task-12-reach-load-test.md)（提交進版控的範例執行結果；本機重跑會輸出到 gitignored 的 `app/build/reports/load-test/`）。
 > 註：MVP 以 10 萬筆級壓測驗收；sustained 百萬筆級屬設計演進目標，留作獨立 capacity exercise。
