@@ -77,10 +77,13 @@ class OpenApiSpecExportTest extends AbstractIntegrationTest {
         JsonNode createResponses = doc.at("/paths/~1internal~1campaigns/post/responses");
         assertThat(createResponses.has("201")).isTrue();
 
-        JsonNode statusResponses =
-                doc.at("/paths/~1internal~1campaigns~1{id}~1status/post/responses");
-        assertThat(statusResponses.has("409")).as("stale version → 409 documented").isTrue();
-        assertThat(statusResponses.has("422")).as("illegal transition → 422 documented").isTrue();
+        JsonNode statusResponses = doc.at("/paths/~1internal~1campaigns~1{id}~1status/post/responses");
+        assertThat(statusResponses.has("409"))
+                .as("stale version → 409 documented")
+                .isTrue();
+        assertThat(statusResponses.has("422"))
+                .as("illegal transition → 422 documented")
+                .isTrue();
     }
 
     @Test
@@ -102,25 +105,31 @@ class OpenApiSpecExportTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("CI 上匯出 spec 檔")
     void exportSpecFiles() throws Exception {
-        String json = mockMvc.perform(get("/v3/api-docs"))
+        // Decode the response bytes as UTF-8 explicitly: springdoc's yaml endpoint does not always
+        // tag a charset, so MockMvc's default getContentAsString() would mis-decode CJK as ISO-8859-1
+        // and the on-disk spec would carry mojibake 繁體中文.
+        byte[] jsonBytes = mockMvc.perform(get("/v3/api-docs"))
                 .andExpect(status().isOk())
                 .andReturn()
                 .getResponse()
-                .getContentAsString();
-        String yaml = mockMvc.perform(get("/v3/api-docs.yaml"))
+                .getContentAsByteArray();
+        byte[] yamlBytes = mockMvc.perform(get("/v3/api-docs.yaml"))
                 .andExpect(status().isOk())
                 .andReturn()
                 .getResponse()
-                .getContentAsString();
+                .getContentAsByteArray();
 
         Files.createDirectories(EXPORT_DIR);
         Path jsonFile = EXPORT_DIR.resolve("openapi.json");
         Path yamlFile = EXPORT_DIR.resolve("openapi.yaml");
-        Files.writeString(jsonFile, json, StandardCharsets.UTF_8);
-        Files.writeString(yamlFile, yaml, StandardCharsets.UTF_8);
+        Files.write(jsonFile, jsonBytes);
+        Files.write(yamlFile, yamlBytes);
 
         assertThat(Files.exists(jsonFile)).isTrue();
         assertThat(Files.exists(yamlFile)).isTrue();
-        assertThat(Files.readString(yamlFile, StandardCharsets.UTF_8)).contains("/internal/campaigns");
+        String yamlOnDisk = Files.readString(yamlFile, StandardCharsets.UTF_8);
+        assertThat(yamlOnDisk).contains("/internal/campaigns");
+        // Guard the encoding: the exported spec must carry intact 繁體中文, not mojibake.
+        assertThat(yamlOnDisk).contains("活動");
     }
 }
