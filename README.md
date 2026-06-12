@@ -1,0 +1,221 @@
+# campaign-reach-system
+
+> 讓電商行銷團隊**自己設定活動、自己決定發給誰、由系統可靠地把訊息送出去**，並看得到成效的行銷活動平台後端。
+
+[![CI](https://github.com/BIBIOTA/campaign-reach-system/actions/workflows/ci.yml/badge.svg)](https://github.com/BIBIOTA/campaign-reach-system/actions/workflows/ci.yml)
+[![API Docs](https://img.shields.io/badge/API%20Docs-GitHub%20Pages-blue)](https://bibiota.github.io/campaign-reach-system/)
+
+---
+
+## 1. 這個專案是什麼
+
+### 解決什麼問題
+
+過去公司推行銷活動時，**優惠設定、對象圈選、訊息發送分散在不同工具與流程，且常需要工程介入**。
+結果是：活動上線慢、行銷人員無法自助操作、觸達分散難以管理、發送成效也看不見。
+
+campaign-reach-system 為電商建立一套**統一的行銷活動平台**，把這些能力收斂到一個後端服務，
+讓行銷／營運人員不靠工程就能把活動做完整、把訊息穩定送達、並回頭檢視成效。
+
+### 帶來的商業價值
+
+- **行銷自助、縮短上線前置時間** — 行銷人員自助上線折扣／優惠券活動（首波），不再每檔活動都排工程。
+- **統一且可靠的觸達** — 可**排程定時發送**，也可**依使用者行為即時觸發**（如棄購提醒），訊息穩定送出。
+- **成效全程可追蹤** — 每位收件人是否送達、活動整體送達率／失敗率一目了然，做為活動歸因依據。
+- **能隨規模成長** — 設計上可演進至單次百萬筆級觸達；MVP 已以 10 萬筆級壓測驗證流程可靠跑通。
+- **以營收為終點** — 最終以活動帶來的轉換／營收衡量成效，系統提供可歸因的活動與觸達資料。
+
+### 服務對象
+
+- **主要：行銷／營運人員** — 設定活動內容、優惠規則、觸達對象與發送時機，並查看成效。
+- **次要：內部系統與團隊** — 電商主站（提供使用者行為以觸發活動）、後台前端團隊（呼叫本系統 API）。
+
+### 範圍
+
+本期交付**後端能力**（提供 API 供後台前端與其他內部系統介接），**不含**消費者前台與後台操作介面。
+活動由「優惠規則設定」與「觸達發送設定」兩部分組成，可各自獨立演進；首波聚焦折扣／優惠券活動與 Email 通道，
+其餘活動類型與通道在設計上預留擴充。
+
+> 設計上的一句話分工：**「活動」決定什麼活動要觸發；「觸達」決定要發給誰、怎麼發、何時發。**
+> 詳細需求見 [prd.md](openspec/changes/archive/2026-06-11-add-ecommerce-campaign-system/prd.md)，技術架構見 [§4 技術棧](#4-技術棧) 與 [design.md](openspec/changes/archive/2026-06-11-add-ecommerce-campaign-system/design.md)。
+
+---
+
+## 2. 文件連結
+
+本專案採 **SDD（Spec-Driven Development）** 流程，所有設計與規格文件都隨 change 保存在 `openspec/` 下。
+
+| 文件 | 連結 |
+| --- | --- |
+| 📐 **設計文件（design.md）** | [openspec/changes/archive/2026-06-11-add-ecommerce-campaign-system/design.md](openspec/changes/archive/2026-06-11-add-ecommerce-campaign-system/design.md) |
+| 📋 **產品需求（prd.md）** | [openspec/changes/archive/2026-06-11-add-ecommerce-campaign-system/prd.md](openspec/changes/archive/2026-06-11-add-ecommerce-campaign-system/prd.md) |
+| 🌐 **API 文件（Swagger UI / OpenAPI）** | <https://bibiota.github.io/campaign-reach-system/> |
+
+### UML diagrams
+
+| 圖 | 類型 | 連結 |
+| --- | --- | --- |
+| 觸達全鏈路流程 | Sequence | [01-sequence-reach-flow.puml](openspec/changes/archive/2026-06-11-add-ecommerce-campaign-system/diagrams/01-sequence-reach-flow.puml) · [png](openspec/changes/archive/2026-06-11-add-ecommerce-campaign-system/diagrams/01-sequence-reach-flow.png) |
+| 活動 / Task 生命週期 | State | [02-state-campaign-and-task-lifecycle.puml](openspec/changes/archive/2026-06-11-add-ecommerce-campaign-system/diagrams/02-state-campaign-and-task-lifecycle.puml) · [png](openspec/changes/archive/2026-06-11-add-ecommerce-campaign-system/diagrams/02-state-campaign-and-task-lifecycle.png) |
+| Domain Model | Class | [03-class-domain-model.puml](openspec/changes/archive/2026-06-11-add-ecommerce-campaign-system/diagrams/03-class-domain-model.puml) · [png](openspec/changes/archive/2026-06-11-add-ecommerce-campaign-system/diagrams/03-class-domain-model.png) |
+| 元件架構 | Component | [04-component-architecture.puml](openspec/changes/archive/2026-06-11-add-ecommerce-campaign-system/diagrams/04-component-architecture.puml) · [png](openspec/changes/archive/2026-06-11-add-ecommerce-campaign-system/diagrams/04-component-architecture.png) |
+| 資料庫 schema | ER | [05-er-database-schema.puml](openspec/changes/archive/2026-06-11-add-ecommerce-campaign-system/diagrams/05-er-database-schema.puml) · [png](openspec/changes/archive/2026-06-11-add-ecommerce-campaign-system/diagrams/05-er-database-schema.png) |
+
+> 其他規格：[proposal.md](openspec/changes/archive/2026-06-11-add-ecommerce-campaign-system/proposal.md) ·
+> [tasks.md](openspec/changes/archive/2026-06-11-add-ecommerce-campaign-system/tasks.md) ·
+> [specs/](openspec/changes/archive/2026-06-11-add-ecommerce-campaign-system/specs/) ·
+> [verification-report.md](openspec/changes/archive/2026-06-11-add-ecommerce-campaign-system/verification-report.md)
+
+---
+
+## 3. 開發方式（SDD 流程）
+
+本專案以一套**自訂的 Spec-Driven Development 流程**開發 —
+參見 [BIBIOTA/yuki-marketplace](https://github.com/BIBIOTA/yuki-marketplace)。
+
+每個變更（change）都以 `openspec/changes/{change-id}/` 為單位，依序產出並驗證 artifact：
+
+```
+brainstorm → prd.md → design.md → tasks.md → UML/diagrams →
+proposal + specs/ → 實作（TDD / subagent-driven）→ verification-report → archive
+```
+
+核心原則：
+
+- **先寫 spec、再寫 code**：design.md / prd.md / specs 為單一事實來源；實作必須對齊 scenario 與 UML 契約。
+- **增量交付**：以「每 section 一個 PR」推進（本期 Sections 1–12 對應 PR #4–#14）。
+- **驗證前不宣稱完成**：合併前跑五階段 `verification-before-completion`（lint+test、`openspec validate --strict`、
+  diagram 契約一致性、Figma 狀態一致性、deferred 項），全通過才可 `openspec archive`。
+- **文件即治理**：模組邊界 / lint / CI 規則變動時，[`CLAUDE.md`](CLAUDE.md)、build script、`ModuleBoundaryTest`、
+  `ci.yml` 必須同步更新，避免文件與建置漂移。
+
+---
+
+## 4. 技術棧
+
+| 面向 | 選型 |
+| --- | --- |
+| 語言 / 執行環境 | **Java 21**（JVM toolchain 鎖定 21） |
+| 框架 | **Spring Boot 3.4**（Web / Data JPA / Security / Validation / Kafka） |
+| 建置工具 | **Gradle（Kotlin DSL）** 多模組 + version catalog（`gradle/libs.versions.toml`） |
+| 訊息佇列 | **Apache Kafka**（`spring-kafka`；模組間事件邊界，永不 mock broker） |
+| 資料庫 | **PostgreSQL**，schema 由 **Flyway** migration 擁有（Hibernate `ddl-auto: none`） |
+| 排程鎖 | **ShedLock**（JdbcTemplate LockProvider，去重多實例 `@Scheduled` 掃描） |
+| 韌性 | **Resilience4j**（circuit breaker 包住 EmailAdapter，供應商不可用時穩定降級） |
+| API 文件 | **springdoc-openapi 2.7**（`/v3/api-docs` + `/swagger-ui`）+ 繁中 `@Operation`/`@Schema` 標註 |
+| 格式化 | **Spotless + Palantir Java Format**（單一 formatting 事實來源） |
+| 靜態檢查 | **Checkstyle**（google_checks 去除 layout）、**SpotBugs**（effort=MAX，High/Normal 阻擋） |
+| 架構守門 | **ArchUnit**（模組邊界 `ModuleBoundaryTest`） |
+| 測試 | **JUnit 5** + **Testcontainers**（真實 Kafka + PostgreSQL 整合測試） |
+| 覆蓋率 | **JaCoCo**（`jacocoTestCoverageVerification` 納入 gate） |
+
+---
+
+## 5. 專案啟動方式
+
+### 先決條件
+
+- JDK 21（專案已用 Gradle toolchain 鎖定；只需本機可取得 JDK 21）
+- 執行中的 **PostgreSQL** 與 **Kafka**（本機開發可自備或用容器）
+- 執行整合測試另需 **Docker**（Testcontainers）
+
+### 設定環境變數
+
+`application.yml` 不含任何預設機密，缺值即 fail-fast。啟動前需提供：
+
+```bash
+export DB_URL="jdbc:postgresql://localhost:5432/campaign_reach"
+export DB_USERNAME="postgres"
+export DB_PASSWORD="postgres"
+export KAFKA_BOOTSTRAP_SERVERS="localhost:9092"
+export EMAIL_PROVIDER_API_KEY="<your-email-provider-key>"
+```
+
+### 啟動應用
+
+```bash
+# 開發模式（hot run）
+./gradlew :app:bootRun
+
+# 或先打包再執行
+./gradlew :app:bootJar
+java -jar app/build/libs/app-*.jar
+```
+
+啟動後（預設 `:8080`）：
+
+- 內部 REST API：`http://localhost:8080/internal/campaigns`（HTTP Basic，需 `OPERATOR` 角色）
+- Swagger UI：`http://localhost:8080/swagger-ui/index.html`
+- OpenAPI 規格：`http://localhost:8080/v3/api-docs`
+
+> 線上版 API 文件（GitHub Pages）：<https://bibiota.github.io/campaign-reach-system/>
+
+---
+
+## 6. 測試方式
+
+```bash
+# 自動格式化（commit 前先跑）
+./gradlew spotlessApply
+
+# 個別檢查
+./gradlew spotlessCheck      # 格式
+./gradlew checkstyleMain     # 風格（maxErrors=0）
+./gradlew spotbugsMain       # 靜態分析（High/Normal 阻擋）
+./gradlew test               # 單元 + ArchUnit 邊界 + Testcontainers 整合測試
+
+# 聚合 gate（CI 等效）
+./gradlew check              # 上述全部 + JaCoCo 覆蓋率驗證
+```
+
+**CI gate**（`.github/workflows/ci.yml`，PR 與 push `main` 觸發）執行 `./gradlew check`，
+任一項失敗即阻擋合併。
+
+> **Docker 與整合測試**：Testcontainers 整合測試需 Docker。GitHub runner 具 Docker 會完整執行；
+> 本機無 Docker 時 `@RequiresDocker` 自動 skip，不影響其他檢查。
+
+---
+
+## 7. 測試覆蓋率與壓測報告
+
+### 覆蓋率（JaCoCo）
+
+每個模組透過 convention plugin `campaignreach.java-conventions` 套用 JaCoCo report +
+最低覆蓋率 gate（`jacocoTestCoverageVerification`），並納入 `./gradlew check`。
+各模組可用 `jacocoMinCoverage` property 設定 instruction-coverage 下限（例如 `:shared` 設為 **0.70**）。
+
+本機以 `./gradlew jacocoTestReport` 產出（各模組 `build/reports/jacoco/test/`）。實測各模組覆蓋率：
+
+| 模組 | Instruction | Branch | Line | covered/total（instr） |
+| --- | --- | --- | --- | --- |
+| `:campaign` | 80.6% | 66.5% | 78.9% | 2302 / 2856 |
+| `:reach` | 68.1% | 59.9% | 71.1% | 2409 / 3536 |
+| `:shared` | 89.3% | 75.9% | 87.0% | 459 / 514 |
+| `:app` | 94.2% | — | 89.5% | 81 / 86 |
+| **合計** | **75.1%** | **64.0%** | **75.8%** | **5251 / 6992** |
+
+> 數據為各模組 `jacocoTestReport` 之 instruction/branch/line 覆蓋率。
+> `:reach` 數字僅反映 `:reach` 自身測試任務；部分跨模組行為（如 10 萬筆級全鏈路）由 `:app` 整合測試驅動，
+> 其執行未計入 `:reach` 的 per-module 報告，故 `:reach` 實際被測程度高於上表。
+
+### 壓測報告（Task 12.1 — 10 萬筆級全鏈路可靠性）
+
+以 `ReachLoadReliabilityIntegrationTest` 在真實 Testcontainers（PostgreSQL）上驅動完整鏈路
+（landing → fan-out `ON CONFLICT` → dispatcher `FOR UPDATE SKIP LOCKED` claim + write-back），
+斷言以 DB `GROUP BY` 查回最終狀態分布。
+
+| 指標 | 數值 |
+| --- | --- |
+| 收件人規模（N） | **100,000** |
+| Fan-out 吞吐 | ~37,900 tasks/sec |
+| Dispatch 吞吐 | ~1,130 tasks/sec |
+| Wall time（fan-out + dispatch） | ~91 s |
+| 最終狀態 | **SENT = 100,000**；PENDING/PROCESSING/RETRY/FAILED/DLQ = 0（全收斂） |
+| Used heap（粗略快照） | ~173 MB |
+
+**隔離性（NFR-002，大量發送不拖垮其他活動）**：DB dispatch 層以 channel-wide FIFO + `SKIP LOCKED`
+非阻塞並發 claim，重活動不會卡住他活動的 claim；request 層則以 `reach.requested` 依 `reach_request_id`
+分區規避 per-campaign 熱分區。由 `heavySendDoesNotStarveOtherCampaigns`（兩 worker 並發 drain）證實。
+
+> 完整報告：[`app/build/reports/load-test/task-12-reach-load-test.md`](app/build/reports/load-test/task-12-reach-load-test.md)（執行壓測後產生）。
+> 註：MVP 以 10 萬筆級壓測驗收；sustained 百萬筆級屬設計演進目標，留作獨立 capacity exercise。
