@@ -64,11 +64,19 @@ jobs:
           cp app/build/openapi/openapi.yaml "$SITE/openapi.yaml"
           cp app/build/openapi/openapi.json "$SITE/openapi.json"
 
-          # 2) Postman collection generated from the spec.
+          # 2) Postman collection generated from the spec. parametersResolution=Example makes the
+          #    converter emit the concrete examples the spec carries (operation request bodies, path
+          #    params) instead of <string>/<uuid> schema placeholders, so the imported requests come
+          #    pre-filled with valid, ready-to-send sample values.
           npx -y openapi-to-postmanv2 \
             -s "$SITE/openapi.yaml" \
             -o "$SITE/postman/campaign-reach.postman_collection.json" \
-            -p
+            -p \
+            -O parametersResolution=Example
+          # Inject ready-to-call collection variables (baseUrl + Basic-auth defaults) so the published
+          # collection works right after import without manual variable entry.
+          node docs/scripts/finalize-postman-collection.mjs \
+            "$SITE/postman/campaign-reach.postman_collection.json"
 
           # 3) Self-contained Swagger UI (pinned dist, fetched from npm — not a runtime CDN link).
           npm pack "swagger-ui-dist@${SWAGGER_UI_VERSION}" >/dev/null

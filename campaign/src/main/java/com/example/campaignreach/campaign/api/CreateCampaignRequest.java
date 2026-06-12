@@ -24,6 +24,34 @@ import java.time.Instant;
  * @param targetSpec audience targeting settings
  * @param reachPlan reach delivery settings
  */
+@Schema(
+        description = "建立活動請求。範例為一個可直接送出的 DISCOUNT 百分比折扣活動（滿千 9 折、發 EMAIL 給 VIP）。",
+        example =
+                """
+                {
+                  "name": "夏季全館 9 折",
+                  "type": "DISCOUNT",
+                  "startAt": "2026-07-01T00:00:00Z",
+                  "endAt": "2026-07-31T23:59:59Z",
+                  "ruleConfig": {
+                    "ruleType": "DISCOUNT",
+                    "schema_version": 2,
+                    "kind": "PERCENTAGE",
+                    "percentage": 10,
+                    "thresholdMode": "MIN_SPEND",
+                    "minSpend": 1000
+                  },
+                  "targetSpec": {
+                    "kind": "CONDITION",
+                    "conditions": { "memberTier": "VIP" }
+                  },
+                  "reachPlan": {
+                    "channel": "EMAIL",
+                    "templateRef": "summer-sale-2026",
+                    "timing": "SCHEDULED"
+                  }
+                }
+                """)
 public record CreateCampaignRequest(
         @Schema(description = "活動名稱（必填，不可空白）", example = "夏季全館 9 折") @NotBlank(message = "name must not be blank")
                 String name,

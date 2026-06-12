@@ -1,6 +1,7 @@
 package com.example.campaignreach.reach.metrics;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -47,7 +48,8 @@ public class ReachMetricsController {
         @ApiResponse(responseCode = "401", description = "未通過後台 OPERATOR 認證")
     })
     @GetMapping("/{campaignId}/metrics")
-    public CampaignReachMetrics campaignMetrics(@PathVariable UUID campaignId) {
+    public CampaignReachMetrics campaignMetrics(
+            @Parameter(example = "3fa85f64-5717-4562-b3fc-2c963f66afa6") @PathVariable UUID campaignId) {
         return service.campaignMetrics(campaignId);
     }
 
@@ -58,7 +60,9 @@ public class ReachMetricsController {
         @ApiResponse(responseCode = "401", description = "未通過後台 OPERATOR 認證")
     })
     @GetMapping("/{campaignId}/recipients/{userId}")
-    public RecipientReachView recipientStatus(@PathVariable UUID campaignId, @PathVariable UUID userId) {
+    public RecipientReachView recipientStatus(
+            @Parameter(example = "3fa85f64-5717-4562-b3fc-2c963f66afa6") @PathVariable UUID campaignId,
+            @Parameter(example = "7c9e6679-7425-40de-944b-e07fc1f90ae7") @PathVariable UUID userId) {
         return service.recipientStatus(campaignId, userId);
     }
 }

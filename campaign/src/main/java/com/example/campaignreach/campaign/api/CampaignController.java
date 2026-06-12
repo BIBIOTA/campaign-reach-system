@@ -1,6 +1,7 @@
 package com.example.campaignreach.campaign.api;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -57,7 +58,7 @@ public class CampaignController {
         @ApiResponse(responseCode = "401", description = "未通過後台 OPERATOR 認證")
     })
     @GetMapping("/{id}")
-    public CampaignView get(@PathVariable UUID id) {
+    public CampaignView get(@Parameter(example = "3fa85f64-5717-4562-b3fc-2c963f66afa6") @PathVariable UUID id) {
         return service.get(id);
     }
 
@@ -75,7 +76,9 @@ public class CampaignController {
         @ApiResponse(responseCode = "401", description = "未通過後台 OPERATOR 認證")
     })
     @PatchMapping("/{id}")
-    public CampaignView update(@PathVariable UUID id, @Valid @RequestBody UpdateCampaignRequest request) {
+    public CampaignView update(
+            @Parameter(example = "3fa85f64-5717-4562-b3fc-2c963f66afa6") @PathVariable UUID id,
+            @Valid @RequestBody UpdateCampaignRequest request) {
         return service.update(id, request);
     }
 
@@ -92,7 +95,9 @@ public class CampaignController {
         @ApiResponse(responseCode = "401", description = "未通過後台 OPERATOR 認證")
     })
     @PostMapping("/{id}/status")
-    public CampaignView changeStatus(@PathVariable UUID id, @Valid @RequestBody ChangeCampaignStatusRequest request) {
+    public CampaignView changeStatus(
+            @Parameter(example = "3fa85f64-5717-4562-b3fc-2c963f66afa6") @PathVariable UUID id,
+            @Valid @RequestBody ChangeCampaignStatusRequest request) {
         return service.transition(id, request);
     }
 }
