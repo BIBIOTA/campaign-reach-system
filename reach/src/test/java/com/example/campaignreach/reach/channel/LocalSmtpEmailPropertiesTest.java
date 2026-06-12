@@ -85,5 +85,16 @@ class LocalSmtpEmailPropertiesTest {
                         "localhost", 1025, "from@example.com", "to@example.com", Duration.ofSeconds(-1)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("campaignreach.email-provider.local.timeout");
+
+        // Timeout exceeding Integer.MAX_VALUE ms — JavaMail parses timeout properties as int, so this
+        // would cause NumberFormatException at send time; caught at startup instead.
+        assertThatThrownBy(() -> new LocalSmtpEmailProperties(
+                        "localhost",
+                        1025,
+                        "from@example.com",
+                        "to@example.com",
+                        Duration.ofMillis((long) Integer.MAX_VALUE + 1)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("campaignreach.email-provider.local.timeout");
     }
 }

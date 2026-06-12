@@ -57,5 +57,10 @@ public record LocalSmtpEmailProperties(String host, Integer port, String from, S
         if (value == null || value.isNegative() || value.isZero()) {
             throw new IllegalArgumentException("campaignreach.email-provider.local.timeout must be positive");
         }
+        if (value.toMillis() > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException("campaignreach.email-provider.local.timeout must not exceed "
+                    + Integer.MAX_VALUE
+                    + " milliseconds");
+        }
     }
 }

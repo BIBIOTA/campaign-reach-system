@@ -3,6 +3,7 @@ package com.example.campaignreach.reach.channel;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.resilience4j.springboot3.circuitbreaker.autoconfigure.CircuitBreakerAutoConfiguration;
+import java.time.Clock;
 import java.util.Arrays;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
@@ -77,6 +78,9 @@ class LocalSmtpEmailConfigTest {
                     // registered (component-scan / user-config phase) before EmailAdapterAutoConfiguration's
                     // @ConditionalOnBean is evaluated in the auto-config phase.
                     assertThat(context).hasSingleBean(EmailAdapter.class);
+                    // The render-time clock is passed directly into the provider, NOT registered as a bean,
+                    // so it cannot become an application-wide Clock dependency or clash with another Clock.
+                    assertThat(context).doesNotHaveBean(Clock.class);
                 });
     }
 

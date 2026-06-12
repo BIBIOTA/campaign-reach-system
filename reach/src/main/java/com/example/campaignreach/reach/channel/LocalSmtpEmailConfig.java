@@ -65,29 +65,20 @@ public class LocalSmtpEmailConfig {
     }
 
     /**
-     * The clock the local provider stamps render times with. Kept local-profile-scoped here (rather than
-     * a global bean) so it cannot accidentally become an application-wide {@code Clock} dependency.
-     *
-     * @return a UTC system clock
-     */
-    @Bean
-    public Clock localSmtpClock() {
-        return Clock.systemUTC();
-    }
-
-    /**
      * Registers the local SMTP provider as an {@link EmailProviderClient} (the interface type, so
      * {@link EmailAdapterAutoConfiguration}'s {@code @ConditionalOnBean(EmailProviderClient.class)}
-     * matches and {@link EmailAdapter} activates).
+     * matches and {@link EmailAdapter} activates). The clock is passed directly rather than declared as
+     * a separate {@code @Bean} to avoid registering a global {@code Clock} bean that could conflict with
+     * any other {@code Clock} definition in the context.
      *
      * @param mailSender the local SMTP mail sender
      * @param properties the local SMTP settings (from/recipient)
-     * @param clock the render-time clock
      * @return the local SMTP {@link EmailProviderClient}
      */
     @Bean
     public EmailProviderClient localSmtpEmailProviderClient(
-            JavaMailSender mailSender, LocalSmtpEmailProperties properties, Clock clock) {
-        return new LocalSmtpEmailProviderClient(mailSender, new LocalEmailTemplateRenderer(), properties, clock);
+            JavaMailSender mailSender, LocalSmtpEmailProperties properties) {
+        return new LocalSmtpEmailProviderClient(
+                mailSender, new LocalEmailTemplateRenderer(), properties, Clock.systemUTC());
     }
 }
