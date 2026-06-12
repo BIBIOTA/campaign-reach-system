@@ -107,6 +107,10 @@ public class CampaignController {
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "轉換成功，回傳更新後的活動內容"),
         @ApiResponse(
+                responseCode = "400",
+                description = "請求欄位驗證失敗（如 targetStatus 或 version 為空）",
+                content = @Content(schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
                 responseCode = "404",
                 description = "查無此活動",
                 content = @Content(schema = @Schema(implementation = ApiError.class))),
