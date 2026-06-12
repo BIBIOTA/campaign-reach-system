@@ -24,7 +24,7 @@ containing three bounded modules. All packages are rooted at `com.example.campai
 
 ### Boundary Rules (Hard Constraints)
 
-- **campaign and reach communicate only via `shared/event` (Kafka events) — direct domain imports between them are forbidden.**
+- **campaign and reach communicate only via `shared.event` (Kafka events) — direct domain imports between them are forbidden.**
   Both trigger paths (API-triggered and Scheduler-triggered) converge on the same `reach.requested` topic.
 - Both campaign and reach **may** depend on `shared`; they **must not** depend on each other's domain.
 - `shared` contains only cross-module stable contracts (`event` / `config`) — campaign/reach entities, repositories, and services **must not** be placed here.
