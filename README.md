@@ -47,8 +47,8 @@ campaign-reach-system 為電商建立一套**統一的行銷活動平台**，把
 
 | 文件 | 連結 |
 | --- | --- |
-| 📐 **設計文件（design.md）** | [openspec/changes/archive/2026-06-11-add-ecommerce-campaign-system/design.md](openspec/changes/archive/2026-06-11-add-ecommerce-campaign-system/design.md) |
-| 📋 **產品需求（prd.md）** | [openspec/changes/archive/2026-06-11-add-ecommerce-campaign-system/prd.md](openspec/changes/archive/2026-06-11-add-ecommerce-campaign-system/prd.md) |
+| 📐 **設計文件（design.md）** | [design.md](openspec/changes/archive/2026-06-11-add-ecommerce-campaign-system/design.md) |
+| 📋 **產品需求（prd.md）** | [prd.md](openspec/changes/archive/2026-06-11-add-ecommerce-campaign-system/prd.md) |
 | 🌐 **API 文件（Swagger UI / OpenAPI）** | <https://bibiota.github.io/campaign-reach-system/> |
 
 ### UML diagrams
