@@ -114,3 +114,4 @@
   - [01-sequence-local-email-delivery-flow.puml](./diagrams/01-sequence-local-email-delivery-flow.puml)
   - [02-component-local-smtp-email-architecture.puml](./diagrams/02-component-local-smtp-email-architecture.puml)
 - [ ] Figma designs (spec-driven-dev:writing-figma)
+  - deferred: Figma designs are not required for this backend-only local email delivery change; proposal.md lists Figma Designs as None.
