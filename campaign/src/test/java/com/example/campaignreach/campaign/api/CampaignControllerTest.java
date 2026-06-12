@@ -177,7 +177,8 @@ class CampaignControllerTest {
         UUID id = UUID.randomUUID();
         Campaign stored = discountCampaign(id);
         when(repository.findById(id)).thenReturn(Optional.of(stored));
-        when(repository.save(any(Campaign.class))).thenAnswer(inv -> inv.getArgument(0));
+        // update() flushes via saveAndFlush so the response returns the materialised @Version.
+        when(repository.saveAndFlush(any(Campaign.class))).thenAnswer(inv -> inv.getArgument(0));
 
         // Update only reachPlan; ruleConfig is omitted (null) → must be left unchanged.
         String body = objectMapper.writeValueAsString(Map.of(
@@ -199,7 +200,8 @@ class CampaignControllerTest {
         UUID id = UUID.randomUUID();
         Campaign stored = discountCampaign(id);
         when(repository.findById(id)).thenReturn(Optional.of(stored));
-        when(repository.save(any(Campaign.class))).thenAnswer(inv -> inv.getArgument(0));
+        // update() flushes via saveAndFlush so the response returns the materialised @Version.
+        when(repository.saveAndFlush(any(Campaign.class))).thenAnswer(inv -> inv.getArgument(0));
 
         // Update only ruleConfig; reachPlan omitted → must be left unchanged (EMAIL/tpl-1/SCHEDULED).
         String body = objectMapper.writeValueAsString(Map.of(

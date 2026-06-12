@@ -2,6 +2,7 @@ package com.example.campaignreach.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -117,6 +118,37 @@ class CampaignApiIntegrationTest extends AbstractIntegrationTest {
         Campaign reloaded = repository.findById(created.id()).orElseThrow();
         assertThat(reloaded.getStatus()).isEqualTo(CampaignStatus.DRAFT);
         assertThat(reloaded.getVersion()).isEqualTo(created.version());
+    }
+
+    /**
+     * Scenario (4.1, FR-001): a successful PATCH must return the <em>new</em> optimistic-lock version
+     * in its response body, so a client chaining a follow-up write (a further PATCH or a POST /status)
+     * echoes a current value rather than the stale one it sent — otherwise the next write fails with a
+     * spurious 409. Regression guard: with a plain {@code save()} (no flush) the deferred {@code
+     * @Version} increment is not yet materialised when the response view is built, so the body would
+     * carry the stale pre-update version. Mirrors {@link #legalTransitionViaHttpPersistsStatusAndBumpsVersion}.
+     */
+    @Test
+    void updateViaHttpReturnsBumpedVersionInResponse() throws Exception {
+        Created created = createDraftCampaign();
+
+        String response = mockMvc.perform(patch("/internal/campaigns/" + created.id())
+                        .with(httpBasic(OPERATOR_USER, OPERATOR_PASS))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                Map.of("version", created.version(), "name", "Spring Sale (renamed)"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Spring Sale (renamed)"))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        int returnedVersion = objectMapper.readTree(response).get("version").asInt();
+        assertThat(returnedVersion).isGreaterThan(created.version());
+
+        // The body's version matches what is actually persisted, so it is safe to chain a follow-up write.
+        Campaign reloaded = repository.findById(created.id()).orElseThrow();
+        assertThat(returnedVersion).isEqualTo(reloaded.getVersion());
     }
 
     /** POSTs a valid DRAFT discount campaign over authenticated HTTP and returns its id + version. */
