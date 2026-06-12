@@ -1,6 +1,7 @@
 package com.example.campaignreach.campaign.api;
 
 import com.example.campaignreach.campaign.domain.CampaignStatus;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 
 /**
@@ -16,5 +17,7 @@ import jakarta.validation.constraints.NotNull;
  * @param version the campaign version the client read; a stale value fails the transition with 409
  */
 public record ChangeCampaignStatusRequest(
-        @NotNull(message = "targetStatus must not be null") CampaignStatus targetStatus,
-        @NotNull(message = "version must not be null") Integer version) {}
+        @Schema(description = "請求轉換到的下一個生命週期狀態") @NotNull(message = "targetStatus must not be null")
+                CampaignStatus targetStatus,
+        @Schema(description = "客戶端先前讀到的活動版本（樂觀鎖）；值過期時轉換以 409 失敗") @NotNull(message = "version must not be null")
+                Integer version) {}

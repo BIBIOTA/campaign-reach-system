@@ -14,6 +14,17 @@ dependencies {
     implementation(project(":reach"))
     implementation(project(":shared"))
 
+    // OpenAPI docs: springdoc auto-configures /v3/api-docs + /swagger-ui at runtime and
+    // introspects the component-scanned campaign / reach controllers. The starter lives
+    // only on the deployable; campaign / reach carry annotations only.
+    implementation(libs.springdoc.openapi.starter.webmvc.ui)
+
+    // The deployable declares its own @Order(1) SecurityFilterChain (SwaggerDocsSecurityConfig)
+    // that permits the documentation paths. The security types (HttpSecurity / SecurityFilterChain)
+    // arrive only transitively (implementation-scoped) via :campaign, so they are not on :app's
+    // compile classpath — declare the starter here for the app's own config to compile against.
+    implementation(libs.spring.boot.starter.security)
+
     // Flyway owns the schema (Hibernate ddl-auto: none). The deployable runs the
     // migrations on startup; PostgreSQL 16 requires the -postgresql module too.
     // JPA + driver are needed at runtime so the migrated Campaign entity persists.
