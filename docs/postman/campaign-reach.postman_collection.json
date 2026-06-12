@@ -1921,7 +1921,7 @@
                   "  pm.test('at least one EMAIL reach task is SENT', function () {",
                   "    pm.expect(sent).to.be.above(0);",
                   "  });",
-                  "  postman.setNextRequest(null);",
+                  "  postman.setNextRequest('E2E 5 - Assert Mailpit captured EMAIL');",
                   "} else if (attempt < maxAttempts) {",
                   "  console.log(`SENT not observed yet; polling metrics again (${attempt}/${maxAttempts}) after ${intervalMs}ms`);",
                   "  postman.setNextRequest(pm.info.requestName);",
@@ -1968,6 +1968,118 @@
               ]
             },
             "description": "Polls campaign reach metrics with an upper bound until the asynchronous EMAIL task reaches SENT. This is polling with a configurable interval, not a one-time fixed sleep."
+          },
+          "response": []
+        },
+        {
+          "name": "E2E 5 - Assert Mailpit captured EMAIL",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Mailpit messages endpoint responds', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "const messages = Array.isArray(body)",
+                  "  ? body",
+                  "  : (Array.isArray(body.messages) ? body.messages : (Array.isArray(body.Messages) ? body.Messages : []));",
+                  "const templateRef = pm.collectionVariables.get('e2eTemplateRef');",
+                  "const subjectPrefix = '[Local Campaign Reach]';",
+                  "",
+                  "const matchingMessage = messages.find(function (message) {",
+                  "  const subject = message.Subject || message.subject || '';",
+                  "  return subject.includes(subjectPrefix) && subject.includes(templateRef);",
+                  "});",
+                  "",
+                  "pm.test('Mailpit captured EMAIL subject includes local prefix and templateRef', function () {",
+                  "  pm.expect(templateRef, 'e2eTemplateRef').to.be.a('string').and.not.empty;",
+                  "  pm.expect(messages, 'Mailpit messages').to.be.an('array');",
+                  "  pm.expect(matchingMessage, `message subject containing ${subjectPrefix} and ${templateRef}`).to.exist;",
+                  "});",
+                  "",
+                  "if (matchingMessage) {",
+                  "  console.log(`Mailpit captured matching EMAIL: ${matchingMessage.Subject || matchingMessage.subject}`);",
+                  "}",
+                  "console.log(`Cleanup guidance: clear Mailpit messages before rerunning this folder from ${pm.collectionVariables.get('mailpitBaseUrl')} to avoid cross-run contamination.`);",
+                  "postman.setNextRequest('E2E 6 - Mailpit cleanup instructions');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "host": [
+                "{{mailpitBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "messages"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "description": "Reads Mailpit's local HTTP API after metrics reports SENT and asserts that the provider emitted an EMAIL whose subject includes both [Local Campaign Reach] and the dynamic {{e2eTemplateRef}}."
+          },
+          "response": []
+        },
+        {
+          "name": "E2E 6 - Mailpit cleanup instructions",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Mailpit cleanup guidance is provided', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "console.log(`Cleanup step: open ${pm.collectionVariables.get('mailpitBaseUrl')} and clear the Mailpit inbox before rerunning this local/manual folder.`);",
+                  "console.log('The assertion matches the unique e2eTemplateRef, but clearing Mailpit keeps manual reruns isolated.');",
+                  "postman.setNextRequest(null);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "host": [
+                "{{mailpitBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "messages"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "description": "Non-destructive cleanup prompt. Clear the Mailpit inbox from the local Mailpit UI before rerunning this folder so old captured messages cannot pollute manual acceptance runs."
           },
           "response": []
         }
@@ -2019,6 +2131,11 @@
     {
       "key": "e2ePollIntervalMs",
       "value": "2000",
+      "type": "string"
+    },
+    {
+      "key": "mailpitBaseUrl",
+      "value": "http://localhost:8025",
       "type": "string"
     },
     {
