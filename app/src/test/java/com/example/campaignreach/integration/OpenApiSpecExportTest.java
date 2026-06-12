@@ -101,9 +101,24 @@ class OpenApiSpecExportTest extends AbstractIntegrationTest {
                 .as("create 400 should reference ApiError, not the success CreateCampaignResponse")
                 .endsWith("/ApiError");
 
-        // POST .../{id}/status: 404 / 409 / 422 are all error bodies, not the CampaignView success type.
+        // GET .../{id}: 404 is an error body, not the CampaignView success type.
+        JsonNode getResponses = doc.at("/paths/~1internal~1campaigns~1{id}/get/responses");
+        assertThat(firstSchemaRef(getResponses.at("/404")))
+                .as("get 404 should reference ApiError")
+                .endsWith("/ApiError");
+
+        // PATCH .../{id}: 400 / 404 / 409 are all error bodies.
+        JsonNode updateResponses = doc.at("/paths/~1internal~1campaigns~1{id}/patch/responses");
+        for (String code : new String[] {"400", "404", "409"}) {
+            assertThat(firstSchemaRef(updateResponses.at("/" + code)))
+                    .as("update %s should reference ApiError", code)
+                    .endsWith("/ApiError");
+        }
+
+        // POST .../{id}/status: @Valid on the body can fail with 400, plus 404 / 409 / 422 — all error
+        // bodies, not the CampaignView success type.
         JsonNode statusResponses = doc.at("/paths/~1internal~1campaigns~1{id}~1status/post/responses");
-        for (String code : new String[] {"404", "409", "422"}) {
+        for (String code : new String[] {"400", "404", "409", "422"}) {
             assertThat(firstSchemaRef(statusResponses.at("/" + code)))
                     .as("status %s should reference ApiError", code)
                     .endsWith("/ApiError");
