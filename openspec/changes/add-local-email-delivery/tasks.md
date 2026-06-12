@@ -79,5 +79,7 @@
   - status: not_started
 
 ## Optional artifacts
-- [x] PlantUML diagrams (spec-driven-dev:writing-uml) — required types: sequence, component
+- [x] PlantUML diagrams:
+  - [01-sequence-local-email-delivery-flow.puml](./diagrams/01-sequence-local-email-delivery-flow.puml)
+  - [02-component-local-smtp-email-architecture.puml](./diagrams/02-component-local-smtp-email-architecture.puml)
 - [ ] Figma designs (spec-driven-dev:writing-figma)

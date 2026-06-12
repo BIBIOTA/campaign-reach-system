@@ -156,3 +156,8 @@ Spring context 測試：
 
 - 後續 `writing-plans` 可標記需要更新既有 sequence/component UML，補上 local SMTP provider 與 Mailpit 的本機開發流。
 - 不需要 Figma，因為本 change 沒有前端 UI。
+
+## Diagrams
+
+- [Sequence: 本機 Email 觸達寄送流程](./diagrams/01-sequence-local-email-delivery-flow.puml) — 描述從 `ReachRequested`、fan-out、dispatcher claim 到 SMTP 寄送與 Mailpit 查看信件的時序。
+- [Component: 本機 SMTP Email 架構](./diagrams/02-component-local-smtp-email-architecture.puml) — 描述 campaign/shared/reach 模組、本機 SMTP provider、Spring Mail、Mailpit 與 PostgreSQL 的元件關係。

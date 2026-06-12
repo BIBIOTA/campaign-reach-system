@@ -1,0 +1,46 @@
+@startuml
+title 本機 Email 觸達寄送流程
+
+actor "開發者" as Dev
+participant "Campaign API / Scheduler / Domain Event Consumer" as Campaign
+queue "Kafka\nreach.requested" as Kafka
+participant "Reach Orchestrator" as Orchestrator
+database "PostgreSQL\nreach_request / reach_task" as DB
+participant "ReachTaskDispatcher" as Dispatcher
+participant "EmailAdapter\n(circuit breaker)" as Adapter
+participant "LocalSmtpEmailProviderClient" as Provider
+participant "LocalEmailTemplateRenderer" as Renderer
+participant "Spring Mail\nJavaMailSender" as MailSender
+participant "Mailpit\nSMTP :1025 / UI :8025" as Mailpit
+
+Dev -> Campaign: 建立或觸發 EMAIL reach
+Campaign ->> Kafka: publish ReachRequested
+Kafka ->> Orchestrator: consume ReachRequested
+Orchestrator -> DB: upsert reach_request
+Orchestrator -> DB: fan-out EMAIL reach_task(PENDING)
+
+loop fixed-delay dispatcher poll
+    Dispatcher -> DB: claim EMAIL task\nFOR UPDATE SKIP LOCKED
+    DB --> Dispatcher: ClaimedTask(userId, templateRef)
+    Dispatcher -> Adapter: send(ReachMessage)
+    Adapter -> Provider: deliver(ReachMessage)
+    Provider -> Renderer: render(message, now)
+    Renderer --> Provider: subject + body
+    Provider -> MailSender: send(from, fixed recipient, subject, body)
+    MailSender -> Mailpit: SMTP DATA
+    Mailpit --> MailSender: accepted
+    MailSender --> Provider: message accepted
+    Provider --> Adapter: SendResult(providerMessageId)
+    Adapter --> Dispatcher: SendResult
+    Dispatcher -> DB: markSent(taskId, providerMessageId)
+end
+
+Dev -> Mailpit: 開啟 http://localhost:8025 查看信件
+
+note right of Provider
+  固定 recipient 只存在本機 provider 設定。
+  reach_task、Kafka event、ReachMessage
+  不保存 email address。
+end note
+
+@enduml
