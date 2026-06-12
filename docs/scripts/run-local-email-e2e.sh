@@ -2,8 +2,9 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-COLLECTION="${ROOT_DIR}/docs/postman/campaign-reach.postman_collection.json"
-ENVIRONMENT="${ROOT_DIR}/docs/postman/local-email-e2e.postman_environment.json"
+cd "$ROOT_DIR"
+COLLECTION="docs/postman/campaign-reach.postman_collection.json"
+ENVIRONMENT="docs/postman/local-email-e2e.postman_environment.json"
 FOLDER="local/manual EMAIL e2e acceptance"
 
 BASE_URL="${BASE_URL:-http://localhost:8080}"
