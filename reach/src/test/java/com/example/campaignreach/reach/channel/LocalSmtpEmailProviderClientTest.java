@@ -5,16 +5,23 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.example.campaignreach.shared.event.Channel;
+import java.lang.reflect.RecordComponent;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Arrays;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
+import org.slf4j.LoggerFactory;
 import org.springframework.mail.MailException;
 import org.springframework.mail.MailSendException;
 import org.springframework.mail.SimpleMailMessage;
@@ -87,5 +94,82 @@ class LocalSmtpEmailProviderClientTest {
         assertThatThrownBy(() -> client.deliver(message))
                 .isInstanceOf(MailException.class)
                 .isNotInstanceOf(NonRetryableSendException.class);
+    }
+
+    @Test
+    @DisplayName("Fixed local recipient is not persisted")
+    void fixedLocalRecipientIsNotPersisted() {
+        // A recognizable recipient sourced ONLY from local provider configuration.
+        String fixedRecipient = "local-inbox@example.test";
+        LocalSmtpEmailProperties configWithFixedRecipient =
+                new LocalSmtpEmailProperties("localhost", 1025, FROM, fixedRecipient, Duration.ofSeconds(5));
+
+        JavaMailSender mailSender = Mockito.mock(JavaMailSender.class);
+        LocalSmtpEmailProviderClient client = new LocalSmtpEmailProviderClient(
+                mailSender, renderer, configWithFixedRecipient, fixedClock, () -> "local-smtp-fixed");
+        ReachMessage message = new ReachMessage(USER_ID, Channel.EMAIL, TEMPLATE_REF);
+
+        client.deliver(message);
+
+        ArgumentCaptor<SimpleMailMessage> captor = ArgumentCaptor.forClass(SimpleMailMessage.class);
+        verify(mailSender).send(captor.capture());
+        SimpleMailMessage sent = captor.getValue();
+
+        // The recipient is read ONLY from local provider configuration, not from the ReachMessage.
+        assertThat(sent.getTo()).containsExactly(fixedRecipient);
+
+        // The rendered body must NOT embed the recipient address (no recipient PII in content).
+        assertThat(sent.getText()).doesNotContain(fixedRecipient);
+
+        // Structural proof that ReachMessage carries no email/recipient field: its record components are
+        // exactly (userId, channel, templateRef) — there is no accessor that could carry an email address.
+        List<String> componentNames = Arrays.stream(ReachMessage.class.getRecordComponents())
+                .map(RecordComponent::getName)
+                .toList();
+        assertThat(componentNames).containsExactly("userId", "channel", "templateRef");
+        assertThat(componentNames)
+                .noneMatch(name -> name.toLowerCase().contains("email")
+                        || name.toLowerCase().contains("recipient")
+                        || name.toLowerCase().contains("address"));
+    }
+
+    @Test
+    @DisplayName("Provider logs remain conservative")
+    void providerLogsRemainConservative() {
+        String fixedRecipient = "local-inbox@example.test";
+        LocalSmtpEmailProperties configWithFixedRecipient =
+                new LocalSmtpEmailProperties("localhost", 1025, FROM, fixedRecipient, Duration.ofSeconds(5));
+
+        JavaMailSender mailSender = Mockito.mock(JavaMailSender.class);
+        LocalSmtpEmailProviderClient client = new LocalSmtpEmailProviderClient(
+                mailSender, renderer, configWithFixedRecipient, fixedClock, () -> "local-smtp-fixed");
+        ReachMessage message = new ReachMessage(USER_ID, Channel.EMAIL, TEMPLATE_REF);
+
+        // Capture log events emitted by the provider client logger at DEBUG (the per-send log level).
+        ch.qos.logback.classic.Logger clientLogger =
+                (ch.qos.logback.classic.Logger) LoggerFactory.getLogger(LocalSmtpEmailProviderClient.class);
+        Level previousLevel = clientLogger.getLevel();
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        clientLogger.addAppender(appender);
+        clientLogger.setLevel(Level.DEBUG);
+        try {
+            client.deliver(message);
+        } finally {
+            clientLogger.detachAppender(appender);
+            clientLogger.setLevel(previousLevel);
+        }
+
+        String logText =
+                appender.list.stream().map(ILoggingEvent::getFormattedMessage).reduce("", (a, b) -> a + "\n" + b);
+
+        // The conservative log includes the provider message id and the userId identifier.
+        assertThat(logText).contains("local-smtp-fixed").contains(USER_ID.toString());
+
+        // It must NOT leak any recipient PII or email content: recipient/from address, subject, body notice.
+        assertThat(logText).doesNotContain(fixedRecipient);
+        assertThat(logText).doesNotContain(FROM);
+        assertThat(logText).doesNotContain("[Local Campaign Reach]");
+        assertThat(logText).doesNotContain("This is a LOCAL TEST email from campaign-reach-system");
     }
 }

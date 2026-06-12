@@ -4,6 +4,8 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 import java.util.function.Supplier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.mail.MailException;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
@@ -35,9 +37,13 @@ import org.springframework.mail.javamail.JavaMailSender;
  * profile/mode-gated registration is the local provider configuration's job, keeping it off the
  * default component scan and trivially unit-testable with a mock {@link JavaMailSender}.
  *
- * <p><strong>PII discipline.</strong> This client does not log the email body or the recipient address.
+ * <p><strong>PII discipline.</strong> This client does not log the email body, subject, from-address, or
+ * the recipient address. The single conservative success log is limited to non-PII identifiers: the
+ * provider message id plus the {@code userId} and {@code templateRef} routing identifiers.
  */
 public final class LocalSmtpEmailProviderClient implements EmailProviderClient {
+
+    private static final Logger LOG = LoggerFactory.getLogger(LocalSmtpEmailProviderClient.class);
 
     /** Marks a provider message id as locally generated (no real SMTP message id is available). */
     private static final String LOCAL_MESSAGE_ID_PREFIX = "local-smtp-";
@@ -117,6 +123,17 @@ public final class LocalSmtpEmailProviderClient implements EmailProviderClient {
         mailSender.send(mail);
 
         // SimpleMailMessage send() returns no provider id, so emit a locally generated one.
-        return new SendResult(messageIdSupplier.get());
+        String providerMessageId = messageIdSupplier.get();
+
+        // Conservative operational log: identifiers only. The recipient/from address, subject, and body
+        // are deliberately excluded to keep recipient PII out of logs (spec「Provider logs remain
+        // conservative」). userId/templateRef are non-PII routing identifiers.
+        LOG.debug(
+                "Local SMTP email delivered: providerMessageId={} userId={} templateRef={}",
+                providerMessageId,
+                message.userId(),
+                message.templateRef());
+
+        return new SendResult(providerMessageId);
     }
 }
