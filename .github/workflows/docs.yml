@@ -87,12 +87,17 @@ jobs:
              "$SITE/swagger-ui/"
           cp package/index.html "$SITE/swagger-ui/index.html"
           # Point Swagger UI at our exported spec instead of the bundled petstore demo.
+          # supportedSubmitMethods: [] disables "Try it out": this is a STATIC Pages site with no
+          # backend behind it, so an interactive request would only fail (CORS / connection refused).
+          # The browse/read experience stays intact; to actually exercise the API, run the app locally
+          # and open its own springdoc /swagger-ui (which keeps Try it out enabled).
           cat > "$SITE/swagger-ui/swagger-initializer.js" <<'JS'
           window.onload = function () {
             window.ui = SwaggerUIBundle({
               url: "../openapi.yaml",
               dom_id: "#swagger-ui",
               deepLinking: true,
+              supportedSubmitMethods: [],
               presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
               layout: "StandaloneLayout",
             });
