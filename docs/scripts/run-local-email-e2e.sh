@@ -51,10 +51,11 @@ curl -fsS -X DELETE "${MAILPIT_BASE_URL}/api/v1/messages" \
   -H "Content-Type: application/json" \
   -d '{}' >/dev/null
 
-echo "Running Newman folder '${FOLDER}' against ${BASE_URL}..."
+echo "Running Newman folder '${FOLDER}' against ${BASE_URL} (poll delay ${E2E_POLL_INTERVAL_MS}ms)..."
 "${NEWMAN[@]}" run "${COLLECTION}" \
   --environment "${ENVIRONMENT}" \
   --folder "${FOLDER}" \
+  --delay-request "${E2E_POLL_INTERVAL_MS}" \
   --env-var "baseUrl=${BASE_URL}" \
   --env-var "basicAuthUsername=${OPERATOR_USERNAME}" \
   --env-var "basicAuthPassword=${OPERATOR_PASSWORD}" \
