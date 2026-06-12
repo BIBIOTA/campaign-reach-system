@@ -52,35 +52,36 @@
   - Depends on: 2.2
   - Independence: serial
   - status: passing
-- [ ] 4.3 確保新 Java 檔通過既有 gate 並處理 JaCoCo 覆蓋
+- [x] 4.3 確保新 Java 檔通過既有 gate 並處理 JaCoCo 覆蓋
   - Acceptance: WHEN `./gradlew check` 執行 THEN spotless / checkstyle / spotbugs / ArchUnit / JaCoCo 全通過 AND `OpenApiConfig`、`SwaggerDocsSecurityConfig` 不致使覆蓋率門檻失敗（必要時納入既有排除設定，並於 PR 說明理由）
   - Depends on: 2.1, 2.2, 4.1, 4.2
   - Independence: serial
-  - status: not_started
+  - status: passing
+  - Note: `:app` 覆蓋率 floor 為預設 0.00，且整合測試會帶到兩個 config bean，無需新增 JaCoCo 排除。
 
 ## 5. Postman collection
-- [ ] 5.1 由 OpenAPI spec 產生 Postman collection 並提交一份到 repo
+- [x] 5.1 由 OpenAPI spec 產生 Postman collection 並提交一份到 repo
   - Acceptance: WHEN 以 `openapi-to-postmanv2` 從 `openapi.yaml` 轉換 THEN 產出 `docs/postman/campaign-reach.postman_collection.json` AND 含所有 `/internal/**` 端點 AND collection 設定 HTTP Basic 認證變數方便使用者填入帳密
   - Depends on: 4.1
   - Independence: serial
-  - status: not_started
+  - status: passing
 
 ## 6. GitHub Pages 部署
-- [ ] 6.1 新增 Pages landing 與 Swagger UI 靜態資產組裝
+- [x] 6.1 新增 Pages landing 與 Swagger UI 靜態資產組裝
   - Acceptance: WHEN 組裝靜態站 THEN 使用自包含 `swagger-ui-dist`（版本鎖定，不依賴 CDN）指向 `./openapi.yaml` AND `docs/index.html` landing 連到 Swagger UI 與 Postman 下載
   - Depends on: 4.1, 5.1
   - Independence: serial
-  - status: not_started
-- [ ] 6.2 新增 `.github/workflows/docs.yml` 部署到 GitHub Pages
+  - status: passing
+- [x] 6.2 新增 `.github/workflows/docs.yml` 部署到 GitHub Pages
   - Acceptance: WHEN push 到 `main` 或手動 `workflow_dispatch` THEN workflow 跑 `OpenApiSpecExportTest` 產 spec → 產 Postman → 組 Swagger UI 站 → `upload-pages-artifact` + `deploy-pages` AND 宣告 `permissions: pages: write, id-token: write` AND 與既有 `ci.yml` 分離（不影響品質 gate）
   - Depends on: 6.1
   - Independence: serial
-  - status: not_started
-- [ ] 6.3 記錄 Pages 手動前置設定
+  - status: passing
+- [x] 6.3 記錄 Pages 手動前置設定
   - Acceptance: WHEN 文件被閱讀 THEN 註明需於 repo Settings → Pages → Source 設為「GitHub Actions」（此步驟無法用程式碼完成）
   - Depends on: 6.2
   - Independence: serial
-  - status: not_started
+  - status: passing
 
 ## Optional artifacts
 - [ ] PlantUML diagrams (spec-driven-dev:writing-uml)

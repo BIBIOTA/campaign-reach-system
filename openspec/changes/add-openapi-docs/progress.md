@@ -21,3 +21,15 @@
 - Next action: 進入 task 5.1（由 spec 產生 Postman collection）。
 - Blockers: 無。
 - Note: 4.3（完整 gate / JaCoCo）保留至所有程式碼落地後一次性 `./gradlew check` 驗證。
+
+## Session 3 — 2026-06-12 11:55
+- Stage: TDD
+- Task: 5.1 / 6.1 / 6.2 / 6.3 / 4.3（Postman + Pages + 完整 gate）
+- Transition: in_progress → passing
+- Evidence:
+  - Commits: `fix: export OpenAPI spec as UTF-8 and apply basicAuth globally`; `feat: add generated Postman collection for /internal API`; `feat: add GitHub Pages docs site (Swagger UI landing) and docs.yml deploy workflow`
+  - Postman: `openapi-to-postmanv2` 產出 `docs/postman/campaign-reach.postman_collection.json`，含全部 6 個 `/internal` 端點，collection auth = basic（`{{basicAuthUsername}}`/`{{basicAuthPassword}}`）。
+  - Pages: `docs/index.html` landing + `.github/workflows/docs.yml`（push main / workflow_dispatch；permissions pages:write+id-token:write；自包含 swagger-ui-dist 5.18.2，無 CDN；與 ci.yml 分離）。YAML 經 ruby 解析通過；swagger-ui-dist 檔案清單已驗證 cp 目標皆存在。
+  - Gate: `./gradlew check` → BUILD SUCCESSFUL in 2m 9s（spotless / checkstyle / spotbugs / ArchUnit ModuleBoundaryTest / JaCoCo / 全部測試）。
+- Next action: 進入 `spec-driven-dev:verification-before-completion`。
+- Blockers: 無。
