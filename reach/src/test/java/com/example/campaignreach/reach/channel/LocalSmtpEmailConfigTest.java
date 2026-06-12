@@ -40,7 +40,7 @@ class LocalSmtpEmailConfigTest {
             .withConfiguration(UserConfigurations.of(EmailChannelConfig.class, LocalSmtpEmailConfig.class));
 
     @Test
-    @DisplayName("非 local profile 時不註冊本機 EmailProviderClient，且 EmailAdapter 不啟用")
+    @DisplayName("Local SMTP provider is disabled outside explicit local mode")
     void localProviderIsDisabledOutsideExplicitLocalMode() {
         // No "local" profile active and mode unset: the whole LocalSmtpEmailConfig is gated off.
         runner.withPropertyValues(FULL_LOCAL_SETTINGS).run(context -> {
@@ -64,7 +64,7 @@ class LocalSmtpEmailConfigTest {
     }
 
     @Test
-    @DisplayName("local profile + mode=smtp-local + 完整設定時，註冊本機 EmailProviderClient 並啟用 EmailAdapter")
+    @DisplayName("Local SMTP provider activates when local mode is complete")
     void localProviderActivatesWhenLocalModeIsComplete() {
         runner.withInitializer(ctx -> ctx.getEnvironment().setActiveProfiles("local"))
                 .withPropertyValues(FULL_LOCAL_SETTINGS)

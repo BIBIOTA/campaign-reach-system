@@ -83,34 +83,35 @@
 > 路線 B：以外部腳本驅動 running 的本機 stack（`docker compose up -d` + `local` profile app），
 > 驗證「建立活動 → 啟用 → 觸達寄送」完整鏈路，最後以 Mailpit HTTP API 斷言信件被捕捉。
 > 此腳本為本機 / 手動驗收用，**不納入 `./gradlew check` CI gate**（gate 仍由 4.x 的 JVM 測試負責）。
-- [ ] 5.1 擴充 Postman collection 為全鏈路驗收流程
+- [x] 5.1 擴充 Postman collection 為全鏈路驗收流程
   - Acceptance: WHEN 在既有 `docs/postman/campaign-reach.postman_collection.json` 基礎上擴充 THEN collection 含一條依序執行的 EMAIL 驗收流程：建立活動 → 啟用（狀態轉換）→ 查詢 metrics
   - Acceptance: WHEN 觸達鏈路為非同步 THEN 驗收流程以輪詢（含上限次數與間隔）等待 task 進入 `SENT`，不使用固定 sleep
   - Acceptance: WHEN 步驟需後台認證 THEN 沿用既有 collection 變數 `basicAuthUsername` / `basicAuthPassword`（不新增 auth 變數），並由 newman 環境檔覆寫其值，collection 不硬編秘密
   - Depends on: 2.2, 3.1
   - Independence: parallel-safe
-  - status: not_started
-- [ ] 5.2 加入 Mailpit HTTP API 寄送斷言
+  - status: passing
+- [x] 5.2 加入 Mailpit HTTP API 寄送斷言
   - Acceptance: WHEN metrics 顯示 task `SENT` THEN 腳本呼叫 Mailpit HTTP API（`GET http://localhost:8025/api/v1/messages`）斷言對應信件存在，且 subject 含 `[Local Campaign Reach]` 與 `templateRef`
   - Acceptance: WHEN 斷言完成 THEN 腳本提供清空 Mailpit 信箱的步驟或提示，避免重跑互相污染
   - Depends on: 5.1
   - Independence: serial
-  - status: not_started
-- [ ] 5.3 提供 newman 執行腳本與環境檔
+  - status: passing
+- [x] 5.3 提供 newman 執行腳本與環境檔
   - Acceptance: WHEN 開發者執行 newman（例如 `newman run` 搭配本機環境檔）THEN 在 stack 已啟動下能一鍵跑完整條驗收流程並回傳通過 / 失敗
   - Acceptance: WHEN 環境檔提供 THEN 內含 base URL、`basicAuthUsername` / `basicAuthPassword`（覆寫 collection 既有變數）、Mailpit base URL 等可調參數，且不含真實秘密
   - Depends on: 5.1, 5.2
   - Independence: serial
-  - status: not_started
-- [ ] 5.4 更新 README 端到端驗收說明
+  - status: passing
+- [x] 5.4 更新 README 端到端驗收說明
   - Acceptance: WHEN 開發者閱讀 README THEN 能依步驟啟動 stack、以 `local` profile 啟動 app、執行 newman 驗收腳本，並理解此腳本驗收的是本機全鏈路
   - Acceptance: WHEN README 描述此驗收 THEN 明確說明它依賴本機 Mailpit、固定 recipient，且不納入 CI gate
   - Depends on: 5.3
   - Independence: serial
-  - status: not_started
+  - status: passing
 
 ## Optional artifacts
 - [x] PlantUML diagrams:
   - [01-sequence-local-email-delivery-flow.puml](./diagrams/01-sequence-local-email-delivery-flow.puml)
   - [02-component-local-smtp-email-architecture.puml](./diagrams/02-component-local-smtp-email-architecture.puml)
 - [ ] Figma designs (spec-driven-dev:writing-figma)
+  - deferred: Figma designs are not required for this backend-only local email delivery change; proposal.md lists Figma Designs as None.

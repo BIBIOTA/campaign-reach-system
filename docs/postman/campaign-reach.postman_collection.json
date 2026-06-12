@@ -1684,6 +1684,340 @@
           ]
         }
       ]
+    },
+    {
+      "name": "local/manual EMAIL e2e acceptance",
+      "description": "Manual/local Newman acceptance flow for the EMAIL reach path. Run against a local stack; Task 5.3 will provide the Newman environment/setup that supplies {{e2eAudienceListId}} for a STATIC_LIST with at least one member. Requests inherit the collection Basic Auth variables basicAuthUsername/basicAuthPassword; override those from the Newman environment file.",
+      "item": [
+        {
+          "name": "E2E 1 - Create EMAIL campaign",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const runId = `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;",
+                  "const audienceListId = pm.variables.get('e2eAudienceListId');",
+                  "if (!audienceListId || audienceListId === '00000000-0000-0000-0000-000000000000') {",
+                  "  throw new Error('Set collection/environment variable e2eAudienceListId to a pre-seeded audience_list.id with at least one member before running the EMAIL e2e flow.');",
+                  "}",
+                  "const now = Date.now();",
+                  "pm.collectionVariables.set('e2eRunId', runId);",
+                  "pm.collectionVariables.set('e2eTemplateRef', `local-email-e2e-${runId}`);",
+                  "pm.collectionVariables.set('e2eStartAt', new Date(now - 2 * 60 * 60 * 1000).toISOString());",
+                  "pm.collectionVariables.set('e2eEndAt', new Date(now + 2 * 60 * 60 * 1000).toISOString());",
+                  "pm.collectionVariables.set('e2ePollAttempt', '0');",
+                  "pm.collectionVariables.unset('e2eCampaignId');",
+                  "pm.collectionVariables.unset('e2eCampaignVersion');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('campaign is created as DRAFT', function () {",
+                  "  pm.response.to.have.status(201);",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.id, 'campaign id').to.be.a('string').and.not.empty;",
+                  "  pm.expect(body.status).to.eql('DRAFT');",
+                  "  pm.expect(body.version, 'campaign version').to.be.a('number');",
+                  "  pm.collectionVariables.set('e2eCampaignId', body.id);",
+                  "  pm.collectionVariables.set('e2eCampaignVersion', String(body.version));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "internal",
+                "campaigns"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "description": "Creates a DRAFT EMAIL campaign for the local end-to-end reach acceptance flow.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Local EMAIL e2e {{e2eRunId}}\",\n  \"type\": \"DISCOUNT\",\n  \"startAt\": \"{{e2eStartAt}}\",\n  \"endAt\": \"{{e2eEndAt}}\",\n  \"ruleConfig\": {\n    \"ruleType\": \"DISCOUNT\",\n    \"schema_version\": 2,\n    \"kind\": \"AMOUNT\",\n    \"amount\": 100,\n    \"thresholdMode\": \"NONE\"\n  },\n  \"targetSpec\": {\n    \"kind\": \"STATIC_LIST\",\n    \"listId\": \"{{e2eAudienceListId}}\"\n  },\n  \"reachPlan\": {\n    \"channel\": \"EMAIL\",\n    \"templateRef\": \"{{e2eTemplateRef}}\",\n    \"timing\": \"SCHEDULED\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "headerFamily": "json",
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "E2E 2 - Transition DRAFT to SCHEDULED",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('campaign transitions to SCHEDULED', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.id).to.eql(pm.collectionVariables.get('e2eCampaignId'));",
+                  "  pm.expect(body.status).to.eql('SCHEDULED');",
+                  "  pm.expect(body.version, 'campaign version').to.be.a('number');",
+                  "  pm.collectionVariables.set('e2eCampaignVersion', String(body.version));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "internal",
+                "campaigns",
+                ":id",
+                "status"
+              ],
+              "query": [],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{e2eCampaignId}}"
+                }
+              ]
+            },
+            "description": "Moves the e2e campaign through the required DRAFT to SCHEDULED lifecycle edge. SCHEDULED is the only manual edge in this flow: because the campaign startAt is set in the past, CampaignLifecycleScheduler then auto-advances SCHEDULED -> RUNNING (operators never flip RUNNING by hand), and the reach scan fires EMAIL for the now-RUNNING campaign. The next step polls metrics for that scheduler-driven result.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"targetStatus\": \"SCHEDULED\",\n  \"version\": {{e2eCampaignVersion}}\n}",
+              "options": {
+                "raw": {
+                  "headerFamily": "json",
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "E2E 3 - Poll metrics until SENT",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('metrics endpoint responds', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "const distribution = body.statusDistribution || {};",
+                  "const sent = Number(distribution.SENT || 0);",
+                  "const attempt = Number(pm.collectionVariables.get('e2ePollAttempt') || 0) + 1;",
+                  "const maxAttempts = Number(pm.collectionVariables.get('e2eMaxPollAttempts') || 60);",
+                  "const intervalMs = Number(pm.collectionVariables.get('e2ePollIntervalMs') || 2000);",
+                  "pm.collectionVariables.set('e2ePollAttempt', String(attempt));",
+                  "",
+                  "if (sent > 0) {",
+                  "  pm.test('at least one EMAIL reach task is SENT', function () {",
+                  "    pm.expect(sent).to.be.above(0);",
+                  "  });",
+                  "  postman.setNextRequest('E2E 4 - Assert Mailpit captured EMAIL');",
+                  "} else if (attempt < maxAttempts) {",
+                  "  console.log(`SENT not observed yet; polling metrics again (${attempt}/${maxAttempts}). Pace requests with newman --delay-request ${intervalMs}ms.`);",
+                  "  postman.setNextRequest(pm.info.requestName);",
+                  "} else {",
+                  "  pm.test('at least one EMAIL reach task is SENT before poll limit', function () {",
+                  "    pm.expect(sent, `statusDistribution.SENT after ${attempt} attempts`).to.be.above(0);",
+                  "  });",
+                  "  postman.setNextRequest(null);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "internal",
+                "reach",
+                "campaigns",
+                ":campaignId",
+                "metrics"
+              ],
+              "query": [],
+              "variable": [
+                {
+                  "key": "campaignId",
+                  "value": "{{e2eCampaignId}}"
+                }
+              ]
+            },
+            "description": "Polls campaign reach metrics with an upper bound until the asynchronous EMAIL task reaches SENT. This waits for the scheduler-driven chain (auto-start SCHEDULED -> RUNNING at the past startAt, then reach scan -> dispatch -> SMTP). It is polling with a configurable interval (paced by newman --delay-request), not a one-time fixed sleep."
+          },
+          "response": []
+        },
+        {
+          "name": "E2E 4 - Assert Mailpit captured EMAIL",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Mailpit messages endpoint responds', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "const messages = Array.isArray(body)",
+                  "  ? body",
+                  "  : (Array.isArray(body.messages) ? body.messages : (Array.isArray(body.Messages) ? body.Messages : []));",
+                  "const templateRef = pm.collectionVariables.get('e2eTemplateRef');",
+                  "const subjectPrefix = '[Local Campaign Reach]';",
+                  "",
+                  "const matchingMessage = messages.find(function (message) {",
+                  "  const subject = message.Subject || message.subject || '';",
+                  "  return subject.includes(subjectPrefix) && subject.includes(templateRef);",
+                  "});",
+                  "",
+                  "pm.test('Mailpit captured EMAIL subject includes local prefix and templateRef', function () {",
+                  "  pm.expect(templateRef, 'e2eTemplateRef').to.be.a('string').and.not.empty;",
+                  "  pm.expect(messages, 'Mailpit messages').to.be.an('array');",
+                  "  pm.expect(matchingMessage, `message subject containing ${subjectPrefix} and ${templateRef}`).to.exist;",
+                  "});",
+                  "",
+                  "if (matchingMessage) {",
+                  "  console.log(`Mailpit captured matching EMAIL: ${matchingMessage.Subject || matchingMessage.subject}`);",
+                  "}",
+                  "console.log(`Cleanup guidance: clear Mailpit messages before rerunning this folder from ${pm.collectionVariables.get('mailpitBaseUrl')} to avoid cross-run contamination.`);",
+                  "postman.setNextRequest('E2E 5 - Mailpit cleanup instructions');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "host": [
+                "{{mailpitBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "messages"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "description": "Reads Mailpit's local HTTP API after metrics reports SENT and asserts that the provider emitted an EMAIL whose subject includes both [Local Campaign Reach] and the dynamic {{e2eTemplateRef}}."
+          },
+          "response": []
+        },
+        {
+          "name": "E2E 5 - Mailpit cleanup instructions",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Mailpit cleanup guidance is provided', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "console.log(`Cleanup step: open ${pm.collectionVariables.get('mailpitBaseUrl')} and clear the Mailpit inbox before rerunning this local/manual folder.`);",
+                  "console.log('The assertion matches the unique e2eTemplateRef, but clearing Mailpit keeps manual reruns isolated.');",
+                  "postman.setNextRequest(null);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "host": [
+                "{{mailpitBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "messages"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "description": "Non-destructive cleanup prompt. Clear the Mailpit inbox from the local Mailpit UI before rerunning this folder so old captured messages cannot pollute manual acceptance runs."
+          },
+          "response": []
+        }
+      ]
     }
   ],
   "auth": {
@@ -1716,6 +2050,61 @@
     {
       "key": "basicAuthPassword",
       "value": "operator-pass",
+      "type": "string"
+    },
+    {
+      "key": "e2eAudienceListId",
+      "value": "00000000-0000-0000-0000-000000000000",
+      "type": "string"
+    },
+    {
+      "key": "e2eMaxPollAttempts",
+      "value": "60",
+      "type": "string"
+    },
+    {
+      "key": "e2ePollIntervalMs",
+      "value": "2000",
+      "type": "string"
+    },
+    {
+      "key": "mailpitBaseUrl",
+      "value": "http://localhost:8025",
+      "type": "string"
+    },
+    {
+      "key": "e2eRunId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "e2eTemplateRef",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "e2eStartAt",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "e2eEndAt",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "e2eCampaignId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "e2eCampaignVersion",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "e2ePollAttempt",
+      "value": "0",
       "type": "string"
     }
   ],
