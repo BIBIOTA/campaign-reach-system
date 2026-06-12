@@ -242,7 +242,7 @@
   - Depends on: 9.2, 9.3, 10.1, 10.3
   - Independence: serial
   - status: passing
-  - verification-pending: 本沙箱 Testcontainers 無法連 Docker daemon，新增的 `ReachLoadReliabilityIntegrationTest`（@RequiresDocker）於本機 auto-skip；真實 10 萬筆級收斂跑完與報告實際數值（處理速率/各狀態分布/資源使用）待有 Docker 的 CI 環境實跑（verification-before-completion Stage 5）。收斂與隔離斷言邏輯在任何實跑 N 下皆成立；真正 sustained 百萬筆級留作獨立 capacity exercise。
+  - resolved（本地實跑）: 升級 Testcontainers 1.20.4→1.21.4（並於 convention plugin 以 `extra["testcontainers.version"]` 覆寫 Spring Boot BOM 管的版本）後，`ReachLoadReliabilityIntegrationTest`（@RequiresDocker）已於本地 Docker Engine 29.4.0 真實跑完（非 auto-skip）。`./gradlew check` 全綠：tests=251 failures=0 errors=0 **skipped=0**（先前 49 個 Docker IT 由 auto-skip 變為實跑）。10 萬筆級實測數值：N=100,000、全數收斂 **SENT=100000**（PENDING/PROCESSING/RETRY_SCHEDULED/FAILED/DLQ/CANCELLED 皆 0）、fan-out 35,188 tasks/sec（2,841ms）、dispatch 1,142 tasks/sec（87,553ms）、wall≈90.4s、heap≈195MB（報告：`app/build/reports/load-test/task-12-reach-load-test.md`）。原因為 Engine 29 MinAPIVersion≥1.40 拒絕舊 docker-java 預設協商的 API 版本（HTTP 400），與沙箱/daemon 無關。真正 sustained 百萬筆級仍留作獨立 capacity exercise。
 
 ## Optional artifacts
 - [ ] PlantUML diagrams (spec-driven-dev:writing-uml) — 已存在於 diagrams/（sequence/state/class/component/ER），本次不重跑

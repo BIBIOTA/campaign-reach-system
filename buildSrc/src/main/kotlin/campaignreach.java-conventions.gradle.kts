@@ -32,6 +32,14 @@ repositories {
     mavenCentral()
 }
 
+// Override the Spring Boot BOM-managed Testcontainers version with our version-catalog pin.
+// The Spring Boot BOM declares Testcontainers via the `testcontainers.version` property; setting
+// it as a project extra makes io.spring.dependency-management resolve the catalog version instead.
+// Needed because newer Docker Engines (MinAPIVersion >= 1.40) reject the API version the older
+// docker-java default negotiates, which otherwise makes @RequiresDocker integration tests skip
+// locally even with a healthy daemon (design.md §7).
+extra["testcontainers.version"] = libs.findVersion("testcontainers").get().requiredVersion
+
 dependencyManagement {
     imports {
         mavenBom(org.springframework.boot.gradle.plugin.SpringBootPlugin.BOM_COORDINATES)
@@ -47,6 +55,13 @@ dependencies {
 
 tasks.withType<Test>().configureEach {
     useJUnitPlatform()
+    // Opt-in escape hatch for docker-java's negotiated Docker API version. OFF by default so CI
+    // (which may run an older Docker whose max API < this value) is unaffected and Testcontainers
+    // negotiates normally. Set it locally only if a future Engine's MinAPIVersion outpaces what
+    // Testcontainers negotiates: `-PdockerApiVersion=1.44` or env `DOCKER_API_VERSION_OVERRIDE`.
+    (providers.gradleProperty("dockerApiVersion").orNull
+            ?: providers.environmentVariable("DOCKER_API_VERSION_OVERRIDE").orNull)
+        ?.let { systemProperty("api.version", it) }
     // Surface the real cause of test failures (incl. Spring context-startup failures) in CI logs,
     // where the default summary prints only stack-trace frame locations without exception messages.
     testLogging {
