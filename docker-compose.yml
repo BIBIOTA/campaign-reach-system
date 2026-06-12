@@ -1,15 +1,15 @@
 # Local development infrastructure for campaign-reach-system.
 #
-# Spins up the two backing services the app needs at runtime — PostgreSQL and
-# Kafka (KRaft mode, no ZooKeeper). This is for LOCAL DEV ONLY; integration
-# tests use Testcontainers and do NOT use this file.
+# Spins up the backing services the app needs at runtime — PostgreSQL, Kafka
+# (KRaft mode, no ZooKeeper), and Mailpit (local SMTP capture). This is for
+# LOCAL DEV ONLY; integration tests use Testcontainers and do NOT use this file.
 #
 #   docker compose up -d        # start (data persists in named volumes)
 #   docker compose down         # stop, keep data
 #   docker compose down -v      # stop and wipe data
 #
 # Host ports are overridable via .env (see .env.example) for machines where the
-# defaults are already taken. `restart: unless-stopped` keeps both services up
+# defaults are already taken. `restart: unless-stopped` keeps all services up
 # across reboots until you explicitly `docker compose down`.
 
 name: campaign-reach-local
@@ -63,6 +63,27 @@ services:
       # Full path: the kafka CLI scripts live under /opt/kafka/bin and are NOT on
       # PATH in apache/kafka:3.8.0, so a bare script name would always exit 127.
       test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # Mailpit captures email the app sends during local smoke tests. It acts as a
+  # fake SMTP sink: mail is held in-memory only and NEVER forwarded to real
+  # recipients, so it is safe to exercise the email path without spamming anyone.
+  #   - SMTP :1025  — the app connects here to "send" mail.
+  #   - Web UI :8025 — developers open http://localhost:8025 to view captured mail.
+  # No named volume on purpose: captured mail is ephemeral and need not survive a
+  # restart, which keeps the smoke-test sink simple and disposable.
+  mailpit:
+    image: axllent/mailpit:v1.20
+    container_name: crs-mailpit
+    restart: unless-stopped
+    ports:
+      - "${MAILPIT_SMTP_PORT:-1025}:1025"
+      - "${MAILPIT_UI_PORT:-8025}:8025"
+    healthcheck:
+      # The mailpit image ships with wget; /readyz on the UI port reports ready.
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8025/readyz || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10
