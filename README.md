@@ -131,22 +131,40 @@ proposal + specs/ → 實作（TDD / subagent-driven）→ verification-report �
 ### 先決條件
 
 - JDK 21（專案已用 Gradle toolchain 鎖定；只需本機可取得 JDK 21）
-- 執行中的 **PostgreSQL** 與 **Kafka**（本機開發可自備或用容器）
-- 執行整合測試另需 **Docker**（Testcontainers）
+- **Docker**（本機開發以 `docker-compose.yml` 起 PostgreSQL + Kafka；整合測試的 Testcontainers 也需要）
 
-### 設定環境變數
+### 1. 啟動本機基礎設施（PostgreSQL + Kafka）
 
-`application.yml` 不含任何預設機密，缺值即 fail-fast。啟動前需提供：
+repo 根目錄附帶 `docker-compose.yml`，一鍵起好 app 執行期需要的兩個後端服務
+（PostgreSQL 與 KRaft 模式的 Kafka，免 ZooKeeper）。資料存放於具名 volume，
+`restart: unless-stopped` 會在重開機後自動拉起，直到你明確 `down`。
 
 ```bash
-export DB_URL="jdbc:postgresql://localhost:5432/campaign_reach"
-export DB_USERNAME="postgres"
-export DB_PASSWORD="postgres"
-export KAFKA_BOOTSTRAP_SERVERS="localhost:9092"
-export EMAIL_PROVIDER_API_KEY="<your-email-provider-key>"
+docker compose up -d        # 啟動（資料持久化於具名 volume）
+docker compose down         # 停止，保留資料
+docker compose down -v      # 停止並清除資料
 ```
 
-### 啟動應用
+> 此 compose 僅供**本機開發**；整合測試走 Testcontainers，不使用本檔。
+
+### 2. 設定環境變數
+
+`application.yml` 不含任何預設機密，缺值即 fail-fast。專案提供 `.env.example` 範本，
+其預設值與上面的 compose 對齊；複製為 `.env`（已被 gitignore）後再載入 shell：
+
+```bash
+cp .env.example .env
+# 若預設 port（5432 / 9092）已被占用，改 .env 內的 POSTGRES_PORT / KAFKA_PORT
+# 與對應的 DB_URL / KAFKA_BOOTSTRAP_SERVERS 即可
+
+set -a; source .env; set +a   # 將 .env 載入當前 shell
+```
+
+`.env` 涵蓋 DB（`DB_URL` / `DB_USERNAME` / `DB_PASSWORD`）、Kafka
+（`KAFKA_BOOTSTRAP_SERVERS`）、Email provider（`EMAIL_PROVIDER_API_KEY`，本機 smoke 測試給
+dummy 值即可）與後台 operator 帳號（`OPERATOR_USERNAME` / `OPERATOR_PASSWORD` / `OPERATOR_ID`）。
+
+### 3. 啟動應用
 
 ```bash
 # 開發模式（hot run）
@@ -157,11 +175,19 @@ export EMAIL_PROVIDER_API_KEY="<your-email-provider-key>"
 java -jar app/build/libs/app-*.jar
 ```
 
-啟動後（預設 `:8080`）：
+啟動後（預設 `:8080`；若 8080 已被占用可加 `--args='--server.port=8081'`）：
 
 - 內部 REST API：`http://localhost:8080/internal/campaigns`（HTTP Basic，需 `OPERATOR` 角色）
 - Swagger UI：`http://localhost:8080/swagger-ui/index.html`
 - OpenAPI 規格：`http://localhost:8080/v3/api-docs`
+
+快速 smoke test（建立一筆草稿活動，預期回 `201`）：
+
+```bash
+curl -u "$OPERATOR_USERNAME:$OPERATOR_PASSWORD" -H 'Content-Type: application/json' \
+  -d '{"name":"夏季全館 9 折","type":"DISCOUNT","startAt":"2026-07-01T00:00:00Z","endAt":"2026-07-31T23:59:59Z","ruleConfig":{"ruleType":"DISCOUNT","schema_version":2,"kind":"PERCENTAGE","percentage":10,"thresholdMode":"NONE"},"targetSpec":{"kind":"CONDITION","conditions":{"memberTier":"GOLD"}},"reachPlan":{"channel":"EMAIL","templateRef":"summer-sale-email","timing":"SCHEDULED"}}' \
+  http://localhost:8080/internal/campaigns
+```
 
 > 線上版 API 文件（GitHub Pages）：<https://bibiota.github.io/campaign-reach-system/>
 
