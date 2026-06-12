@@ -28,9 +28,11 @@ class LocalEmailDeliveryArtifactsTest {
     @Test
     @DisplayName("Local smoke test is documented")
     void localSmokeTestIsDocumented() throws IOException {
-        String readme = Files.readString(ROOT.resolve("README.md"));
+        // The getting-started guide was extracted out of README.md into docs/getting-started.md (#26),
+        // so the smoke-test walkthrough now lives there.
+        String guide = Files.readString(ROOT.resolve("docs/getting-started.md"));
 
-        assertThat(readme)
+        assertThat(guide)
                 .contains("本機寄信 smoke test")
                 .contains("docker compose up -d")
                 .contains("SPRING_PROFILES_ACTIVE=local")

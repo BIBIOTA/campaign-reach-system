@@ -87,6 +87,56 @@ class OpenApiSpecExportTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("4xx 錯誤回應使用 ApiError schema 而非成功型別")
+    void errorResponsesUseApiErrorSchemaNotSuccessType() throws Exception {
+        JsonNode doc = objectMapper.readTree(mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+
+        // POST /internal/campaigns: 400 must document the error body (ApiError), not the success type.
+        JsonNode createResponses = doc.at("/paths/~1internal~1campaigns/post/responses");
+        assertThat(firstSchemaRef(createResponses.at("/400")))
+                .as("create 400 should reference ApiError, not the success CreateCampaignResponse")
+                .endsWith("/ApiError");
+
+        // GET .../{id}: 404 is an error body, not the CampaignView success type.
+        JsonNode getResponses = doc.at("/paths/~1internal~1campaigns~1{id}/get/responses");
+        assertThat(firstSchemaRef(getResponses.at("/404")))
+                .as("get 404 should reference ApiError")
+                .endsWith("/ApiError");
+
+        // PATCH .../{id}: 400 / 404 / 409 are all error bodies.
+        JsonNode updateResponses = doc.at("/paths/~1internal~1campaigns~1{id}/patch/responses");
+        for (String code : new String[] {"400", "404", "409"}) {
+            assertThat(firstSchemaRef(updateResponses.at("/" + code)))
+                    .as("update %s should reference ApiError", code)
+                    .endsWith("/ApiError");
+        }
+
+        // POST .../{id}/status: @Valid on the body can fail with 400, plus 404 / 409 / 422 — all error
+        // bodies, not the CampaignView success type.
+        JsonNode statusResponses = doc.at("/paths/~1internal~1campaigns~1{id}~1status/post/responses");
+        for (String code : new String[] {"400", "404", "409", "422"}) {
+            assertThat(firstSchemaRef(statusResponses.at("/" + code)))
+                    .as("status %s should reference ApiError", code)
+                    .endsWith("/ApiError");
+        }
+
+        // 401 is produced by Spring Security with no typed body: it must NOT advertise the success schema.
+        assertThat(firstSchemaRef(createResponses.at("/401")))
+                .as("401 must not advertise a success-type body")
+                .isEmpty();
+    }
+
+    /** Returns the $ref of the response's first content media-type schema, or "" when none is declared. */
+    private static String firstSchemaRef(JsonNode response) {
+        var media = response.at("/content").elements();
+        return media.hasNext() ? media.next().at("/schema/$ref").asText("") : "";
+    }
+
+    @Test
     @DisplayName("DTO schema 帶繁中欄位說明")
     void dtoSchemaHasChineseFieldDescriptions() throws Exception {
         JsonNode doc = objectMapper.readTree(mockMvc.perform(get("/v3/api-docs"))

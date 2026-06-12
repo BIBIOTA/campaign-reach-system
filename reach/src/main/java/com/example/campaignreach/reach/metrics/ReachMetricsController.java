@@ -2,6 +2,7 @@ package com.example.campaignreach.reach.metrics;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -45,7 +46,7 @@ public class ReachMetricsController {
     @Operation(summary = "活動維度成效彙總", description = "回傳指定活動的送達率、失敗率與各狀態的收件人分佈；無任何收件人時各比率為 0.0（不會除以零）。")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "查詢成功，回傳活動維度彙總"),
-        @ApiResponse(responseCode = "401", description = "未通過後台 OPERATOR 認證")
+        @ApiResponse(responseCode = "401", description = "未通過後台 OPERATOR 認證", content = @Content)
     })
     @GetMapping("/{campaignId}/metrics")
     public CampaignReachMetrics campaignMetrics(
@@ -57,7 +58,7 @@ public class ReachMetricsController {
     @Operation(summary = "單筆收件人觸達狀態", description = "回傳指定活動下單一收件人的觸達狀態（已最小化個資）。")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "查詢成功，回傳收件人觸達狀態"),
-        @ApiResponse(responseCode = "401", description = "未通過後台 OPERATOR 認證")
+        @ApiResponse(responseCode = "401", description = "未通過後台 OPERATOR 認證", content = @Content)
     })
     @GetMapping("/{campaignId}/recipients/{userId}")
     public RecipientReachView recipientStatus(
