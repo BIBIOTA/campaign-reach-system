@@ -48,13 +48,19 @@ The system SHALL render local-only email content from `ReachMessage` without req
 - **THEN** the system still renders the generic local test email
 - **AND** does not fail dispatch because the template is unknown
 
+#### Scenario: Blank templateRef is rejected before rendering
+
+- **WHEN** `templateRef` is null or blank
+- **THEN** the existing `ReachMessage` or `ClaimedTask` invariant rejects the message before local template rendering
+- **AND** the local renderer does not hide the invalid message contract by applying a generic template
+
 ### Requirement: Local SMTP configuration shall fail fast when invalid
 
 The system SHALL validate local SMTP settings at application startup so local smoke tests fail loudly before dispatch begins.
 
 #### Scenario: Invalid local SMTP configuration fails startup
 
-- **WHEN** local SMTP mode is enabled and SMTP host, from address, recipient address, or port is missing or invalid
+- **WHEN** local SMTP mode is enabled and SMTP host, from address, recipient address, port, or timeout is missing or invalid
 - **THEN** the application context fails during configuration binding or bean creation
 - **AND** no partially configured local SMTP provider is registered
 

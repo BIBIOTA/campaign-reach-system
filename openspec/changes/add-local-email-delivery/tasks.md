@@ -3,7 +3,7 @@
 ## 1. 本機 SMTP 設定與依賴
 - [ ] 1.1 加入 Spring Mail 依賴與本機 SMTP 設定模型
   - Acceptance: WHEN `reach` 模組需要建構本機 SMTP provider THEN build classpath 包含 Spring Mail 能力，且 `LocalSmtpEmailProperties` 可綁定 host、port、from、recipient、timeout 等本機設定
-  - Acceptance: WHEN host、from、recipient 缺漏或 port 超出合法範圍 THEN Spring context 在設定綁定階段 fail fast
+  - Acceptance: WHEN host、from、recipient 缺漏，或 port/timeout 超出合法範圍 THEN Spring context 在設定綁定階段 fail fast
   - Depends on: -
   - Independence: independent
   - status: not_started
@@ -20,6 +20,7 @@
   - Acceptance: WHEN renderer 收到 `ReachMessage(userId, EMAIL, templateRef)` THEN subject 包含 `[Local Campaign Reach]` 與 `templateRef`
   - Acceptance: WHEN renderer 產生 body THEN body 包含本機測試信提示、`templateRef`、`userId`、`channel` 與發送時間
   - Acceptance: WHEN `templateRef` 是任意非空字串 THEN renderer 使用通用本機樣板並成功產生內容，不因未知 templateRef 失敗
+  - Acceptance: WHEN `templateRef` 為 null 或空白 THEN 既有 `ReachMessage` / `ClaimedTask` invariant 在進入 renderer 前拒絕該訊息
   - Depends on: -
   - Independence: independent
   - status: not_started
@@ -59,7 +60,7 @@
 
 ## 4. 測試與驗證
 - [ ] 4.1 加入設定與 context 測試
-  - Acceptance: WHEN 設定缺漏或非法 THEN 測試證明 Spring context fail fast
+  - Acceptance: WHEN 設定缺漏、格式非法或 timeout 非正數 THEN 測試證明 Spring context fail fast
   - Acceptance: WHEN profile 或 mode 不符合本機條件 THEN 測試證明本機 `EmailProviderClient` 不註冊
   - Acceptance: WHEN `local + smtp-local` 且設定完整 THEN 測試證明本機 `EmailProviderClient` 與既有 `EmailAdapter` 會啟用
   - Depends on: 1.2
@@ -75,6 +76,36 @@
 - [ ] 4.3 跑本 change 的品質 gate
   - Acceptance: WHEN 實作完成 THEN `./gradlew spotlessCheck checkstyleMain spotbugsMain test` 通過，或若本機缺少 Java 21 / Docker 等環境條件，驗證報告需明確記錄無法執行的原因與替代證據
   - Depends on: 1.1, 1.2, 2.1, 2.2, 2.3, 3.1, 3.2, 3.3, 4.1, 4.2
+  - Independence: serial
+  - status: not_started
+
+## 5. 端到端驗收腳本（newman 本機全鏈路）
+> 路線 B：以外部腳本驅動 running 的本機 stack（`docker compose up -d` + `local` profile app），
+> 驗證「建立活動 → 啟用 → 觸達寄送」完整鏈路，最後以 Mailpit HTTP API 斷言信件被捕捉。
+> 此腳本為本機 / 手動驗收用，**不納入 `./gradlew check` CI gate**（gate 仍由 4.x 的 JVM 測試負責）。
+- [ ] 5.1 擴充 Postman collection 為全鏈路驗收流程
+  - Acceptance: WHEN 在既有 `docs/postman/campaign-reach.postman_collection.json` 基礎上擴充 THEN collection 含一條依序執行的 EMAIL 驗收流程：建立活動 → 啟用（狀態轉換）→ 查詢 metrics
+  - Acceptance: WHEN 觸達鏈路為非同步 THEN 驗收流程以輪詢（含上限次數與間隔）等待 task 進入 `SENT`，不使用固定 sleep
+  - Acceptance: WHEN 步驟需後台認證 THEN 透過環境變數帶入 `OPERATOR` HTTP Basic 憑證，collection 不硬編秘密
+  - Depends on: 2.2, 3.1
+  - Independence: parallel-safe
+  - status: not_started
+- [ ] 5.2 加入 Mailpit HTTP API 寄送斷言
+  - Acceptance: WHEN metrics 顯示 task `SENT` THEN 腳本呼叫 Mailpit HTTP API（`GET http://localhost:8025/api/v1/messages`）斷言對應信件存在，且 subject 含 `[Local Campaign Reach]` 與 `templateRef`
+  - Acceptance: WHEN 斷言完成 THEN 腳本提供清空 Mailpit 信箱的步驟或提示，避免重跑互相污染
+  - Depends on: 5.1
+  - Independence: serial
+  - status: not_started
+- [ ] 5.3 提供 newman 執行腳本與環境檔
+  - Acceptance: WHEN 開發者執行 newman（例如 `newman run` 搭配本機環境檔）THEN 在 stack 已啟動下能一鍵跑完整條驗收流程並回傳通過 / 失敗
+  - Acceptance: WHEN 環境檔提供 THEN 內含 base URL、`OPERATOR` 憑證、Mailpit base URL 等可調參數，且不含真實秘密
+  - Depends on: 5.1, 5.2
+  - Independence: serial
+  - status: not_started
+- [ ] 5.4 更新 README 端到端驗收說明
+  - Acceptance: WHEN 開發者閱讀 README THEN 能依步驟啟動 stack、以 `local` profile 啟動 app、執行 newman 驗收腳本，並理解此腳本驗收的是本機全鏈路
+  - Acceptance: WHEN README 描述此驗收 THEN 明確說明它依賴本機 Mailpit、固定 recipient，且不納入 CI gate
+  - Depends on: 5.3
   - Independence: serial
   - status: not_started
 

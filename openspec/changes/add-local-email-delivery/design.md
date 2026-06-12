@@ -56,7 +56,7 @@ doc_language: 繁體中文
 
 - `LocalSmtpEmailProperties`
   - 綁定本機 SMTP 設定。
-  - 驗證 host、port、from、recipient。
+  - 驗證 host、port、from、recipient，以及 timeout（須為正數）。
 
 - `LocalSmtpEmailConfig`
   - 只在 `local` profile 且 `campaignreach.email-provider.mode=smtp-local` 時註冊。
@@ -82,7 +82,7 @@ doc_language: 繁體中文
 
 ## 信件樣板
 
-第一版只提供內建示意樣板。未知 `templateRef` 不視為錯誤，而是 render 成通用本機測試信。
+第一版只提供內建示意樣板。未知但非空的 `templateRef` 不視為錯誤，而是 render 成通用本機測試信。空白或 null `templateRef` 仍違反既有 `ReachMessage` / `ClaimedTask` invariant，應在進入 renderer 前被拒絕，不以通用樣板吞掉資料契約錯誤。
 
 Subject 範例：
 
@@ -102,16 +102,17 @@ Body 內容至少包含：
 
 ## 錯誤處理
 
-- SMTP host 缺漏、port 非合法值、from/recipient 格式錯誤：設定綁定階段 fail fast。
+- SMTP host 缺漏、port 非合法值、timeout 非正數、from/recipient 格式錯誤：設定綁定階段 fail fast。
 - Mailpit 未啟動、SMTP 連線 timeout、暫時性 transport error：視為 retryable provider failure，交由既有 `EmailAdapter` / dispatcher retry / circuit breaker 流程處理。
-- `templateRef` 未登錄：不失敗，使用通用本機樣板。
+- `templateRef` 未登錄但非空：不失敗，使用通用本機樣板。
+- `templateRef` 為 null 或空白：視為違反既有 message invariant，應在 `ReachMessage` / `ClaimedTask` 建構階段 fail fast，不進入本機 renderer。
 - production 未啟用 local mode：不註冊本機 provider，避免固定收件信箱誤用。
 
 ## 測試策略
 
 單元測試：
 
-- `LocalSmtpEmailProperties` 驗證缺漏或非法設定會失敗。
+- `LocalSmtpEmailProperties` 驗證缺漏、非法格式或非正數 timeout 會失敗。
 - `LocalEmailTemplateRenderer` 驗證 subject/body 包含 `templateRef`、`userId`、`channel` 與本機測試提示。
 - `LocalSmtpEmailProviderClient` 使用 mock/stub mail sender 驗證固定 recipient、from、subject/body 與 `SendResult`。
 
@@ -126,9 +127,15 @@ Spring context 測試：
 
 - README 增加 Mailpit 啟動與查看信件流程。
 - `.env.example` 增加本機 SMTP 設定。
-- smoke test 驗收方式：觸發一筆 EMAIL reach，Mailpit UI 看得到信，DB 中對應 task 進入 `SENT`。
+- 手動 smoke test 驗收方式：觸發一筆 EMAIL reach，Mailpit UI 看得到信，DB 中對應 task 進入 `SENT`。
 
-第一版不把 Mailpit UI 驗證納入 CI gate。若後續需要自動化端到端驗證，可用 Mailpit HTTP API 補一個 Docker-gated integration test。
+端到端驗收腳本（路線 B，本 change 交付）：
+
+- 在既有 `docs/postman/campaign-reach.postman_collection.json` 上擴充一條 EMAIL 全鏈路驗收流程，以 newman 對 running 的本機 stack 執行：建立活動 → 啟用 → 輪詢 metrics 直到 task `SENT` → 呼叫 Mailpit HTTP API（`GET http://localhost:8025/api/v1/messages`）斷言信件被捕捉。
+- 觸達鏈路為非同步（Kafka → orchestrator → dispatcher → adapter），故驗收以「輪詢 + 上限」等待 `SENT`，不使用固定 sleep；後台認證以環境變數帶入 `OPERATOR` 憑證，collection 不硬編秘密。
+- 此腳本定位為本機 / 手動端到端驗收，依賴本機 Mailpit 與固定 recipient，**不納入 `./gradlew check` CI gate**。
+
+第一版不把 Mailpit UI 或上述 newman 驗收納入 CI gate。若後續需要在 gate 內做自動化端到端驗證，可另以 Mailpit HTTP API 補一個 Docker-gated integration test（路線 A）。
 
 ## 模組邊界
 
