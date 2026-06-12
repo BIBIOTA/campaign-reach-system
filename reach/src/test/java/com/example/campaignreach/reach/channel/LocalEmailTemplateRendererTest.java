@@ -26,7 +26,7 @@ class LocalEmailTemplateRendererTest {
 
     @Test
     @DisplayName("Template renderer produces a local test message")
-    void templateRendererProducesALocalTestMessage() {
+    void templateRendererProducesLocalTestMessage() {
         ReachMessage message = new ReachMessage(USER_ID, Channel.EMAIL, "summer-sale-email");
 
         RenderedEmail rendered = renderer.render(message, SENT_AT);
