@@ -128,7 +128,7 @@ proposal + specs/ → 實作（TDD / subagent-driven）→ verification-report �
 
 ## 5. 專案啟動方式
 
-本機環境起動、環境變數設定、應用啟動、Mailpit 寄信 smoke test 及 Newman 端到端驗收的完整說明，
+本機環境啟動、環境變數設定、應用啟動、Mailpit 寄信 smoke test 及 Newman 端到端驗收的完整說明，
 請見 **[docs/getting-started.md](docs/getting-started.md)**。
 
 ---
