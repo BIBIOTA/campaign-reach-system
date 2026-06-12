@@ -259,6 +259,46 @@ curl -u "$OPERATOR_USERNAME:$OPERATOR_PASSWORD" \
 打開 <http://localhost:8025>（Mailpit UI，port 由 `.env` 的 `MAILPIT_UI_PORT` 決定，預設 8025），
 即可看到剛剛這封寄到 `local-inbox@local.test` 的 EMAIL 觸達內容；若還沒出現，稍等一個掃描週期再重新整理。
 
+### 5. 本機 EMAIL 端到端驗收（Newman + Mailpit API）
+
+若要用腳本驗證完整本機鏈路，可執行 Newman 驗收流程。這條流程會：
+
+1. seed 一組本機 static audience list / member（只含 UUID，不含 email）。
+2. 清空 Mailpit mailbox，避免舊信污染本次驗收。
+3. 跑 Postman collection 的 `local/manual EMAIL e2e acceptance` folder：
+   建立 EMAIL 活動 → 推進到 RUNNING → 輪詢 metrics 直到 `SENT` → 呼叫 Mailpit HTTP API
+   `GET /api/v1/messages` 斷言信件 subject 包含 `[Local Campaign Reach]` 與本次 `templateRef`。
+
+先啟動本機 stack，載入 `.env`，並以 `local` profile / `smtp-local` 啟動 app：
+
+```bash
+docker compose up -d
+cp .env.example .env        # 若尚未建立 .env
+set -a; source .env; set +a
+./gradlew :app:bootRun
+```
+
+在另一個 shell 載入相同 `.env` 後執行：
+
+```bash
+set -a; source .env; set +a
+docs/scripts/run-local-email-e2e.sh
+```
+
+腳本會使用 `docs/postman/local-email-e2e.postman_environment.json` 的本機預設值，並可用環境變數覆寫：
+
+```bash
+BASE_URL=http://localhost:8080 \
+MAILPIT_BASE_URL=http://localhost:8025 \
+E2E_MAX_POLL_ATTEMPTS=60 \
+E2E_POLL_INTERVAL_MS=2000 \
+docs/scripts/run-local-email-e2e.sh
+```
+
+> 這是**本機 / 手動端到端驗收**，不是 CI gate 的一部分；CI 仍跑 `./gradlew check`。
+> 驗收依賴本機 Mailpit，且 EMAIL provider 固定寄到 `LOCAL_SMTP_RECIPIENT`
+> （預設 `local-inbox@local.test`），不會寄到真實外部收件人。
+
 ---
 
 ## 6. 測試方式
