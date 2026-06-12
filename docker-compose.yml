@@ -48,7 +48,10 @@ services:
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:${KAFKA_PORT:-9092}
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
-      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      # 127.0.0.1 (not localhost): the controller listener binds IPv4 0.0.0.0:9093,
+      # so forcing IPv4 loopback avoids a failed quorum connection on hosts where
+      # localhost resolves to ::1 (IPv6) first.
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@127.0.0.1:9093
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
@@ -56,6 +59,13 @@ services:
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
     volumes:
       - kafkadata:/var/lib/kafka/data
+    healthcheck:
+      # Full path: the kafka CLI scripts live under /opt/kafka/bin and are NOT on
+      # PATH in apache/kafka:3.8.0, so a bare script name would always exit 127.
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
 volumes:
   pgdata:
