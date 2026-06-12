@@ -7,6 +7,9 @@ openspec/changes/**/diagrams/.encode.py
 **/build/
 !gradle/wrapper/gradle-wrapper.jar
 
+# Local dev env (secrets / machine-specific ports) — keep .env.example committed
+.env
+
 # IDE
 .idea/
 *.iml
