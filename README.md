@@ -285,7 +285,14 @@ set -a; source .env; set +a
 docs/scripts/run-local-email-e2e.sh
 ```
 
-腳本會使用 `docs/postman/local-email-e2e.postman_environment.json` 的本機預設值，並可用環境變數覆寫：
+> **port 8080 被佔用時**：若 app 以 `--server.port=8081` 啟動（或其他 port），
+> 需以 `BASE_URL` 告知腳本實際位址：
+>
+> ```bash
+> BASE_URL=http://localhost:8081 docs/scripts/run-local-email-e2e.sh
+> ```
+
+其他可覆寫的參數（預設值與 `local-email-e2e.postman_environment.json` 一致）：
 
 ```bash
 BASE_URL=http://localhost:8080 \
