@@ -52,7 +52,7 @@
         gap: 16px;
         grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
       }
-      a.card {
+      .card {
         display: block;
         padding: 20px;
         border: 1px solid var(--border);
@@ -62,17 +62,24 @@
         color: inherit;
         transition: border-color 0.15s ease;
       }
-      a.card:hover {
+      .card:hover {
         border-color: var(--accent);
       }
-      a.card h2 {
+      .card h2 {
         font-size: 1.1rem;
         margin: 0 0 6px;
         color: var(--accent);
       }
-      a.card span {
+      .card span {
         color: var(--muted);
         font-size: 0.92rem;
+      }
+      .card span a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      .card span a:hover {
+        text-decoration: underline;
       }
       footer {
         margin-top: 48px;
@@ -102,10 +109,10 @@
           <h2>Swagger UI →</h2>
           <span>互動式瀏覽與試打 API（Authorize 後可 Try it out）</span>
         </a>
-        <a class="card" href="./openapi.yaml">
-          <h2>OpenAPI 規格 →</h2>
-          <span>下載 openapi.yaml（亦提供 <a href="./openapi.json">openapi.json</a>）</span>
-        </a>
+        <div class="card">
+          <h2>OpenAPI 規格</h2>
+          <span>下載 <a href="./openapi.yaml">openapi.yaml</a>（亦提供 <a href="./openapi.json">openapi.json</a>）</span>
+        </div>
         <a class="card" href="./postman/campaign-reach.postman_collection.json" download>
           <h2>Postman Collection →</h2>
           <span>匯入 Postman 後填入 basicAuthUsername / basicAuthPassword 即可操作</span>
