@@ -36,6 +36,14 @@ shedlock = "5.16.0"
 # probing) instead of cascading. Resilience4j 2.x is the Spring Boot 3 line.
 resilience4j = "2.3.0"
 
+# OpenAPI / Swagger documentation. springdoc 2.7.x is the Spring Boot 3.4 line and
+# auto-configures /v3/api-docs + /swagger-ui on :app. swagger-annotations-jakarta lets
+# :campaign / :reach annotate controllers & DTOs (繁體中文 @Operation/@Schema) without
+# pulling the whole starter; the version is aligned with the swagger-core that springdoc
+# 2.7.x resolves to avoid a split annotation/runtime version.
+springdoc = "2.7.0"
+swaggerAnnotations = "2.2.25"
+
 # Test
 junit = "5.11.4"
 # Integration testing with real Kafka + PostgreSQL containers (design.md §7)
@@ -73,6 +81,11 @@ flyway-database-postgresql = { module = "org.flywaydb:flyway-database-postgresql
 # resilience4j.circuitbreaker.* config and exposes the CircuitBreakerRegistry. Wraps the
 # EmailAdapter so an unavailable Email provider degrades stably without cascading failure.
 resilience4j-spring-boot3 = { module = "io.github.resilience4j:resilience4j-spring-boot3", version.ref = "resilience4j" }
+
+# OpenAPI docs: the starter (runtime /v3/api-docs + /swagger-ui, :app only) and the
+# annotation-only artifact (:campaign / :reach annotate controllers & DTOs).
+springdoc-openapi-starter-webmvc-ui = { module = "org.springdoc:springdoc-openapi-starter-webmvc-ui", version.ref = "springdoc" }
+swagger-annotations-jakarta = { module = "io.swagger.core.v3:swagger-annotations-jakarta", version.ref = "swaggerAnnotations" }
 
 # ArchUnit (JUnit 5 integration)
 archunit-junit5 = { module = "com.tngtech.archunit:archunit-junit5", version.ref = "archunit" }

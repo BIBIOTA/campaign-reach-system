@@ -1,5 +1,9 @@
 package com.example.campaignreach.reach.metrics;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.UUID;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -27,6 +31,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/internal/reach/campaigns")
+@Tag(name = "觸達成效", description = "活動觸達成效彙總與單筆收件人狀態查詢（後台 OPERATOR 專用，唯讀）")
 public class ReachMetricsController {
 
     private final ReachMetricsQueryService service;
@@ -36,12 +41,22 @@ public class ReachMetricsController {
     }
 
     /** 活動維度彙總: returns delivered/failed rate and the per-status recipient distribution. */
+    @Operation(summary = "活動維度成效彙總", description = "回傳指定活動的送達率、失敗率與各狀態的收件人分佈；無任何收件人時各比率為 0.0（不會除以零）。")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "查詢成功，回傳活動維度彙總"),
+        @ApiResponse(responseCode = "401", description = "未通過後台 OPERATOR 認證")
+    })
     @GetMapping("/{campaignId}/metrics")
     public CampaignReachMetrics campaignMetrics(@PathVariable UUID campaignId) {
         return service.campaignMetrics(campaignId);
     }
 
     /** 單筆收件人狀態: returns the recipient's reach status(es) for the campaign (PII-minimized). */
+    @Operation(summary = "單筆收件人觸達狀態", description = "回傳指定活動下單一收件人的觸達狀態（已最小化個資）。")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "查詢成功，回傳收件人觸達狀態"),
+        @ApiResponse(responseCode = "401", description = "未通過後台 OPERATOR 認證")
+    })
     @GetMapping("/{campaignId}/recipients/{userId}")
     public RecipientReachView recipientStatus(@PathVariable UUID campaignId, @PathVariable UUID userId) {
         return service.recipientStatus(campaignId, userId);

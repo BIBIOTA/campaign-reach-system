@@ -1,6 +1,7 @@
 package com.example.campaignreach.campaign.api;
 
 import com.example.campaignreach.campaign.domain.rule.RuleConfig;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import java.time.Instant;
@@ -24,10 +25,11 @@ import java.time.Instant;
  * @param reachPlan new reach settings; {@code null} leaves them unchanged
  */
 public record UpdateCampaignRequest(
-        @NotNull(message = "version must not be null") Integer version,
-        String name,
-        Instant startAt,
-        Instant endAt,
-        RuleConfig ruleConfig,
-        @Valid TargetSpecDto targetSpec,
-        @Valid ReachPlanDto reachPlan) {}
+        @Schema(description = "客戶端先前讀到的活動版本（樂觀鎖）；值過期時更新以 409 失敗") @NotNull(message = "version must not be null")
+                Integer version,
+        @Schema(description = "新活動名稱；null 表示不變") String name,
+        @Schema(description = "新活動有效期起始時間；null 表示不變") Instant startAt,
+        @Schema(description = "新活動有效期結束時間；null 表示不變") Instant endAt,
+        @Schema(description = "新的依類型優惠規則；null 表示維持原規則不變") RuleConfig ruleConfig,
+        @Schema(description = "新的觸達對象設定；null 表示不變") @Valid TargetSpecDto targetSpec,
+        @Schema(description = "新的觸達發送設定；null 表示不變") @Valid ReachPlanDto reachPlan) {}

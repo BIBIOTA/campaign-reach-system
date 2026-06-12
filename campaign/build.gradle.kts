@@ -20,6 +20,11 @@ dependencies {
     implementation(libs.spring.boot.starter.web)
     implementation(libs.spring.boot.starter.security)
 
+    // OpenAPI annotations only (繁體中文 @Operation/@Tag/@Schema/@ApiResponse on the
+    // campaign controller & DTOs). The springdoc starter that reads them at runtime lives
+    // on :app; this third-party annotation artifact introduces no campaign→reach coupling.
+    implementation(libs.swagger.annotations.jakarta)
+
     // Kafka producer side (task 6.2): the scan scheduler publishes activity-level
     // ReachRequested events to reach.requested. The at-least-once CONSUMER policy in
     // :shared is gated/separate; campaign is on the PRODUCER side here.

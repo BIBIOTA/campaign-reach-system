@@ -2,6 +2,7 @@ package com.example.campaignreach.campaign.api;
 
 import com.example.campaignreach.campaign.domain.CampaignType;
 import com.example.campaignreach.campaign.domain.rule.RuleConfig;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -24,10 +25,15 @@ import java.time.Instant;
  * @param reachPlan reach delivery settings
  */
 public record CreateCampaignRequest(
-        @NotBlank(message = "name must not be blank") String name,
-        @NotNull(message = "type must not be null") CampaignType type,
-        @NotNull(message = "startAt must not be null") Instant startAt,
-        @NotNull(message = "endAt must not be null") Instant endAt,
-        @NotNull(message = "ruleConfig must not be null") RuleConfig ruleConfig,
-        @NotNull(message = "targetSpec must not be null") @Valid TargetSpecDto targetSpec,
-        @NotNull(message = "reachPlan must not be null") @Valid ReachPlanDto reachPlan) {}
+        @Schema(description = "活動名稱（必填，不可空白）", example = "夏季全館 9 折") @NotBlank(message = "name must not be blank")
+                String name,
+        @Schema(description = "活動優惠類型，決定預期的 ruleConfig 子型別") @NotNull(message = "type must not be null")
+                CampaignType type,
+        @Schema(description = "活動有效期起始時間（UTC Instant）") @NotNull(message = "startAt must not be null") Instant startAt,
+        @Schema(description = "活動有效期結束時間（UTC Instant）") @NotNull(message = "endAt must not be null") Instant endAt,
+        @Schema(description = "依活動類型而定的優惠規則設定（多型，依 ruleType 區分）") @NotNull(message = "ruleConfig must not be null")
+                RuleConfig ruleConfig,
+        @Schema(description = "觸達對象（受眾）設定") @NotNull(message = "targetSpec must not be null") @Valid
+                TargetSpecDto targetSpec,
+        @Schema(description = "觸達發送計畫設定") @NotNull(message = "reachPlan must not be null") @Valid
+                ReachPlanDto reachPlan) {}

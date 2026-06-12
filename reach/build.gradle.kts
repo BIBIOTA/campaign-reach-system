@@ -30,6 +30,11 @@ dependencies {
     // module (CampaignSecurityConfig), so no second SecurityFilterChain is added here.
     implementation(libs.spring.boot.starter.web)
 
+    // OpenAPI annotations only (繁體中文 @Operation/@Tag/@Schema/@ApiResponse on the
+    // reach-metrics controller & view DTOs). The springdoc starter that reads them at runtime
+    // lives on :app; this third-party annotation artifact introduces no reach→campaign coupling.
+    implementation(libs.swagger.annotations.jakarta)
+
     // reach may only talk to campaign through the shared kernel (event/config).
     // It must NOT depend on :campaign — enforced by the ArchUnit guard in :app.
     implementation(project(":shared"))

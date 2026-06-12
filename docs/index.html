@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>活動觸達系統 API 文件</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --fg: #1b1f24;
+        --muted: #57606a;
+        --bg: #ffffff;
+        --card: #f6f8fa;
+        --border: #d0d7de;
+        --accent: #0969da;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --fg: #e6edf3;
+          --muted: #8b949e;
+          --bg: #0d1117;
+          --card: #161b22;
+          --border: #30363d;
+          --accent: #4493f8;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: -apple-system, "Segoe UI", "Noto Sans TC", Roboto, sans-serif;
+        line-height: 1.6;
+        color: var(--fg);
+        background: var(--bg);
+      }
+      .wrap {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 56px 20px 72px;
+      }
+      h1 {
+        font-size: 1.9rem;
+        margin: 0 0 8px;
+      }
+      p.lead {
+        color: var(--muted);
+        margin: 0 0 36px;
+      }
+      .cards {
+        display: grid;
+        gap: 16px;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      }
+      .card {
+        display: block;
+        padding: 20px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: var(--card);
+        text-decoration: none;
+        color: inherit;
+        transition: border-color 0.15s ease;
+      }
+      .card:hover {
+        border-color: var(--accent);
+      }
+      .card h2 {
+        font-size: 1.1rem;
+        margin: 0 0 6px;
+        color: var(--accent);
+      }
+      .card span {
+        color: var(--muted);
+        font-size: 0.92rem;
+      }
+      .card span a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      .card span a:hover {
+        text-decoration: underline;
+      }
+      footer {
+        margin-top: 48px;
+        color: var(--muted);
+        font-size: 0.85rem;
+        border-top: 1px solid var(--border);
+        padding-top: 16px;
+      }
+      code {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 5px;
+        padding: 1px 5px;
+        font-size: 0.85em;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>活動觸達系統 API 文件</h1>
+      <p class="lead">
+        campaign-reach-system 內部後台 REST API（繁體中文說明）。所有 <code>/internal</code> 端點皆需後台
+        OPERATOR 以 HTTP Basic 認證。
+      </p>
+      <div class="cards">
+        <a class="card" href="./swagger-ui/index.html">
+          <h2>Swagger UI →</h2>
+          <span>互動式瀏覽與試打 API（Authorize 後可 Try it out）</span>
+        </a>
+        <div class="card">
+          <h2>OpenAPI 規格</h2>
+          <span>下載 <a href="./openapi.yaml">openapi.yaml</a>（亦提供 <a href="./openapi.json">openapi.json</a>）</span>
+        </div>
+        <a class="card" href="./postman/campaign-reach.postman_collection.json" download>
+          <h2>Postman Collection →</h2>
+          <span>匯入 Postman 後填入 basicAuthUsername / basicAuthPassword 即可操作</span>
+        </a>
+      </div>
+      <footer>
+        本頁由 GitHub Actions 從原始碼自動產生並部署到 GitHub Pages，內容與後端實作同步。
+      </footer>
+    </div>
+  </body>
+</html>
