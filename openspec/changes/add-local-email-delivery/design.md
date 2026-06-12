@@ -61,6 +61,7 @@ doc_language: 繁體中文
 - `LocalSmtpEmailConfig`
   - 只在 `local` profile 且 `campaignreach.email-provider.mode=smtp-local` 時註冊。
   - 提供 `JavaMailSender` 與 `EmailProviderClient` bean。
+  - 註冊機制：以被 component-scan 的一般 `@Configuration` 搭配 `@Profile("local")` 與 `@ConditionalOnProperty(campaignreach.email-provider.mode=smtp-local)` 定義 `EmailProviderClient` bean。component-scanned bean 在 auto-configuration 階段之前即完成註冊，因此既有 `EmailAdapterAutoConfiguration` 的 `@ConditionalOnBean(EmailProviderClient.class)`（其 javadoc 已說明此條件必須在 auto-config 階段評估、不受 component-scan 順序影響）能正確偵測到本機 provider 並啟用 `EmailAdapter`。實作時不得改用 `@ConditionalOnMissingBean`，也不得把本機 provider 改放進另一個 auto-configuration，以免破壞既有的 `@ConditionalOnBean` 評估時序語義。
 
 設定邊界：
 
@@ -132,7 +133,7 @@ Spring context 測試：
 端到端驗收腳本（路線 B，本 change 交付）：
 
 - 在既有 `docs/postman/campaign-reach.postman_collection.json` 上擴充一條 EMAIL 全鏈路驗收流程，以 newman 對 running 的本機 stack 執行：建立活動 → 啟用 → 輪詢 metrics 直到 task `SENT` → 呼叫 Mailpit HTTP API（`GET http://localhost:8025/api/v1/messages`）斷言信件被捕捉。
-- 觸達鏈路為非同步（Kafka → orchestrator → dispatcher → adapter），故驗收以「輪詢 + 上限」等待 `SENT`，不使用固定 sleep；後台認證以環境變數帶入 `OPERATOR` 憑證，collection 不硬編秘密。
+- 觸達鏈路為非同步（Kafka → orchestrator → dispatcher → adapter），故驗收以「輪詢 + 上限」等待 `SENT`，不使用固定 sleep；後台認證沿用既有 collection 的 `basicAuthUsername` / `basicAuthPassword` 變數、由 newman 環境檔覆寫其值，collection 不硬編秘密。
 - 此腳本定位為本機 / 手動端到端驗收，依賴本機 Mailpit 與固定 recipient，**不納入 `./gradlew check` CI gate**。
 
 第一版不把 Mailpit UI 或上述 newman 驗收納入 CI gate。若後續需要在 gate 內做自動化端到端驗證，可另以 Mailpit HTTP API 補一個 Docker-gated integration test（路線 A）。
