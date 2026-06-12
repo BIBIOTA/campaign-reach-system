@@ -120,7 +120,11 @@ public class CampaignApplicationService {
             campaign.setReachPlan(toJson(request.reachPlan()));
         }
 
-        Campaign saved = repository.save(campaign);
+        // saveAndFlush so the @Version increment Hibernate defers until flush is materialised before
+        // toView reads it: the response must carry the *new* version so a client chaining a follow-up
+        // write (a further PATCH or a POST /status) echoes a current value rather than the stale one it
+        // sent, which would otherwise fail the next write with a spurious 409. Mirrors transition().
+        Campaign saved = repository.saveAndFlush(campaign);
         return toView(saved);
     }
 
