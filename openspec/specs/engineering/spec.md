@@ -11,7 +11,7 @@ The repository SHALL provide a root `CLAUDE.md` that serves as the single source
 
 - **WHEN** 在 repo 根目錄檢視文件
 - **THEN** the system 存在 `CLAUDE.md`，描述 campaign / reach / shared 三個 bounded module 的職責與邊界
-- **AND** 明示「campaign 與 reach 僅透過 `shared/event` 溝通、禁止彼此直接 import」之約束，與 ArchUnit 守護測試一致
+- **AND** 明示「campaign 與 reach 僅透過 `shared.event` 溝通、禁止彼此直接 import」之約束，與 ArchUnit 守護測試一致
 
 > See: ../../diagrams/04-component-architecture.puml
 

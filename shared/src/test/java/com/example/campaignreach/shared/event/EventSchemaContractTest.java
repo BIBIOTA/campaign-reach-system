@@ -10,7 +10,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 /**
- * Locks the Kafka event-schema wire contract for the cross-module {@code shared/event} types
+ * Locks the Kafka event-schema wire contract for the cross-module {@code shared.event} types
  * (design.md §5, task 2.1). These are the stable contracts campaign and reach communicate through;
  * the tests pin field names, the camelCase {@code sendCycle} acceptance, the enum literals, and the
  * "no recipient list" rule for the activity-level {@link ReachRequested}.

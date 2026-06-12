@@ -108,7 +108,7 @@ proposal + specs/ → 實作（TDD / subagent-driven）→ verification-report �
 
 ## 4. 技術棧
 
-> **元件架構（modular monolith）** — campaign 與 reach 只透過 `shared/event`（Kafka 事件）溝通，
+> **元件架構（modular monolith）** — campaign 與 reach 只透過 `shared.event`（Kafka 事件）溝通，
 > 不互相 import 對方 domain；由 ArchUnit `ModuleBoundaryTest` 守門。完整圖見 [§2 UML diagrams](#uml-diagrams)。
 >
 > ![元件架構圖](openspec/changes/archive/2026-06-11-add-ecommerce-campaign-system/diagrams/04-component-architecture.png)
