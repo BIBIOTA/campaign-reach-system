@@ -270,21 +270,25 @@ curl -u "$OPERATOR_USERNAME:$OPERATOR_PASSWORD" \
    （只含 UUID，不含 email；對應 `E2E_AUDIENCE_LIST_ID` / `E2E_USER_ID`，以 upsert 方式可重複執行）。
 2. 呼叫 Mailpit HTTP API `DELETE /api/v1/messages` 清空 mailbox，避免舊信污染本次驗收。
 
-**驗收流程（Newman 依序跑 6 個請求）**
+**驗收流程（Newman 依序跑 5 個請求）**
 
 | # | 步驟 | 方法與 API | 說明 |
 | --- | --- | --- | --- |
-| 1 | 建立 EMAIL 活動 | `POST /internal/campaigns` | 以 static list 為 target、`reachPlan.channel=EMAIL` 建立 DRAFT 活動；`startAt/endAt` 涵蓋當下，回傳活動 `id` 與 `version`。 |
-| 2 | DRAFT → SCHEDULED | `POST /internal/campaigns/{id}/status` | 帶 `targetStatus=SCHEDULED` 與樂觀鎖 `version`，推進生命週期。 |
-| 3 | SCHEDULED → RUNNING | `POST /internal/campaigns/{id}/status` | 帶 `targetStatus=RUNNING`，啟用活動；後續的 scheduler / Kafka / reach 非同步管線由步驟 4 的 metrics 輪詢驗證。 |
-| 4 | 輪詢 metrics 直到 `SENT` | `GET /internal/reach/campaigns/{campaignId}/metrics` | 以 `E2E_MAX_POLL_ATTEMPTS` / `E2E_POLL_INTERVAL_MS` 為上限做輪詢（非一次性 sleep），等非同步 EMAIL 任務落到 `SENT`。 |
-| 5 | 斷言 Mailpit 收到信 | `GET /api/v1/messages`（Mailpit） | metrics 報 `SENT` 後讀 Mailpit，斷言信件 subject 同時包含 `[Local Campaign Reach]` 與本次動態 `templateRef`。 |
-| 6 | 清理提示 | `GET /api/v1/messages`（Mailpit） | 非破壞性提示，提醒重跑前先清空 Mailpit inbox。 |
+| 1 | 建立 EMAIL 活動 | `POST /internal/campaigns` | 以 static list 為 target、`reachPlan.channel=EMAIL` 建立 DRAFT 活動；`startAt` 刻意設在**過去**、`endAt` 在未來以涵蓋當下，回傳活動 `id` 與 `version`。 |
+| 2 | DRAFT → SCHEDULED | `POST /internal/campaigns/{id}/status` | 帶 `targetStatus=SCHEDULED` 與樂觀鎖 `version`，推進生命週期。**這是流程中唯一的手動狀態轉換。** |
+| 3 | 輪詢 metrics 直到 `SENT` | `GET /internal/reach/campaigns/{campaignId}/metrics` | 以 `E2E_MAX_POLL_ATTEMPTS` / `E2E_POLL_INTERVAL_MS` 為上限做輪詢（非一次性 sleep），等排程驅動的非同步鏈路把 EMAIL 任務推到 `SENT`。 |
+| 4 | 斷言 Mailpit 收到信 | `GET /api/v1/messages`（Mailpit） | metrics 報 `SENT` 後讀 Mailpit，斷言信件 subject 同時包含 `[Local Campaign Reach]` 與本次動態 `templateRef`。 |
+| 5 | 清理提示 | `GET /api/v1/messages`（Mailpit） | 非破壞性提示，提醒重跑前先清空 Mailpit inbox。 |
 
+> **為何沒有「手動轉 RUNNING」這一步？** 因為步驟 1 的 `startAt` 設在過去，`CampaignLifecycleScheduler`
+> 會在活動轉成 SCHEDULED 後**自動**把它推進到 RUNNING（這也是真實 operator 流程——沒有人會手動切 RUNNING），
+> reach-scan 隨即對 RUNNING 活動觸發寄送。若再加一個手動 `SCHEDULED → RUNNING` 請求，會與排程器競爭同一條
+> 狀態邊，並因 version 過期而回 409。步驟 3 的 metrics 輪詢即用來等待這條排程驅動的結果。
+>
 > 上述 `/internal/*` 端點皆需 operator basic auth（`OPERATOR_USERNAME` / `OPERATOR_PASSWORD`）；
 > Mailpit `/api/v1/*` 為本機收信槽 API，不需認證。整條鏈路涵蓋
-> 建立活動 → 狀態機推進 → 排程掃描發出 `reach.requested` → orchestrator 展開 →
-> dispatcher 認領 → EmailAdapter → 本機 SMTP → Mailpit。
+> 建立活動 → 手動推進 SCHEDULED → 排程器自動轉 RUNNING → 排程掃描發出 `reach.requested` →
+> orchestrator 展開 → dispatcher 認領 → EmailAdapter → 本機 SMTP → Mailpit。
 
 先啟動本機 stack，載入 `.env`，並以 `local` profile / `smtp-local` 啟動 app：
 

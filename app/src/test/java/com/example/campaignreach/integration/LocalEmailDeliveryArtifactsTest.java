@@ -45,13 +45,16 @@ class LocalEmailDeliveryArtifactsTest {
     void postmanCollectionContainsEmailE2eFlow() throws IOException {
         String collection = Files.readString(ROOT.resolve("docs/postman/campaign-reach.postman_collection.json"));
 
+        // SCHEDULED is the only manual lifecycle edge; the lifecycle scheduler auto-advances
+        // SCHEDULED -> RUNNING at the past startAt, so there is deliberately no manual
+        // "Transition SCHEDULED to RUNNING" step (it would race the scheduler and 409 on a stale version).
         assertThat(collection)
                 .contains("local/manual EMAIL e2e acceptance")
                 .contains("E2E 1 - Create EMAIL campaign")
                 .contains("E2E 2 - Transition DRAFT to SCHEDULED")
-                .contains("E2E 3 - Transition SCHEDULED to RUNNING")
-                .contains("E2E 4 - Poll metrics until SENT")
-                .contains("E2E 5 - Assert Mailpit captured EMAIL");
+                .contains("E2E 3 - Poll metrics until SENT")
+                .contains("E2E 4 - Assert Mailpit captured EMAIL")
+                .doesNotContain("Transition SCHEDULED to RUNNING");
         // Async reach is awaited via capped polling, never a fixed sleep.
         assertThat(collection)
                 .contains("e2eMaxPollAttempts")

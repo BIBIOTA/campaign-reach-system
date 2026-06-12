@@ -1818,7 +1818,7 @@
                 }
               ]
             },
-            "description": "Moves the e2e campaign through the required DRAFT to SCHEDULED lifecycle edge.",
+            "description": "Moves the e2e campaign through the required DRAFT to SCHEDULED lifecycle edge. SCHEDULED is the only manual edge in this flow: because the campaign startAt is set in the past, CampaignLifecycleScheduler then auto-advances SCHEDULED -> RUNNING (operators never flip RUNNING by hand), and the reach scan fires EMAIL for the now-RUNNING campaign. The next step polls metrics for that scheduler-driven result.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"targetStatus\": \"SCHEDULED\",\n  \"version\": {{e2eCampaignVersion}}\n}",
@@ -1833,72 +1833,7 @@
           "response": []
         },
         {
-          "name": "E2E 3 - Transition SCHEDULED to RUNNING",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('campaign transitions to RUNNING', function () {",
-                  "  pm.response.to.have.status(200);",
-                  "  const body = pm.response.json();",
-                  "  pm.expect(body.id).to.eql(pm.collectionVariables.get('e2eCampaignId'));",
-                  "  pm.expect(body.status).to.eql('RUNNING');",
-                  "  pm.expect(body.version, 'campaign version').to.be.a('number');",
-                  "  pm.collectionVariables.set('e2eCampaignVersion', String(body.version));",
-                  "  pm.collectionVariables.set('e2ePollAttempt', '0');",
-                  "});"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "internal",
-                "campaigns",
-                ":id",
-                "status"
-              ],
-              "query": [],
-              "variable": [
-                {
-                  "key": "id",
-                  "value": "{{e2eCampaignId}}"
-                }
-              ]
-            },
-            "description": "Activates the e2e campaign. The asynchronous scheduler/Kafka/reach pipeline is verified by the following metrics poll.",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"targetStatus\": \"RUNNING\",\n  \"version\": {{e2eCampaignVersion}}\n}",
-              "options": {
-                "raw": {
-                  "headerFamily": "json",
-                  "language": "json"
-                }
-              }
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "E2E 4 - Poll metrics until SENT",
+          "name": "E2E 3 - Poll metrics until SENT",
           "event": [
             {
               "listen": "test",
@@ -1921,7 +1856,7 @@
                   "  pm.test('at least one EMAIL reach task is SENT', function () {",
                   "    pm.expect(sent).to.be.above(0);",
                   "  });",
-                  "  postman.setNextRequest('E2E 5 - Assert Mailpit captured EMAIL');",
+                  "  postman.setNextRequest('E2E 4 - Assert Mailpit captured EMAIL');",
                   "} else if (attempt < maxAttempts) {",
                   "  console.log(`SENT not observed yet; polling metrics again (${attempt}/${maxAttempts}). Pace requests with newman --delay-request ${intervalMs}ms.`);",
                   "  postman.setNextRequest(pm.info.requestName);",
@@ -1966,12 +1901,12 @@
                 }
               ]
             },
-            "description": "Polls campaign reach metrics with an upper bound until the asynchronous EMAIL task reaches SENT. This is polling with a configurable interval, not a one-time fixed sleep."
+            "description": "Polls campaign reach metrics with an upper bound until the asynchronous EMAIL task reaches SENT. This waits for the scheduler-driven chain (auto-start SCHEDULED -> RUNNING at the past startAt, then reach scan -> dispatch -> SMTP). It is polling with a configurable interval (paced by newman --delay-request), not a one-time fixed sleep."
           },
           "response": []
         },
         {
-          "name": "E2E 5 - Assert Mailpit captured EMAIL",
+          "name": "E2E 4 - Assert Mailpit captured EMAIL",
           "event": [
             {
               "listen": "test",
@@ -2004,7 +1939,7 @@
                   "  console.log(`Mailpit captured matching EMAIL: ${matchingMessage.Subject || matchingMessage.subject}`);",
                   "}",
                   "console.log(`Cleanup guidance: clear Mailpit messages before rerunning this folder from ${pm.collectionVariables.get('mailpitBaseUrl')} to avoid cross-run contamination.`);",
-                  "postman.setNextRequest('E2E 6 - Mailpit cleanup instructions');"
+                  "postman.setNextRequest('E2E 5 - Mailpit cleanup instructions');"
                 ]
               }
             }
@@ -2037,7 +1972,7 @@
           "response": []
         },
         {
-          "name": "E2E 6 - Mailpit cleanup instructions",
+          "name": "E2E 5 - Mailpit cleanup instructions",
           "event": [
             {
               "listen": "test",
