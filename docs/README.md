@@ -7,7 +7,7 @@
 | 檔案 | 說明 |
 | --- | --- |
 | `index.html` | GitHub Pages 首頁（landing），連到 Swagger UI、OpenAPI 規格與 Postman collection。 |
-| `postman/campaign-reach.postman_collection.json` | 由 OpenAPI 規格自動產生的 Postman collection；匯入後填入 `basicAuthUsername` / `basicAuthPassword` 即可操作 `/internal` API。 |
+| `postman/campaign-reach.postman_collection.json` | 由 OpenAPI 規格自動產生的 Postman collection；已預填可直接打通的預設值（`baseUrl=http://localhost:8080`、`basicAuthUsername=operator`、`basicAuthPassword=operator-pass`，對齊 `.env.example`）並帶有合法的範例請求 body／路徑參數，匯入後即可直接對本機 app 送出請求；連到其他環境時於 Postman 覆寫這些變數即可。 |
 
 `openapi.yaml` / `openapi.json` 與 Swagger UI 靜態資產**不提交到 repo**，由 `.github/workflows/docs.yml` 在
 部署時產生（spec 來自 `OpenApiSpecExportTest`，Swagger UI 來自版本鎖定的 `swagger-ui-dist`，不依賴 CDN）。
@@ -28,7 +28,11 @@ gate（`ci.yml`）**分離**，部署成功與否不影響 PR 合併。網站網
 
 ```bash
 ./gradlew :app:test --tests "*OpenApiSpecExportTest"   # 產生 app/build/openapi/openapi.yaml
+# parametersResolution=Example 讓轉換器輸出 spec 內的範例值（請求 body／路徑參數），而非 <string>/<uuid> 佔位。
 npx -y openapi-to-postmanv2 \
   -s app/build/openapi/openapi.yaml \
-  -o docs/postman/campaign-reach.postman_collection.json -p
+  -o docs/postman/campaign-reach.postman_collection.json -p \
+  -O parametersResolution=Example
+# 注入可直接打通的 collection 變數（baseUrl + Basic Auth 預設值）。
+node docs/scripts/finalize-postman-collection.mjs docs/postman/campaign-reach.postman_collection.json
 ```

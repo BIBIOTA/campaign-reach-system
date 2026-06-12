@@ -16,6 +16,15 @@ import jakarta.validation.constraints.NotNull;
  * @param targetStatus the requested next lifecycle status
  * @param version the campaign version the client read; a stale value fails the transition with 409
  */
+@Schema(
+        description = "活動狀態轉換請求。範例將剛建立的活動由 DRAFT 推進到 SCHEDULED；version 需帶上一次讀到的版本。",
+        example =
+                """
+                {
+                  "targetStatus": "SCHEDULED",
+                  "version": 0
+                }
+                """)
 public record ChangeCampaignStatusRequest(
         @Schema(description = "請求轉換到的下一個生命週期狀態") @NotNull(message = "targetStatus must not be null")
                 CampaignStatus targetStatus,

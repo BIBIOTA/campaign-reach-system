@@ -4,6 +4,8 @@ import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.security.SecurityScheme;
+import io.swagger.v3.oas.models.servers.Server;
+import java.util.List;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -28,6 +30,12 @@ public class OpenApiConfig {
                                 + "狀態轉換（/internal/campaigns），以及觸達成效查詢（/internal/reach）。所有 /internal "
                                 + "端點皆需後台 OPERATOR 以 HTTP Basic 認證；請於下方 Authorize 填入帳號密碼後再試打。")
                         .version("v1"))
+                // Declare an explicit server so the exported spec carries a concrete, port-qualified
+                // base URL. The generated Postman collection derives its {{baseUrl}} variable from this,
+                // so an imported collection points at the local app (port 8080) out of the box instead
+                // of a portless "http://localhost" that would silently hit port 80.
+                .servers(
+                        List.of(new Server().url("http://localhost:8080").description("本機開發 (./gradlew :app:bootRun)")))
                 .schemaRequirement(
                         "basicAuth",
                         new SecurityScheme()

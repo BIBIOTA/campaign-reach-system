@@ -24,6 +24,19 @@ import java.time.Instant;
  * @param targetSpec new targeting settings; {@code null} leaves them unchanged
  * @param reachPlan new reach settings; {@code null} leaves them unchanged
  */
+@Schema(
+        description = "修改活動請求（PATCH 部分更新）。範例只改 reachPlan（改用 PUSH 推播），其餘欄位省略即維持不變；" + "version 必須帶上一次讀到的版本，過期會回 409。",
+        example =
+                """
+                {
+                  "version": 0,
+                  "reachPlan": {
+                    "channel": "PUSH",
+                    "templateRef": "summer-sale-2026-push",
+                    "timing": "SCHEDULED"
+                  }
+                }
+                """)
 public record UpdateCampaignRequest(
         @Schema(description = "客戶端先前讀到的活動版本（樂觀鎖）；值過期時更新以 409 失敗") @NotNull(message = "version must not be null")
                 Integer version,
