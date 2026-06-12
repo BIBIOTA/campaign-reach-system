@@ -195,3 +195,71 @@ Branch: `feat/local-email-delivery` (off `main` @ ed27136)
   - Spec reviewer: ✅ Spec compliant (independently re-ran gate → BUILD SUCCESSFUL; new tests not skipped; boundaries intact)
   - Code-quality reviewer: ✅ Approved (minimal one-line rename, DisplayName/mapping preserved, no dangling refs)
 - Next action: Tasks 1–4 complete; run `openspec validate add-local-email-delivery --strict` and transition to verification-before-completion. Section 5 (newman e2e) is out of scope for this run (user requested Tasks 1–4).
+
+## Session 23 — 2026-06-12 16:25
+- Stage: SDD
+- Task: 5.1 擴充 Postman collection 為全鏈路驗收流程
+- Transition: not_started → in_progress
+- Next action: Implementer expands `docs/postman/campaign-reach.postman_collection.json` with an ordered EMAIL end-to-end flow that creates a campaign, transitions it to RUNNING, and polls metrics until a SENT task appears using existing Basic Auth variables.
+
+## Session 24 — 2026-06-12 16:35
+- Stage: SDD
+- Task: 5.1 擴充 Postman collection 為全鏈路驗收流程
+- Transition: in_progress → passing
+- Evidence:
+  - Commits: 6d0f2cb Add EMAIL e2e Postman flow for task 5.1
+  - Tests: `node -e "JSON.parse(...)"` OK; custom structure check verified create → DRAFT→SCHEDULED → SCHEDULED→RUNNING → bounded metrics polling until `statusDistribution.SENT > 0`; `git diff --check HEAD~1..HEAD` clean.
+  - Spec reviewer: ✅ Spec compliant (ordered EMAIL flow, no fixed one-shot sleep, bounded `postman.setNextRequest` polling, existing `basicAuthUsername` / `basicAuthPassword` reused with no new auth variables).
+  - Code-quality reviewer: ✅ Approved (single collection-only change; clear variables and fail-fast placeholder for Task 5.3 environment setup; no unrelated generated-doc churn).
+- Next action: Start task 5.2 — add Mailpit HTTP API assertion after metrics reports SENT and provide mailbox cleanup guidance to avoid rerun contamination.
+
+## Session 25 — 2026-06-12 16:36
+- Stage: SDD
+- Task: 5.2 加入 Mailpit HTTP API 寄送斷言
+- Transition: not_started → in_progress
+- Next action: Implementer extends the local EMAIL e2e collection with a Mailpit HTTP API assertion request that verifies a captured message subject contains `[Local Campaign Reach]` and the dynamic `templateRef`, then adds mailbox cleanup guidance or a cleanup request to prevent rerun contamination.
+
+## Session 26 — 2026-06-12 16:43
+- Stage: SDD
+- Task: 5.2 加入 Mailpit HTTP API 寄送斷言
+- Transition: in_progress → passing
+- Evidence:
+  - Commits: 5102dc5 Add Mailpit assertion to email e2e collection
+  - Tests: `node -e "JSON.parse(...)"` OK; inspected flow order now continues from metrics SENT to Mailpit assertion; request uses `{{mailpitBaseUrl}}/api/v1/messages`, `noauth`, and subject matching on `[Local Campaign Reach]` plus dynamic `e2eTemplateRef`.
+  - Spec reviewer: ✅ Spec compliant (Mailpit HTTP API assertion runs only after metrics observes SENT; cleanup guidance request/logs are present to avoid rerun contamination).
+  - Code-quality reviewer: ✅ Approved (defensive response parsing for `messages`/`Messages`/array; no destructive API call added without needing it; no unrelated edits).
+- Next action: Start task 5.3 — add a Newman execution script and local environment file, including setup for the static audience list id required by the Postman flow.
+
+## Session 27 — 2026-06-12 16:44
+- Stage: SDD
+- Task: 5.3 提供 newman 執行腳本與環境檔
+- Transition: not_started → in_progress
+- Next action: Implementer adds a local Newman environment file and executable script that seeds the required static audience list, clears Mailpit, and runs the EMAIL e2e Postman folder against an already-started local stack.
+
+## Session 28 — 2026-06-12 16:50
+- Stage: SDD
+- Task: 5.3 提供 newman 執行腳本與環境檔
+- Transition: in_progress → passing
+- Evidence:
+  - Commits: 555a142 Add local Newman email e2e runner for task 5.3
+  - Tests: `bash -n docs/scripts/run-local-email-e2e.sh` OK; Postman environment JSON parse OK; custom structure check verified env keys and script overrides for `baseUrl`, `basicAuthUsername`, `basicAuthPassword`, `mailpitBaseUrl`, `e2eAudienceListId`, and poll tunables; `git diff --check HEAD~1..HEAD` clean.
+  - Spec reviewer: ✅ Spec compliant (script seeds the required static audience list, clears Mailpit before run, invokes Newman against the EMAIL e2e folder, and environment contains local non-secret defaults).
+  - Code-quality reviewer: ✅ Approved (small single-purpose shell runner, configurable via environment variables, no CI wiring added).
+- Next action: Start task 5.4 — document how to run the local Newman EMAIL e2e acceptance and clarify Mailpit/fixed-recipient/manual-not-CI constraints.
+
+## Session 29 — 2026-06-12 16:51
+- Stage: SDD
+- Task: 5.4 更新 README 端到端驗收說明
+- Transition: not_started → in_progress
+- Next action: Implementer updates README with the local Newman EMAIL end-to-end acceptance steps, including stack/app prerequisites, the runner command, Mailpit/fixed-recipient dependency, and the fact that this manual script is outside the CI gate.
+
+## Session 30 — 2026-06-12 16:55
+- Stage: SDD
+- Task: 5.4 更新 README 端到端驗收說明
+- Transition: in_progress → passing
+- Evidence:
+  - Commits: 54e92fe Document local Newman email e2e acceptance for task 5.4
+  - Tests: `rg "^## [0-9]\\." README.md` confirmed top-level numbering remains coherent; `git diff --check -- README.md` clean.
+  - Spec reviewer: ✅ Spec compliant (README covers stack startup, `.env`, local profile / smtp-local app startup, `docs/scripts/run-local-email-e2e.sh`, Mailpit API assertion, fixed local recipient, and non-CI-gate scope).
+  - Code-quality reviewer: ✅ Approved (docs are scoped to the local acceptance workflow and reuse existing README conventions).
+- Next action: Run Task 5 final validation, confirm all Task 5 items are passing, then invoke verification-before-completion.
