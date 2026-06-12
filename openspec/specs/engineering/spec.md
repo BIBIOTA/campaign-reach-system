@@ -1,7 +1,7 @@
 # engineering Specification
 
 ## Purpose
-TBD - created by archiving change add-ecommerce-campaign-system. Update Purpose after archive.
+The engineering specification captures the non-functional conventions and AI-collaboration rules that govern this repository. It documents the module boundary hard constraints (enforced by ArchUnit), the canonical build and lint commands, the CI quality gate, and the CLAUDE.md / AGENTS.md single-source-of-truth policy. These rules are the authoritative reference for developers and AI assistants working in this codebase.
 ## Requirements
 ### Requirement: AI 協作與工程慣例指引（CLAUDE.md / AGENTS.md）
 

@@ -1,7 +1,7 @@
 # campaign Specification
 
 ## Purpose
-TBD - created by archiving change add-ecommerce-campaign-system. Update Purpose after archive.
+The campaign module is the decision layer of the campaign-reach system. It manages the full lifecycle of marketing campaigns — creating and validating promotion rules, evaluating audience eligibility, scheduling reach requests, and publishing `ReachRequested` events to Kafka. It owns the DRAFT → ACTIVE → COMPLETED state machine and enforces promotion-type constraints (discount / free-shipping / gift), usage thresholds, and period boundaries.
 ## Requirements
 ### Requirement: 活動優惠規則建立、查詢與修改
 The system SHALL allow marketing users to create, query, and modify a campaign's promotion rules — including name, period (start/end), promotion type, promotion content, usage threshold, and usage limits — and SHALL persist the rule parameters as validated JSONB. A newly created campaign SHALL default to DRAFT and SHALL only be scheduled for reach after explicit confirmation. (FR-001, FR-006)

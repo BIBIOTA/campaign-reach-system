@@ -60,7 +60,7 @@ tasks.withType<Test>().configureEach {
     // negotiates normally. Set it locally only if a future Engine's MinAPIVersion outpaces what
     // Testcontainers negotiates: `-PdockerApiVersion=1.44` or env `DOCKER_API_VERSION_OVERRIDE`.
     (providers.gradleProperty("dockerApiVersion").orNull
-            ?: System.getenv("DOCKER_API_VERSION_OVERRIDE"))
+            ?: providers.environmentVariable("DOCKER_API_VERSION_OVERRIDE").orNull)
         ?.let { systemProperty("api.version", it) }
     // Surface the real cause of test failures (incl. Spring context-startup failures) in CI logs,
     // where the default summary prints only stack-trace frame locations without exception messages.

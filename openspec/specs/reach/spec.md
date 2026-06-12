@@ -1,7 +1,7 @@
 # reach Specification
 
 ## Purpose
-TBD - created by archiving change add-ecommerce-campaign-system. Update Purpose after archive.
+The reach module is the execution layer of the campaign-reach system. It consumes `ReachRequested` events from Kafka, resolves and paginates the target audience, fans out per-recipient dispatch tasks, and delivers reach through channel adapters (email, etc.). It guarantees idempotent fan-out via `unique(campaign_id, send_cycle_key, trigger_type)` deduplication, tracks per-task delivery status, and emits reach metrics upon completion.
 ## Requirements
 ### Requirement: 觸達批次落庫與 fan-out 冪等
 The system SHALL, upon consuming a `ReachRequested` event, first upsert a single activity-level `reach_request` record deduplicated by `unique(campaign_id, send_cycle_key, trigger_type)`, freeze the target_spec / reach_plan snapshots, and SHALL skip re-expansion when the batch is already in DISPATCHING or DONE (fan-out completed, total_count backfilled) so that Kafka at-least-once redelivery does not re-resolve the audience or re-run inserts; only PENDING/EXPANDING batches are resumed. (FR-013, NFR-003)
