@@ -6,6 +6,7 @@ openspec/changes/**/diagrams/.encode.py
 # Gradle
 .gradle/
 **/build/
+**/.kotlin/
 !gradle/wrapper/gradle-wrapper.jar
 
 # Local dev env (secrets / machine-specific ports) — keep .env.example committed

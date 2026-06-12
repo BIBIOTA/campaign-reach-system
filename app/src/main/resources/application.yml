@@ -126,6 +126,17 @@ campaignreach:
 
   email-provider:
     api-key: ${EMAIL_PROVIDER_API_KEY:}
+    # Local SMTP smoke-test provider (reach module). Empty by default so non-local
+    # environments never enable local mail: mode must equal `smtp-local` AND the
+    # `local` Spring profile must be active for LocalSmtpEmailConfig to register.
+    # Values are supplied from .env (see .env.example); no production-usable default.
+    mode: ${EMAIL_PROVIDER_MODE:}
+    local:
+      host: ${LOCAL_SMTP_HOST:}
+      port: ${LOCAL_SMTP_PORT:}
+      from: ${LOCAL_SMTP_FROM:}
+      recipient: ${LOCAL_SMTP_RECIPIENT:}
+      timeout: ${LOCAL_SMTP_TIMEOUT:}
 
   # Back-office operator accounts for the internal campaign REST (task 4.1, §10).
   # Username/password come from env/vault; the per-operator UUID is deterministic so
